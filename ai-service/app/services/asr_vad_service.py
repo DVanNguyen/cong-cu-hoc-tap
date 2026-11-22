@@ -1,9 +1,10 @@
+import os
 import re
-from typing import List, Dict, Any, Optional
+from typing import Any, Dict, List, Optional, Tuple
 from faster_whisper import WhisperModel
 
 # Bảng ánh xạ ngữ âm xác định cho các thuật ngữ phổ biến khi giảng viên đọc bằng tiếng Việt
-PHONETIC_TERM_ALIASES = {
+PHONETIC_TERM_ALIASES: Dict[str, List[str]] = {
     "A*": ["a sao", "a star", "ây sao", "ây star"],
     "A* search": ["tìm kiếm a sao", "a sao search", "a star search"],
     "PEAS": ["p e a s", "pi i ây ét", "peas"],
@@ -11,97 +12,166 @@ PHONETIC_TERM_ALIASES = {
     "DFS": ["d f s", "đi ép ét"],
     "UCS": ["u c s", "iu xi ét"],
     "IDS": ["i d s", "ai đi ét"],
-    "heuristic": ["hiu rít tích", "hơ rít tích", "hyu rít tích"],
-    "admissible heuristic": ["át mít xơ bồ hiu rít tích", "admissible hiu rít tích"],
+    "heuristic": ["hiu rit tich", "hơ rit tich", "hyu rit tich"],
+    "admissible heuristic": ["át mit xơ bồ hiu rit tich", "admissible hiu rit tich"],
     "Simulated Annealing": ["si miu lây tựt ơ ni linh", "simulated ơ ni linh"],
 }
+
+# Ngôn ngữ được hỗ trợ tường minh; None hoặc "auto" sẽ để Whisper tự động nhận diện
+SUPPORTED_LANGUAGES = {"vi", "en"}
+
 
 class SlideAwareASREngine:
     def __init__(
         self,
-        model_name_or_path: str = "small",
-        device: str = "cpu",
-        compute_type: str = "int8"
+        model_name_or_path: Optional[str] = None,
+        device: Optional[str] = None,
+        compute_type: Optional[str] = None,
     ):
         """
-        Hỗ trợ cả:
-        - Multilingual Whisper: 'small', 'medium', 'base'
-        - PhoWhisper CTranslate2: 'qbsmlabs/PhoWhisper-small' hoặc đường dẫn local
+        Hỗ trợ đa ngôn ngữ (Việt, Anh, Việt-Anh trộn):
+        - Multilingual Whisper: 'small', 'medium', 'large-v3-turbo', 'base'
+        - PhoWhisper CTranslate2 (chỉ dùng cho bài giảng tiếng Việt): 'qbsmlabs/PhoWhisper-small'
+        Có thể cấu hình qua biến môi trường: WHISPER_MODEL, WHISPER_DEVICE, WHISPER_COMPUTE_TYPE.
         """
-        self.model = WhisperModel(model_name_or_path, device=device, compute_type=compute_type)
+        self.model_name = model_name_or_path or os.getenv("WHISPER_MODEL", "small")
+        self.device = device or os.getenv("WHISPER_DEVICE", "cpu")
+        self.compute_type = compute_type or os.getenv("WHISPER_COMPUTE_TYPE", "int8")
+        self.model = WhisperModel(
+            self.model_name,
+            device=self.device,
+            compute_type=self.compute_type,
+        )
+
+    @staticmethod
+    def normalize_language(language: Optional[str]) -> Optional[str]:
+        """Chuẩn hóa mã ngôn ngữ: 'auto' / '' / None -> None (tự động nhận diện)."""
+        if not language:
+            return None
+        cleaned = language.strip().lower()
+        if cleaned in {"auto", "detect", "none"}:
+            return None
+        return cleaned
 
     @staticmethod
     def build_prompt_and_hotwords(
         slide_terms: List[str],
-        course_title: str = "Trí tuệ nhân tạo"
+        course_title: Optional[str] = None,
+        language: Optional[str] = None,
     ) -> Dict[str, Optional[str]]:
         """
-        Thiết kế initial_prompt (< 224 tokens) và chuỗi hotwords tối ưu cho faster-whisper.
+        Thiết kế initial_prompt (< 224 tokens) và hotwords phù hợp với ngôn ngữ bài giảng.
+        - language='en': Prompt tiếng Anh chuẩn để tránh kéo Whisper sang tiếng Việt.
+        - language='vi': Prompt tiếng Việt hỗ trợ trộn thuật ngữ tiếng Anh.
+        - language=None (auto): Prompt trung tính ngắn gọn để không làm lệch bước nhận diện ngôn ngữ.
         """
         if not slide_terms:
             return {"initial_prompt": None, "hotwords": None}
 
-        # Lọc trùng và giữ tối đa 45 thuật ngữ quan trọng nhất để không vượt 224 tokens
-        unique_terms = list(dict.fromkeys(slide_terms))[:45]
+        # Lọc trùng, bỏ khoảng trắng thừa và giữ tối đa 45 thuật ngữ quan trọng nhất
+        unique_terms = list(
+            dict.fromkeys(t.strip() for t in slide_terms if t and t.strip())
+        )[:45]
+        if not unique_terms:
+            return {"initial_prompt": None, "hotwords": None}
+
         terms_csv = ", ".join(unique_terms)
+        lang = SlideAwareASREngine.normalize_language(language)
 
-        # initial_prompt viết dưới dạng câu giảng mẫu để định hình phong cách viết hoa & trộn Việt-Anh
-        initial_prompt = (
-            f"Bài giảng môn {course_title}. "
-            f"Trong slide này chúng ta xét các thuật ngữ: {terms_csv}."
-        )
-        # hotwords truyền trực tiếp vào Beam Search scorer ở mọi cửa sổ âm thanh
+        if lang == "en":
+            topic = course_title or "Computer Science"
+            initial_prompt = (
+                f"University lecture on {topic}. "
+                f"Key technical terms covered in these slides include: {terms_csv}."
+            )
+        elif lang == "vi":
+            topic = course_title or "Trí tuệ nhân tạo"
+            initial_prompt = (
+                f"Bài giảng môn {topic}. "
+                f"Trong slide này chúng ta xét các thuật ngữ: {terms_csv}."
+            )
+        else:
+            # Chế độ tự động (auto-detect): dùng prompt trung tính không ép ngôn ngữ
+            prefix = f"{course_title}. " if course_title else ""
+            initial_prompt = f"{prefix}Key terms: {terms_csv}."
+
         hotwords = " ".join(unique_terms)
-
         return {
             "initial_prompt": initial_prompt,
-            "hotwords": hotwords
+            "hotwords": hotwords,
         }
 
     @staticmethod
-    def recover_slide_domain_terms(text: str, active_slide_terms: List[str]) -> str:
+    def recover_slide_domain_terms(
+        text: str,
+        active_slide_terms: List[str],
+        detected_language: Optional[str] = "vi",
+    ) -> str:
         """
-        Bước hậu xử lý xác định: Chỉ chuẩn hóa lại thuật ngữ nếu thuật ngữ đó
-        CÓ MẶT trong danh sách thuật ngữ trích xuất từ Slide của bài học.
+        Bước hậu xử lý xác định:
+        1. Chỉ áp dụng bảng sửa lỗi phiên âm tiếng Việt (PHONETIC_TERM_ALIASES) khi bài giảng
+           là tiếng Việt hoặc không rõ ngôn ngữ (tránh thay nhầm trên bài giảng full tiếng Anh).
+           Sắp xếp cụm dài trước để tránh 'a sao' thay đè trước 'tìm kiếm a sao'.
+        2. Luôn chuẩn hóa chữ hoa/thường theo đúng thuật ngữ gốc trên Slide (VD: 'bfs' -> 'BFS').
         """
         if not active_slide_terms or not text:
             return text
 
         corrected = text
-        active_lower_map = {t.lower(): t for t in active_slide_terms}
+        active_lower_map = {
+            t.strip().lower(): t.strip() for t in active_slide_terms if t and t.strip()
+        }
 
-        # 1. Khôi phục từ bảng ngữ âm nếu thuật ngữ gốc có trên slide
-        for canonical_term, phonetic_variants in PHONETIC_TERM_ALIASES.items():
-            if canonical_term.lower() in active_lower_map or any(
-                canonical_term.lower() in s.lower() for s in active_slide_terms
-            ):
-                for variant in phonetic_variants:
-                    pattern = re.compile(rf"\b{re.escape(variant)}\b", flags=re.IGNORECASE)
-                    corrected = pattern.sub(canonical_term, corrected)
+        # 1. Chỉ chạy khôi phục phiên âm Việt-Anh khi ngôn ngữ không phải full tiếng Anh
+        if detected_language != "en":
+            replacement_pairs: List[Tuple[str, str]] = []
+            for canonical_term, phonetic_variants in PHONETIC_TERM_ALIASES.items():
+                if canonical_term.lower() in active_lower_map or any(
+                    canonical_term.lower() in s.lower() for s in active_slide_terms
+                ):
+                    for variant in phonetic_variants:
+                        replacement_pairs.append((variant, canonical_term))
 
-        # 2. Chuẩn hóa chữ hoa/thường theo đúng từ gốc trên Slide (VD: 'peas' -> 'PEAS', 'bfs' -> 'BFS')
+            # Sắp xếp cụm dài hơn thay thế trước để tránh xung đột tiền tố/hậu tố
+            replacement_pairs.sort(key=lambda item: len(item[0]), reverse=True)
+            for variant, canonical_term in replacement_pairs:
+                pattern = re.compile(rf"\b{re.escape(variant)}\b", flags=re.IGNORECASE)
+                corrected = pattern.sub(canonical_term, corrected)
+
+        # 2. Chuẩn hóa chữ hoa/thường theo đúng từ gốc trên Slide (an toàn cho cả VI và EN)
         for lower_term, exact_slide_term in active_lower_map.items():
             if len(exact_slide_term) >= 2 and not exact_slide_term.islower():
-                pattern = re.compile(rf"\b{re.escape(lower_term)}\b", flags=re.IGNORECASE)
+                pattern = re.compile(
+                    rf"\b{re.escape(lower_term)}\b", flags=re.IGNORECASE
+                )
                 corrected = pattern.sub(exact_slide_term, corrected)
 
         return corrected
 
-    def transcribe(
+    def transcribe_with_metadata(
         self,
         audio_path: str,
         slide_terms: Optional[List[str]] = None,
+        course_title: Optional[str] = None,
+        language: Optional[str] = None,
         use_vad: bool = True,
-        apply_glossary_post_fix: bool = True
-    ) -> List[Dict[str, Any]]:
+        apply_glossary_post_fix: bool = True,
+    ) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         """
-        Chạy toàn bộ pipeline: Silero VAD -> Faster-Whisper (Prompt + Hotwords) -> Glossary Recovery.
+        Chạy toàn bộ pipeline: Silero VAD -> Faster-Whisper (Auto/VI/EN) -> Glossary Recovery.
+        Trả về (output_segments, metadata) gồm ngôn ngữ nhận diện và độ tin cậy.
         """
-        bias = self.build_prompt_and_hotwords(slide_terms or [])
+        normalized_lang = self.normalize_language(language)
+        bias = self.build_prompt_and_hotwords(
+            slide_terms or [],
+            course_title=course_title,
+            language=normalized_lang,
+        )
 
-        segments_iter, _ = self.model.transcribe(
+        segments_iter, info = self.model.transcribe(
             audio_path,
-            language="vi",
+            language=normalized_lang,  # None => Whisper tự động nhận diện (hỗ trợ full EN & VI)
+            task="transcribe",
             initial_prompt=bias["initial_prompt"],
             hotwords=bias["hotwords"],
             vad_filter=use_vad,
@@ -112,30 +182,70 @@ class SlideAwareASREngine:
                 min_silence_duration_ms=500,
                 speech_pad_ms=250,
             ),
-            condition_on_previous_text=False,  # Ngăn lặp từ và giúp áp dụng prompt/hotwords xuyên suốt
+            condition_on_previous_text=False,
             word_timestamps=True,
             beam_size=5,
             temperature=0.0,
         )
 
-        output_segments = []
+        detected_lang = getattr(info, "language", normalized_lang or "unknown")
+        lang_prob = round(float(getattr(info, "language_probability", 1.0)), 4)
+
+        output_segments: List[Dict[str, Any]] = []
         for idx, seg in enumerate(segments_iter, start=1):
             raw_text = " ".join(seg.text.split()).strip()
             if not raw_text:
                 continue
 
             final_text = (
-                self.recover_slide_domain_terms(raw_text, slide_terms)
+                self.recover_slide_domain_terms(
+                    raw_text,
+                    slide_terms or [],
+                    detected_language=detected_lang,
+                )
                 if (apply_glossary_post_fix and slide_terms)
                 else raw_text
             )
 
-            output_segments.append({
-                "segment_id": idx,
-                "start_sec": round(float(seg.start), 2),
-                "end_sec": round(float(seg.end), 2),
-                "raw_asr_text": raw_text,
-                "text": final_text,
-            })
+            output_segments.append(
+                {
+                    "segment_id": idx,
+                    "start_sec": round(float(seg.start), 2),
+                    "end_sec": round(float(seg.end), 2),
+                    "language": detected_lang,
+                    "raw_asr_text": raw_text,
+                    "text": final_text,
+                }
+            )
 
-        return output_segments
+        metadata = {
+            "requested_language": normalized_lang or "auto",
+            "detected_language": detected_lang,
+            "language_probability": lang_prob,
+            "duration_sec": round(float(getattr(info, "duration", 0.0)), 2),
+            "model_name": self.model_name,
+        }
+        return output_segments, metadata
+
+    def transcribe(
+        self,
+        audio_path: str,
+        slide_terms: Optional[List[str]] = None,
+        course_title: Optional[str] = None,
+        language: Optional[str] = None,
+        use_vad: bool = True,
+        apply_glossary_post_fix: bool = True,
+    ) -> List[Dict[str, Any]]:
+        """
+        Giữ nguyên chữ ký tương thích ngược (trả về List[Dict]) cho các caller cũ,
+        nhưng mặc định language=None để hỗ trợ cả bài giảng full tiếng Anh lẫn tiếng Việt.
+        """
+        segments, _ = self.transcribe_with_metadata(
+            audio_path=audio_path,
+            slide_terms=slide_terms,
+            course_title=course_title,
+            language=language,
+            use_vad=use_vad,
+            apply_glossary_post_fix=apply_glossary_post_fix,
+        )
+        return segments

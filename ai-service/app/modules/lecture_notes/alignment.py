@@ -1,6 +1,6 @@
 import re
 import math
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, Set
 from pydantic import BaseModel
 from rapidfuzz import fuzz
 
@@ -15,8 +15,9 @@ class AlignedNoteItem(BaseModel):
     term_original: Optional[str] = None
     term_vietnamese: Optional[str] = None
 
-# Danh sách mẫu câu giao tiếp / câu đệm cần lọc bỏ (Filler filtering)
+# Danh sách mẫu câu giao tiếp / câu đệm cần lọc bỏ (hỗ trợ cả Tiếng Việt & Tiếng Anh)
 FILLER_PATTERNS = [
+    # --- Tiếng Việt ---
     r"nghe rõ không",
     r"nhìn lên màn hình",
     r"ổn định chỗ ngồi",
@@ -25,26 +26,75 @@ FILLER_PATTERNS = [
     r"lớp phó",
     r"các em trật tự",
     r"có ai hỏi gì không",
-    r"thầy nhắc lại là"
+    r"thầy nhắc lại là",
+    # --- Tiếng Anh (Classroom / Lecture Fillers) ---
+    r"can (everyone|you all|you guys) hear me",
+    r"can you see (my|the) screen",
+    r"any questions (so far|about this|before we move on)",
+    r"does that make sense",
+    r"let'?s take a (quick |short )?break",
+    r"welcome back everyone",
+    r"good (morning|afternoon|evening) everyone",
+    r"before we get started",
+    r"let'?s get started",
+    r"thank you (very much )?for coming",
+    r"see you (next (week|time|class)|on (monday|tuesday|wednesday|thursday|friday))",
 ]
 
+# Stopwords cơ bản giúp compute_token_overlap không bị nhiễu khi giảng full tiếng Anh hoặc tiếng Việt
+STOPWORDS: Set[str] = {
+    # English stopwords
+    "a", "an", "the", "and", "or", "but", "if", "then", "else", "when", "at", "by",
+    "for", "with", "about", "against", "between", "into", "through", "during", "before",
+    "after", "above", "below", "to", "from", "up", "down", "in", "out", "on", "off",
+    "over", "under", "again", "further", "once", "here", "there", "where", "why", "how",
+    "all", "any", "both", "each", "few", "more", "most", "other", "some", "such", "no",
+    "nor", "not", "only", "own", "same", "so", "than", "too", "very", "s", "t", "can",
+    "will", "just", "don", "should", "now", "is", "are", "was", "were", "be", "been",
+    "being", "have", "has", "had", "do", "does", "did", "of", "this", "that", "these",
+    "those", "it", "its", "we", "you", "they", "he", "she", "i", "me", "my", "our", "your",
+    # Vietnamese stopwords
+    "và", "là", "của", "các", "những", "một", "trong", "cho", "với", "để", "từ", "tại",
+    "này", "đó", "khi", "thì", "mà", "như", "được", "có", "không", "sẽ", "đang", "đã",
+    "rất", "cũng", "về", "trên", "dưới", "theo", "hay", "hoặc", "nhưng", "vì", "nên",
+}
+
+
 def is_filler_sentence(text: str) -> bool:
-    """Loại bỏ câu đệm giao tiếp nếu < 5 từ hoặc khớp các mẫu cảm thán/điểm danh."""
-    words = text.strip().split()
+    """Loại bỏ câu đệm giao tiếp (VI & EN) nếu < 5 từ hoặc khớp mẫu điểm danh/xã giao."""
+    cleaned = text.strip()
+    if not cleaned:
+        return True
+    words = cleaned.split()
     if len(words) < 5:
         return True
-    lower_text = text.lower()
+    lower_text = cleaned.lower()
     for pattern in FILLER_PATTERNS:
         if re.search(pattern, lower_text):
             return True
     return False
 
+
+def _extract_content_tokens(text: str) -> Set[str]:
+    """Tách từ khóa có nghĩa (bỏ stopwords & từ 1 ký tự trừ ký hiệu toán/lập trình)."""
+    raw_tokens = re.findall(r"[a-zA-Z0-9_\*\+#]+|[^\W\d_]+", text.lower())
+    filtered = {
+        tok for tok in raw_tokens
+        if tok not in STOPWORDS and (len(tok) >= 2 or tok in {"c", "r", "x", "y", "n", "k"})
+    }
+    return filtered if filtered else set(raw_tokens)
+
+
 def compute_token_overlap(segment_text: str, slide_text: str) -> float:
-    """Tính tỉ lệ từ vựng trùng nhau: |Tokens(u_t) ∩ Tokens(s_k)| / |Tokens(u_t)|."""
-    tokens_seg = set(re.findall(r'\w+', segment_text.lower()))
+    """
+    Tính tỉ lệ từ khóa chuyên ngành trùng nhau giữa đoạn transcript và slide:
+    |ContentTokens(u_t) ∩ ContentTokens(s_k)| / |ContentTokens(u_t)|
+    Giúp DTW căn gióng chính xác hơn trên bài giảng full tiếng Anh (tránh nhiễu bởi 'the', 'is', 'of'...).
+    """
+    tokens_seg = _extract_content_tokens(segment_text)
     if not tokens_seg:
         return 0.0
-    tokens_slide = set(re.findall(r'\w+', slide_text.lower()))
+    tokens_slide = _extract_content_tokens(slide_text)
     overlap = tokens_seg.intersection(tokens_slide)
     return len(overlap) / len(tokens_seg)
 

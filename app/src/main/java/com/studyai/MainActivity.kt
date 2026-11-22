@@ -3,20 +3,44 @@ package com.studyai
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
+import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import com.studyai.data.api.ApiClient
+import com.studyai.ui.LectureLanguageMode
 import com.studyai.ui.MainStudyAiScreen
+import com.studyai.ui.theme.StudyAiTheme
 import com.studyai.viewmodel.StudyAiViewModel
 
 class MainActivity : ComponentActivity() {
@@ -32,13 +56,21 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        enableEdgeToEdge()
 
-        // Tải dữ liệu toàn hệ thống từ 3 Trụ cột qua Laravel Backend API
+        // Tải dữ liệu toàn hệ thống từ 3 Trụ cột qua Backend API
         viewModel.loadAllData(courseId = 1L, lectureId = 1L)
 
         setContent {
-            MaterialTheme {
-                Surface(modifier = Modifier.fillMaxSize()) {
+            val systemDark = isSystemInDarkTheme()
+            var isDarkTheme by rememberSaveable { mutableStateOf(systemDark) }
+            var selectedLanguageMode by rememberSaveable { mutableStateOf(LectureLanguageMode.AUTO) }
+
+            StudyAiTheme(darkTheme = isDarkTheme) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background,
+                ) {
                     val slides by viewModel.slides.collectAsState()
                     val chapters by viewModel.chapters.collectAsState()
                     val currentLectureId by viewModel.currentLectureId.collectAsState()
@@ -50,14 +82,10 @@ class MainActivity : ComponentActivity() {
                     val dictionaryEntries by viewModel.dictionaryEntries.collectAsState()
                     val selectedConceptDetail by viewModel.selectedConceptDetail.collectAsState()
                     val isLoading by viewModel.isLoading.collectAsState()
+                    val errorMessage by viewModel.errorMessage.collectAsState()
 
                     if (isLoading && slides.isEmpty() && nodes.isEmpty() && dictionaryEntries.isEmpty()) {
-                        Box(
-                            modifier = Modifier.fillMaxSize(),
-                            contentAlignment = Alignment.Center
-                        ) {
-                            CircularProgressIndicator()
-                        }
+                        StudyAiLoadingScreen()
                     } else {
                         MainStudyAiScreen(
                             currentLectureId = currentLectureId,
@@ -87,11 +115,80 @@ class MainActivity : ComponentActivity() {
                             },
                             onNavigateToChapterSlide = { targetLectureId, targetSlideNo, targetSec ->
                                 viewModel.jumpToChapterSlide(targetLectureId, targetSlideNo, targetSec)
-                            }
+                            },
+                            isDarkTheme = isDarkTheme,
+                            onToggleDarkTheme = { isDarkTheme = !isDarkTheme },
+                            selectedLanguageMode = selectedLanguageMode,
+                            onLanguageModeChange = { mode ->
+                                selectedLanguageMode = mode
+                            },
+                            errorMessage = errorMessage,
+                            onRetryLoad = {
+                                viewModel.loadAllData(courseId = 1L, lectureId = currentLectureId)
+                            },
                         )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun StudyAiLoadingScreen() {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center,
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(
+                    Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            MaterialTheme.colorScheme.secondary,
+                        )
+                    )
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = "StudyAI",
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(32.dp),
+            )
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        Text(
+            text = "StudyAI",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground,
+        )
+
+        Spacer(modifier = Modifier.height(6.dp))
+
+        Text(
+            text = "Đang đồng bộ bài giảng, đồ thị tri thức và từ điển sống...",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        LinearProgressIndicator(
+            modifier = Modifier
+                .width(180.dp)
+                .clip(RoundedCornerShape(8.dp)),
+            color = MaterialTheme.colorScheme.primary,
+            trackColor = MaterialTheme.colorScheme.primaryContainer,
+        )
     }
 }
