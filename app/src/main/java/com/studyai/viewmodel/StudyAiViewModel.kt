@@ -191,7 +191,8 @@ class StudyAiViewModel(
                 }
 
             } catch (e: Exception) {
-                _errorMessage.value = "Lỗi kết nối máy chủ StudyAI: ${e.message}"
+                android.util.Log.e("StudyAiViewModel", "loadAllData error", e)
+                _errorMessage.value = "Lỗi kết nối máy chủ StudyAI: ${e.localizedMessage ?: e.message ?: e.javaClass.simpleName}"
             } finally {
                 _isLoading.value = false
             }
