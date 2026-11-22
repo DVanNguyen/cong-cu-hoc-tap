@@ -1,0 +1,232 @@
+{
+  "slides": [
+    {
+      "slide_number": 1,
+      "title": "Slide 1: CS 188: Artificial Intelligence Introduction Spring 2023 Uni",
+      "extracted_text": "CS 188: Artificial Intelligence Introduction Spring 2023 University of California, Berkeley [These slides were created by Dan Klein and Pieter Abbeel for CS188 Intro to AI at UC Berkeley (ai.berkeley.edu).]",
+      "terms_json": [
+        "Artificial",
+        "Intelligence",
+        "Introduction",
+        "Spring",
+        "2023",
+        "University"
+      ],
+      "start_sec": 0.0,
+      "end_sec": 30.0
+    },
+    {
+      "slide_number": 2,
+      "title": "Slide 2: First Half of Today: Intros and Logistics § Staff introducti",
+      "extracted_text": "First Half of Today: Intros and Logistics § Staff introductions: Cam, Michael, and course staff § Course logistics § Lectures, discussions, office hours, and exams § Resources and communication platforms § Collaboration and academic honesty § DSP and extenuating circumstances § Stress management and mental health",
+      "terms_json": [
+        "First",
+        "Half",
+        "Intros",
+        "Logistics",
+        "Staff",
+        "course"
+      ],
+      "start_sec": 30.0,
+      "end_sec": 60.0
+    },
+    {
+      "slide_number": 3,
+      "title": "Slide 3: Staff Introductions: Cameron Allen (he/him) § First-year pos",
+      "extracted_text": "Staff Introductions: Cameron Allen (he/him) § First-year postdoc + lecturer in EECS § AI safety research at Center for Human-Compatible AI § First time teaching as co-instructor, so your  feedback/advice/complaints are appreciated! § Did my PhD in CS at Brown (2023) § Research focus: AI and decision making § Experience as TA / Guest Lecturer § Lear",
+      "terms_json": [
+        "Staff",
+        "Cameron",
+        "Allen",
+        "postdoc",
+        "lecturer",
+        "EECS"
+      ],
+      "start_sec": 60.0,
+      "end_sec": 90.0
+    },
+    {
+      "slide_number": 4,
+      "title": "Slide 4: Staff Introductions: Michael Cohen (he/him) § Doing a Postdo",
+      "extracted_text": "Staff Introductions: Michael Cohen (he/him) § Doing a Postdoc § With Stuart Russell at Center for Human-Compatible AI § PhD at Oxford § With the Future of Humanity Institute § Research Focus § Under what circumstances would artificial agents face an  incentive to take over the world? § How can we make arbitrarily competent artificial agents  that d",
+      "terms_json": [
+        "Staff",
+        "Michael",
+        "Cohen",
+        "Doing",
+        "Postdoc",
+        "With"
+      ],
+      "start_sec": 90.0,
+      "end_sec": 120.0
+    },
+    {
+      "slide_number": 5,
+      "title": "Slide 5: Our talented course staff! Evgeny Pobachienko he/him Sid Ijj",
+      "extracted_text": "Our talented course staff! Evgeny Pobachienko he/him Sid Ijju he/him Xavier Yin he/him Alina Trinh she/her Marwa Abdulhai she/her Cham Yao he/him Jerry Sun he/him Joshua Liao he/him",
+      "terms_json": [
+        "talented",
+        "course",
+        "Evgeny",
+        "Pobachienko",
+        "Ijju",
+        "Xavier"
+      ],
+      "start_sec": 120.0,
+      "end_sec": 150.0
+    },
+    {
+      "slide_number": 6,
+      "title": "Slide 6: Our talented course staff! Joy Liu she/her Kenny Wang he/him",
+      "extracted_text": "Our talented course staff! Joy Liu she/her Kenny Wang he/him Michael Wu he/him Matei Gardea he/him Pranav Muralikrishnan he/him Sashrika Pandey she/her Ajay Sridhar he/him Aidan Leung he/him",
+      "terms_json": [
+        "talented",
+        "course",
+        "Kenny",
+        "Wang",
+        "Michael",
+        "Matei"
+      ],
+      "start_sec": 150.0,
+      "end_sec": 180.0
+    },
+    {
+      "slide_number": 7,
+      "title": "Slide 7: Our talented course staff! Allen Cao he/him Saathvik Selvan ",
+      "extracted_text": "Our talented course staff! Allen Cao he/him Saathvik Selvan he/him Samantha Huang she/her Somu Patil he/him might have a few  more people join so  here’s a placeholder",
+      "terms_json": [
+        "talented",
+        "course",
+        "Allen",
+        "Saathvik",
+        "Selvan",
+        "Samantha"
+      ],
+      "start_sec": 180.0,
+      "end_sec": 210.0
+    },
+    {
+      "slide_number": 8,
+      "title": "Slide 8: Enrollment § Course staff does not control enrollment; we ha",
+      "extracted_text": "Enrollment § Course staff does not control enrollment; we have to follow  department policy § Only CS majors will be able to enroll this spring § More details on the course website",
+      "terms_json": [
+        "Enrollment",
+        "Course",
+        "staff",
+        "does",
+        "control",
+        "have"
+      ],
+      "start_sec": 210.0,
+      "end_sec": 240.0
+    },
+    {
+      "slide_number": 9,
+      "title": "Slide 9: Course Structure: Lectures § You are here! (Wheeler 150) § T",
+      "extracted_text": "Course Structure: Lectures § You are here! (Wheeler 150) § Tuesday/Thursday, 12:30–2:00 PM PT § Attendance policy: § Attend lecture, in person. § We will take attendance. You will get extra credit. § Lecture recordings: § Posted next day on website. § Do not count towards attendance.",
+      "terms_json": [
+        "Course",
+        "Lectures",
+        "Attendance",
+        "Attend",
+        "will",
+        "take"
+      ],
+      "start_sec": 240.0,
+      "end_sec": 270.0
+    },
+    {
+      "slide_number": 10,
+      "title": "Slide 10: Course Structure: Attendance § Lecture code: § sp24ai (Also ",
+      "extracted_text": "Course Structure: Attendance § Lecture code: § sp24ai (Also on website)",
+      "terms_json": [
+        "Course",
+        "Attendance",
+        "Lecture",
+        "sp24ai"
+      ],
+      "start_sec": 270.0,
+      "end_sec": 300.0
+    },
+    {
+      "slide_number": 11,
+      "title": "Slide 11: Course Structure: Feedback § Includes link to course feedbac",
+      "extracted_text": "Course Structure: Feedback § Includes link to course feedback form. § Also available on course website.",
+      "terms_json": [
+        "Course",
+        "Feedback",
+        "Includes",
+        "link",
+        "course",
+        "feedback"
+      ],
+      "start_sec": 300.0,
+      "end_sec": 330.0
+    },
+    {
+      "slide_number": 12,
+      "title": "Slide 12: Course Structure: Discussions § We offer three types of disc",
+      "extracted_text": "Course Structure: Discussions § We offer three types of discussions § Regular discussions § Exam prep discussions § Extended-time discussions § We’ll try to make recordings, but no promises § Discussion schedule available on website § Discussions start next week (Jan 22) § You can attend any discussion section you want (no need to  enroll in a sect",
+      "terms_json": [
+        "Course",
+        "Discussions",
+        "offer",
+        "three",
+        "types",
+        "discussions"
+      ],
+      "start_sec": 330.0,
+      "end_sec": 360.0
+    }
+  ],
+  "notes": [
+    {
+      "slide_number": 1,
+      "bullet_point": "Chào mừng đến với CS188 Trí tuệ Nhân tạo - Giới thiệu về Tác tử Thông minh và Định nghĩa AI.",
+      "novelty_score": 0.35,
+      "verbatim_quote": "Welcome to CS188, Artificial Intelligence.",
+      "start_time_sec": 2.6,
+      "end_time_sec": 7.88
+    },
+    {
+      "slide_number": 2,
+      "bullet_point": "Cấu trúc nửa đầu buổi học: Giới thiệu đội ngũ giảng dạy, trợ giảng và cách thức tổ chức môn học.",
+      "novelty_score": 0.3,
+      "verbatim_quote": "First Half of Today: Intros and Logistics",
+      "start_time_sec": 18.0,
+      "end_time_sec": 26.5
+    },
+    {
+      "slide_number": 3,
+      "bullet_point": "Nghiên cứu an toàn AI (AI Safety Research) tại Trung tâm AI Tương thích với Con người (CHAI).",
+      "novelty_score": 0.38,
+      "verbatim_quote": "AI safety research at Center for Human-Compatible AI",
+      "start_time_sec": 65.0,
+      "end_time_sec": 78.4
+    },
+    {
+      "slide_number": 4,
+      "bullet_point": "Mô hình nghiên cứu với Giáo sư Stuart Russell: Tối ưu hóa hàm phần thưởng và hành vi tác tử.",
+      "novelty_score": 0.36,
+      "verbatim_quote": "With Stuart Russell at Center for Human-Compatible AI",
+      "start_time_sec": 115.0,
+      "end_time_sec": 132.0
+    },
+    {
+      "slide_number": 9,
+      "bullet_point": "Lịch học trên giảng đường Wheeler 150 vào Thứ Ba & Thứ Năm hàng tuần.",
+      "novelty_score": 0.29,
+      "verbatim_quote": "Course Structure: Lectures. You are here! Wheeler 150",
+      "start_time_sec": 270.0,
+      "end_time_sec": 288.0
+    },
+    {
+      "slide_number": 10,
+      "bullet_point": "Mã điểm danh trực tuyến cho bài giảng hôm nay: 'sp24ai' trên website môn học.",
+      "novelty_score": 0.32,
+      "verbatim_quote": "Course Structure: Attendance. Lecture code: sp24ai",
+      "start_time_sec": 315.0,
+      "end_time_sec": 332.0
+    }
+  ]
+}

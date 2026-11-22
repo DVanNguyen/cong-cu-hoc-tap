@@ -1,0 +1,110 @@
+[
+  {
+    "segment_id": 1,
+    "start_sec": 0.0,
+    "end_sec": 12.5,
+    "true_slide_number": 1
+  },
+  {
+    "segment_id": 2,
+    "start_sec": 13.0,
+    "end_sec": 28.0,
+    "true_slide_number": 2
+  },
+  {
+    "segment_id": 3,
+    "start_sec": 28.5,
+    "end_sec": 48.0,
+    "true_slide_number": 2
+  },
+  {
+    "segment_id": 4,
+    "start_sec": 48.5,
+    "end_sec": 65.0,
+    "true_slide_number": 3
+  },
+  {
+    "segment_id": 5,
+    "start_sec": 65.5,
+    "end_sec": 85.0,
+    "true_slide_number": 4
+  },
+  {
+    "segment_id": 6,
+    "start_sec": 85.5,
+    "end_sec": 105.0,
+    "true_slide_number": 5
+  },
+  {
+    "segment_id": 7,
+    "start_sec": 105.5,
+    "end_sec": 125.0,
+    "true_slide_number": 6
+  },
+  {
+    "segment_id": 8,
+    "start_sec": 125.5,
+    "end_sec": 145.0,
+    "true_slide_number": 6
+  },
+  {
+    "segment_id": 9,
+    "start_sec": 145.5,
+    "end_sec": 175.0,
+    "true_slide_number": 7
+  },
+  {
+    "segment_id": 10,
+    "start_sec": 175.5,
+    "end_sec": 205.0,
+    "true_slide_number": 8
+  },
+  {
+    "segment_id": 11,
+    "start_sec": 205.5,
+    "end_sec": 235.0,
+    "true_slide_number": 9
+  },
+  {
+    "segment_id": 12,
+    "start_sec": 235.5,
+    "end_sec": 265.0,
+    "true_slide_number": 10
+  },
+  {
+    "segment_id": 13,
+    "start_sec": 265.5,
+    "end_sec": 300.0,
+    "true_slide_number": 11
+  },
+  {
+    "segment_id": 14,
+    "start_sec": 300.5,
+    "end_sec": 335.0,
+    "true_slide_number": 12
+  },
+  {
+    "segment_id": 15,
+    "start_sec": 335.5,
+    "end_sec": 370.0,
+    "true_slide_number": 12
+  },
+  {
+    "segment_id": 16,
+    "start_sec": 370.5,
+    "end_sec": 410.0,
+    "true_slide_number": 13
+  },
+  {
+    "segment_id": 17,
+    "start_sec": 410.5,
+    "end_sec": 460.0,
+    "true_slide_number": 14
+  },
+  {
+    "segment_id": 18,
+    "start_sec": 460.5,
+    "end_sec": 510.0,
+    "true_slide_number": 15
+  }
+]

@@ -1,0 +1,131 @@
+import re
+import uuid
+from pathlib import Path
+from typing import List, Dict, Any, Optional
+import fitz  # PyMuPDF
+from pptx import Presentation
+
+# Danh sách từ tiếng Việt không dấu/từ thông dụng để không nhận nhầm làm thuật ngữ tiếng Anh
+VI_STOPWORDS_ASCII = {
+    "va", "cua", "cac", "trong", "la", "co", "duoc", "cho", "voi", "tu", "theo",
+    "mot", "nhung", "khi", "de", "khong", "tren", "nay", "den", "ve", "nhu",
+    "bai", "chuong", "phan", "vi", "du", "he", "thong", "thuat", "toan", "slide",
+    "page", "trang", "nam", "hoc", "khoa", "dai", "cntt", "vku"
+}
+
+def extract_slide_terms_and_bilingual_pairs(raw_text: str) -> Dict[str, Any]:
+    """
+    Trích xuất:
+    1. domain_terms: Các thuật ngữ chuyên ngành tiếng Anh, từ viết tắt (PEAS, BFS, DFS), ký hiệu (A*, AO*).
+    2. bilingual_pairs: Các cặp thuật ngữ song ngữ dạng 'Tiếng Việt (English Term)' trên slide.
+    """
+    domain_terms = set()
+    bilingual_pairs = []
+
+    # 1. Bắt các thuật toán có dấu * như A*, IDA*, AO*
+    for star_term in re.findall(r"\b[A-Z]{1,4}\*(?:\s+[A-Za-z]+)?\b", raw_text):
+        domain_terms.add(star_term.strip())
+
+    # 2. Bắt cặp song ngữ dạng: Cụm tiếng Việt (Cụm tiếng Anh)
+    paren_pattern = re.compile(r"([A-ZÀ-Ỹa-zà-ỹ\s]{3,45})\s*\(([A-Za-z0-9\-\*\s]{2,45})\)")
+    for vi_part, en_part in paren_pattern.findall(raw_text):
+        vi_clean = " ".join(vi_part.split()).strip(" -•:")
+        en_clean = " ".join(en_part.split()).strip()
+        if not en_clean.isdigit() and len(en_clean) >= 2:
+            domain_terms.add(en_clean)
+            if len(vi_clean) >= 3:
+                bilingual_pairs.append({"vi": vi_clean, "en": en_clean})
+
+    # 3. Bắt từ viết tắt chuyên ngành in hoa (PEAS, BFS, DFS, UCS, IDS, CSP, FIFO, LIFO...)
+    for acronym in re.findall(r"\b[A-Z]{2,8}\b", raw_text):
+        if acronym.lower() not in VI_STOPWORDS_ASCII:
+            domain_terms.add(acronym)
+
+    # 4. Bắt các cụm từ tiếng Anh chuyên ngành (CamelCase, Hyphenated, hoặc cụm từ ASCII)
+    for phrase in re.findall(r"\b[A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+){0,2}\b", raw_text):
+        cleaned = phrase.strip()
+        # Chỉ giữ từ thuần ASCII (không dấu tiếng Việt) và không nằm trong stopwords
+        if cleaned.isascii() and cleaned.lower() not in VI_STOPWORDS_ASCII and len(cleaned) >= 3:
+            domain_terms.add(cleaned)
+
+    return {
+        "domain_terms": sorted(domain_terms),
+        "bilingual_pairs": bilingual_pairs
+    }
+
+def extract_pdf_slide_deck(pdf_path: str) -> List[Dict[str, Any]]:
+    """Đọc file PDF và tách cấu trúc từng trang slide."""
+    doc = fitz.open(pdf_path)
+    slides = []
+
+    for page_idx, page in enumerate(doc, start=1):
+        # Sắp xếp các block theo thứ tự từ trên xuống dưới (y0, x0)
+        blocks = sorted(page.get_text("blocks"), key=lambda b: (round(b[1], 1), round(b[0], 1)))
+        lines = []
+        for b in blocks:
+            if b[6] == 0:  # Chỉ lấy text block (bỏ qua image block)
+                for line in b[4].splitlines():
+                    cleaned = " ".join(line.split()).strip()
+                    if cleaned and not cleaned.isdigit():  # Bỏ số trang đơn lẻ ở footer
+                        lines.append(cleaned)
+
+        title = lines[0] if lines else f"Slide {page_idx}"
+        bullets = lines[1:] if len(lines) > 1 else lines
+        raw_text = "\n".join(lines)
+        term_info = extract_slide_terms_and_bilingual_pairs(raw_text)
+
+        slides.append({
+            "slide_number": page_idx,
+            "title": title[:500],
+            "raw_text": raw_text,
+            "bullets": bullets,
+            "extracted_terms": term_info["domain_terms"],
+            "bilingual_pairs": term_info["bilingual_pairs"],
+            "qdrant_point_id": str(uuid.uuid4())
+        })
+
+    doc.close()
+    return slides
+
+def extract_pptx_slide_deck(pptx_path: str) -> List[Dict[str, Any]]:
+    """Đọc file PPTX và tách cấu trúc từng trang slide."""
+    prs = Presentation(pptx_path)
+    slides = []
+
+    for page_idx, slide in enumerate(prs.slides, start=1):
+        title = (
+            slide.shapes.title.text.strip()
+            if (slide.shapes.title and slide.shapes.title.text)
+            else f"Slide {page_idx}"
+        )
+        lines = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    cleaned = " ".join(para.text.split()).strip()
+                    if cleaned and not cleaned.isdigit():
+                        lines.append(cleaned)
+
+        bullets = [l for l in lines if l != title] or lines
+        raw_text = "\n".join(lines)
+        term_info = extract_slide_terms_and_bilingual_pairs(raw_text)
+
+        slides.append({
+            "slide_number": page_idx,
+            "title": title[:500],
+            "raw_text": raw_text,
+            "bullets": bullets,
+            "extracted_terms": term_info["domain_terms"],
+            "bilingual_pairs": term_info["bilingual_pairs"],
+            "qdrant_point_id": str(uuid.uuid4())
+        })
+
+    return slides
+
+def extract_slide_deck(file_path: str) -> List[Dict[str, Any]]:
+    ext = Path(file_path).suffix.lower()
+    if ext == ".pdf":
+        return extract_pdf_slide_deck(file_path)
+    elif ext == ".pptx":
+        return extract_pptx_slide_deck(file_path)
+    raise ValueError(f"Định dạng không hỗ trợ: {ext}")

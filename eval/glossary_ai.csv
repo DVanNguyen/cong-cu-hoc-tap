@@ -1,0 +1,21 @@
+id,term_en,term_vi,chapter,definition_short,prerequisites
+1,Intelligent Agent,Tác tử thông minh,Chapter 1-2,Thực thể cảm nhận môi trường qua cảm biến và tác động lên môi trường qua bộ tác động,
+2,Rationality,Tính duy lý / Tính hợp lý,Chapter 2,Khả năng chọn hành động tối đa hóa hiệu năng kỳ vọng dựa trên chuỗi tri giác và tri thức tích lũy,Intelligent Agent
+3,PEAS Framework,Khung đặc tả PEAS,Chapter 2,"Mô hình đặc tả tác tử gồm Performance (Hiệu năng), Environment (Môi trường), Actuators (Bộ tác động), Sensors (Cảm biến)",Intelligent Agent
+4,Environment: Observable vs Partially Observable,Môi trường quan sát toàn phần vs một phần,Chapter 2,Cảm biến của tác tử truy cập được toàn bộ trạng thái của môi trường tại mọi thời điểm,PEAS Framework
+5,Environment: Deterministic vs Stochastic,Môi trường xác định vs ngẫu nhiên,Chapter 2,Trạng thái kế tiếp của môi trường hoàn toàn được quyết định bởi trạng thái hiện tại và hành động của tác tử,Environment: Observable vs Partially Observable
+6,State Space,Không gian trạng thái,Chapter 3,Tập hợp tất cả các trạng thái có thể đạt được từ trạng thái khởi đầu thông qua chuỗi các hành động,Problem Formulation
+7,Search Tree,Cây tìm kiếm,Chapter 3,Cây biểu diễn các đường đi khả dĩ qua không gian trạng thái với nút gốc là trạng thái ban đầu,State Space
+8,Branching Factor,Hệ số phân nhánh,Chapter 3,Số lượng nút con tối đa sinh ra từ một nút trong cây tìm kiếm (ký hiệu b),Search Tree
+9,Uninformed Search,Tìm kiếm mù / không có thông tin,Chapter 3,Chiến lược tìm kiếm chỉ dựa trên cấu trúc đồ thị mà không có ước lượng khoảng cách tới đích (BFS, DFS, UCS),Search Strategy
+10,Uniform Cost Search,Tìm kiếm chi phí đều,Chapter 3,Giải thuật mở rộng nút có chi phí đường đi g(n) thấp nhất trước,Uninformed Search
+11,Informed Search,Tìm kiếm có thông tin / Heuristic,Chapter 3-4,Chiến lược tìm kiếm sử dụng tri thức bổ sung để ước lượng độ gần đích,Uninformed Search
+12,Heuristic Function,Hàm Heuristic / Hàm ước lượng,Chapter 3-4,Hàm h(n) ước lượng chi phí đường đi rẻ nhất từ trạng thái tại nút n đến trạng thái đích,Informed Search
+13,Greedy Best-First Search,Tìm kiếm tham lam tốt nhất,Chapter 3,Chiến lược mở rộng nút được đánh giá là gần đích nhất theo hàm f(n) = h(n),Heuristic Function
+14,A* Search,Giải thuật tìm kiếm A*,Chapter 3,Giải thuật đánh giá nút dựa trên f(n) = g(n) + h(n) kết hợp chi phí thực tế đã qua và chi phí ước lượng tới đích,Heuristic Function
+15,Admissible Heuristic,Heuristic chấp nhận được,Chapter 3,Hàm heuristic không bao giờ đánh giá quá cao chi phí thực tế tới đích (h(n) <= h*(n)),A* Search
+16,Consistent Heuristic / Monotonic,Heuristic nhất quán / đơn điệu,Chapter 3,Heuristic thỏa mãn bất đẳng thức tam giác: h(n) <= c(n, a, n') + h(n'),Admissible Heuristic
+17,Local Search,Tìm kiếm cục bộ,Chapter 4,Chiến lược tìm kiếm chỉ lưu giữ một trạng thái hiện tại và di chuyển sang các trạng thái lân cận,State Space
+18,Hill-Climbing Search,Tìm kiếm leo đồi,Chapter 4,Giải thuật tìm kiếm cục bộ di chuyển liên tục theo hướng giá trị tăng (hoặc chi phí giảm),Local Search
+19,Simulated Annealing,Mô phỏng tôi thép / luyện kim,Chapter 4,Giải thuật tìm kiếm cục bộ cho phép nhảy sang bước đi xấu hơn với xác suất giảm dần theo nhiệt độ để thoát cực tiểu địa phương,Hill-Climbing Search
+20,Genetic Algorithm,Giải thuật di truyền,Chapter 4,Giải thuật tìm kiếm mô phỏng chọn lọc tự nhiên bằng cách lai ghép (crossover) và đột biến (mutation) quần thể trạng thái,Local Search

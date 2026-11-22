@@ -1,0 +1,447 @@
+[
+  {
+    "source_id": "msg_01",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-13 09:30:00+07:00",
+    "raw_text": "[GV] thông báo: Các em nộp bài tập chương 2 (Intelligent Agents) lên Google Drive trước 23h59 ngày 20/10/2026 nhé.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_01",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bài tập chương 2: Intelligent Agents",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-20T23:59:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_02",
+    "source_channel": "email",
+    "sent_at": "2026-10-13 14:15:00+07:00",
+    "raw_text": "Chào cả lớp, bài tập nhóm số 1 (PEAS Framework) đã mở trên LMS. Hạn chót nộp là thứ 6 tuần sau lúc 17:00.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_peas_assignment",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bài tập nhóm 1: PEAS Framework",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-23T17:00:00+07:00",
+      "task_type": "project"
+    }
+  },
+  {
+    "source_id": "msg_03",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-14 08:00:00+07:00",
+    "raw_text": "Do nhiều bạn xin thêm thời gian, [GV] dời hạn bài tập 1 đến 23h59 Chủ nhật ngày 25/10 nhé.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_peas_assignment",
+    "intent": "reschedule",
+    "expected_json": {
+      "title": "Bài tập nhóm 1: PEAS Framework",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-25T23:59:00+07:00",
+      "task_type": "project"
+    }
+  },
+  {
+    "source_id": "msg_04",
+    "source_channel": "email",
+    "sent_at": "2026-10-14 10:20:00+07:00",
+    "raw_text": "Thông báo: Lớp nghỉ học vào thứ 7 tuần này do giảng viên bận hội nghị khoa học.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "none",
+    "expected_json": null
+  },
+  {
+    "source_id": "msg_05",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-14 16:45:00+07:00",
+    "raw_text": "[SV1]: Mọi người nhớ chuẩn bị câu hỏi thảo luận về PEAS trước tiết học sáng mai nha.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_peas_assignment",
+    "intent": "create",
+    "expected_json": {
+      "title": "Chuẩn bị thảo luận PEAS",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-15T07:30:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_06",
+    "source_channel": "speech",
+    "sent_at": "2026-10-15 09:15:00+07:00",
+    "raw_text": "Tuần sau chúng ta kiểm tra 15 phút phần Search Algorithms, các em nhớ ôn kỹ BFS với A*.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_06",
+    "intent": "create",
+    "expected_json": {
+      "title": "Kiểm tra 15 phút Search Algorithms",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-22T08:00:00+07:00",
+      "task_type": "exam"
+    }
+  },
+  {
+    "source_id": "msg_07",
+    "source_channel": "email",
+    "sent_at": "2026-10-15 11:00:00+07:00",
+    "raw_text": "Phòng Khảo thí thông báo lịch thi giữa kỳ dự kiến từ ngày 05/11 đến 15/11/2026.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "none",
+    "expected_json": null
+  },
+  {
+    "source_id": "msg_08",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-15 19:30:00+07:00",
+    "raw_text": "Hủy bài tập cá nhân tuần 3, lớp chỉ cần nộp báo cáo nhóm thôi nhé.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "cancel",
+    "expected_json": null
+  },
+  {
+    "source_id": "msg_09",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-16 08:10:00+07:00",
+    "raw_text": "[GV]: Nộp slide thuyết trình đề tài môn học trước 12h trưa ngày kia qua email cho thầy.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_09",
+    "intent": "create",
+    "expected_json": {
+      "title": "Nộp slide thuyết trình đề tài",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-18T12:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_10",
+    "source_channel": "email",
+    "sent_at": "2026-10-16 13:00:00+07:00",
+    "raw_text": "Deadline lab 2 dời lại 2 ngày so với thông báo cũ các em nhé.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_lab_assignments",
+    "intent": "reschedule",
+    "expected_json": {
+      "title": "Lab 2",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-22T23:59:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_11",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-16 15:30:00+07:00",
+    "raw_text": "Bạn nào chưa có nhóm đồ án thì điền link form trước 18h tối nay nha.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_11",
+    "intent": "create",
+    "expected_json": {
+      "title": "Điền form đăng ký nhóm đồ án",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-16T18:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_12",
+    "source_channel": "email",
+    "sent_at": "2026-10-17 09:00:00+07:00",
+    "raw_text": "Thư mời tham dự Workshop Ứng dụng Generative AI trong Kỹ nghệ Phần mềm vào sáng Chủ Nhật.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "none",
+    "expected_json": null
+  },
+  {
+    "source_id": "msg_13",
+    "source_channel": "speech",
+    "sent_at": "2026-10-17 10:45:00+07:00",
+    "raw_text": "Thầy nhắc lại là bài tập lớn cuối kỳ chiếm 30% số điểm, tuần 12 phải nộp báo cáo tiến độ đợt 1.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_13",
+    "intent": "create",
+    "expected_json": {
+      "title": "Báo cáo tiến độ 1: Bài tập lớn",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-11-20T23:59:00+07:00",
+      "task_type": "project"
+    }
+  },
+  {
+    "source_id": "msg_14",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-17 21:00:00+07:00",
+    "raw_text": "[SV2]: Có ai làm xong bài Heuristic chưa, mai nộp rồi mà chưa hiểu đề.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_astar_assignment",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bài tập Heuristic",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-18T08:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_15",
+    "source_channel": "email",
+    "sent_at": "2026-10-18 10:00:00+07:00",
+    "raw_text": "Nhắc nhở đóng học phí học kỳ 1 năm học 2026-2027 hạn chót 30/10/2026.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_15",
+    "intent": "create",
+    "expected_json": {
+      "title": "Đóng học phí học kỳ 1",
+      "course": "Học vụ",
+      "due_at": "2026-10-30T23:59:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_16",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-18 14:00:00+07:00",
+    "raw_text": "[GV]: Bài thực hành cài đặt thuật toán A* bằng Python nộp trước 21h00 thứ Tư tuần tới.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_astar_assignment",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bài thực hành A* Search Python",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-21T21:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_17",
+    "source_channel": "email",
+    "sent_at": "2026-10-19 08:30:00+07:00",
+    "raw_text": "Khoa CNTT thông báo: Sinh viên nộp đề cương thực tập tốt nghiệp trước 16h00 ngày 28/10/2026.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_17",
+    "intent": "create",
+    "expected_json": {
+      "title": "Nộp đề cương thực tập",
+      "course": "Khoa CNTT",
+      "due_at": "2026-10-28T16:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_18",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-19 11:20:00+07:00",
+    "raw_text": "Hôm nay trời mưa to, lớp mình chuyển sang học online qua Google Meet lúc 13h15 nhé.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "none",
+    "expected_json": null
+  },
+  {
+    "source_id": "msg_19",
+    "source_channel": "speech",
+    "sent_at": "2026-10-20 09:40:00+07:00",
+    "raw_text": "Phần bài tập về Admissible Heuristic các em về nhà làm câu 3.12 và 3.14, đầu giờ buổi tới thầy gọi lên bảng kiểm tra.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_astar_assignment",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bài tập 3.12 và 3.14 Admissible Heuristic",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-22T07:30:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_20",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-20 18:00:00+07:00",
+    "raw_text": "Thầy gia hạn bài thực hành A* thêm 24 tiếng, hạn mới là 21h00 thứ Năm nhé cả lớp.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_astar_assignment",
+    "intent": "reschedule",
+    "expected_json": {
+      "title": "Bài thực hành A* Search Python",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-22T21:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_21",
+    "source_channel": "email",
+    "sent_at": "2026-10-21 15:45:00+07:00",
+    "raw_text": "Thông báo đăng ký đề tài nghiên cứu khoa học sinh viên năm 2026. Hạn nhận hồ sơ đến hết ngày 31/10.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_21",
+    "intent": "create",
+    "expected_json": {
+      "title": "Hồ sơ NCKH sinh viên",
+      "course": "Nghiên cứu khoa học",
+      "due_at": "2026-10-31T23:59:00+07:00",
+      "task_type": "project"
+    }
+  },
+  {
+    "source_id": "msg_22",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-22 07:15:00+07:00",
+    "raw_text": "[SV3]: Nhắc nhẹ cả nhóm 9h tối nay họp discord chốt ý tưởng đồ án AI nha.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_22",
+    "intent": "create",
+    "expected_json": {
+      "title": "Họp nhóm đồ án AI",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-22T21:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_23",
+    "source_channel": "speech",
+    "sent_at": "2026-10-22 10:10:00+07:00",
+    "raw_text": "Buổi sau chúng ta học sang Chapter 4 về Local Search, các em nhớ đọc trước tài liệu trên LMS.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_23",
+    "intent": "create",
+    "expected_json": {
+      "title": "Đọc trước Chapter 4 Local Search",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-27T07:30:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_24",
+    "source_channel": "email",
+    "sent_at": "2026-10-23 09:00:00+07:00",
+    "raw_text": "Hủy lịch thi kiểm tra giữa kỳ ngày 25/10, dời sang tuần 10 sẽ có thông báo cụ thể sau.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "cancel",
+    "expected_json": null
+  },
+  {
+    "source_id": "msg_25",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-23 20:00:00+07:00",
+    "raw_text": "[GV]: Lớp trưởng tổng hợp danh sách đề tài và gửi lại thầy trước 17h Chủ nhật tuần này.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_25",
+    "intent": "create",
+    "expected_json": {
+      "title": "Tổng hợp danh sách đề tài",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-25T17:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_26",
+    "source_channel": "email",
+    "sent_at": "2026-10-24 14:30:00+07:00",
+    "raw_text": "Thư viện trường thông báo hạn trả sách giáo trình đợt 1 trước ngày 05/11/2026.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_26",
+    "intent": "create",
+    "expected_json": {
+      "title": "Trả sách giáo trình thư viện",
+      "course": "Thư viện",
+      "due_at": "2026-11-05T17:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_27",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-25 10:00:00+07:00",
+    "raw_text": "[SV1]: Các bạn ơi nộp bài tập nhóm 1 trước 12h đêm nay nha, đừng để trễ hạn bị trừ điểm.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_peas_assignment",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bài tập nhóm 1: PEAS Framework",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-25T23:59:00+07:00",
+      "task_type": "project"
+    }
+  },
+  {
+    "source_id": "msg_28",
+    "source_channel": "speech",
+    "sent_at": "2026-10-27 08:50:00+07:00",
+    "raw_text": "Thầy sẽ mở quiz trắc nghiệm trên trang học trực tuyến từ 20h đến 22h tối thứ 6 này, làm trong 30 phút.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_28",
+    "intent": "create",
+    "expected_json": {
+      "title": "Quiz trắc nghiệm Chapter 3-4",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-10-30T22:00:00+07:00",
+      "task_type": "exam"
+    }
+  },
+  {
+    "source_id": "msg_29",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-27 16:20:00+07:00",
+    "raw_text": "[GV]: Bài lab 3 về Simulated Annealing sẽ nộp vào thứ Ba tuần sau ngày 03/11 lúc 23h59.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_lab_assignments",
+    "intent": "create",
+    "expected_json": {
+      "title": "Lab 3: Simulated Annealing",
+      "course": "Trí tuệ nhân tạo",
+      "due_at": "2026-11-03T23:59:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_30",
+    "source_channel": "email",
+    "sent_at": "2026-10-28 10:15:00+07:00",
+    "raw_text": "Trung tâm Khảo thí VKU: Sinh viên kiểm tra danh sách thi và báo sai sót trước 11h00 ngày 30/10.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_30",
+    "intent": "create",
+    "expected_json": {
+      "title": "Kiểm tra danh sách thi",
+      "course": "Học vụ",
+      "due_at": "2026-10-30T11:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_31",
+    "source_channel": "telegram",
+    "sent_at": "2026-10-29 08:45:00+07:00",
+    "raw_text": "Ai quên điểm danh sáng nay thì nhắn lại cho lớp phó trước 12h trưa.",
+    "is_task": true,
+    "canonical_task_cluster_id": "cluster_task_31",
+    "intent": "create",
+    "expected_json": {
+      "title": "Bổ sung điểm danh",
+      "course": "Lớp học",
+      "due_at": "2026-10-29T12:00:00+07:00",
+      "task_type": "assignment"
+    }
+  },
+  {
+    "source_id": "msg_32",
+    "source_channel": "speech",
+    "sent_at": "2026-10-29 10:30:00+07:00",
+    "raw_text": "Bài tập lớn các nhóm chú ý: Báo cáo giữa kỳ phải có biểu đồ so sánh chi phí của BFS và A*.",
+    "is_task": false,
+    "canonical_task_cluster_id": null,
+    "intent": "none",
+    "expected_json": null
+  }
+]

@@ -1,0 +1,11 @@
+{
+  "title": "Bài tập dời hạn",
+  "course": "Trí tuệ nhân tạo",
+  "type": "assignment",
+  "due_expression": "23h59 Chủ nhật ngày 25/10",
+  "due_iso_candidate": "2026-10-25T23:59:00+07:00",
+  "intent": "reschedule",
+  "effort_est_min": 120,
+  "confidence": 0.95,
+  "evidence_quote": "dời hạn bài tập 1 đến 23h59 Chủ nhật ngày 25/10"
+}

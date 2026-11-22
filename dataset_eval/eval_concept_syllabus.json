@@ -1,0 +1,127 @@
+{
+  "course_code": "AI2026",
+  "course_name": "Trí tuệ nhân tạo (Artificial Intelligence)",
+  "syllabus_concepts": [
+    {
+      "canonical_name": "Tác tử thông minh (Intelligent Agent)",
+      "aliases": [
+        "Intelligent Agent",
+        "Tác tử",
+        "Agent"
+      ]
+    },
+    {
+      "canonical_name": "Môi trường (Environment)",
+      "aliases": [
+        "Environment",
+        "Môi trường tác tử"
+      ]
+    },
+    {
+      "canonical_name": "Cảm biến (Sensors)",
+      "aliases": [
+        "Sensors",
+        "Cảm biến"
+      ]
+    },
+    {
+      "canonical_name": "Bộ tác động (Actuators)",
+      "aliases": [
+        "Actuators",
+        "Cơ cấu tác động"
+      ]
+    },
+    {
+      "canonical_name": "Chuỗi nhận thức (Percept Sequence)",
+      "aliases": [
+        "Percept Sequence",
+        "Dãy nhận thức"
+      ]
+    },
+    {
+      "canonical_name": "Hàm tác tử (Agent Function)",
+      "aliases": [
+        "Agent Function",
+        "Hàm quyết định tác tử"
+      ]
+    },
+    {
+      "canonical_name": "Khuôn mẫu PEAS (PEAS Framework)",
+      "aliases": [
+        "PEAS",
+        "PEAS Framework"
+      ]
+    },
+    {
+      "canonical_name": "Không gian trạng thái (State Space)",
+      "aliases": [
+        "State Space",
+        "Không gian bài toán"
+      ]
+    },
+    {
+      "canonical_name": "Tìm kiếm theo chiều rộng (Breadth-First Search)",
+      "aliases": [
+        "BFS",
+        "Breadth-First Search"
+      ]
+    },
+    {
+      "canonical_name": "Tìm kiếm theo chiều sâu (Depth-First Search)",
+      "aliases": [
+        "DFS",
+        "Depth-First Search"
+      ]
+    },
+    {
+      "canonical_name": "Tìm kiếm chi phí đồng nhất (Uniform Cost Search)",
+      "aliases": [
+        "UCS",
+        "Uniform Cost Search"
+      ]
+    },
+    {
+      "canonical_name": "Tìm kiếm Heuristic (Heuristic Search)",
+      "aliases": [
+        "Heuristic Search",
+        "Hàm đánh giá"
+      ]
+    },
+    {
+      "canonical_name": "Thuật toán A* (A* Search)",
+      "aliases": [
+        "A*",
+        "A* Search",
+        "A Star"
+      ]
+    },
+    {
+      "canonical_name": "Heuristic chấp nhận được (Admissible Heuristic)",
+      "aliases": [
+        "Admissible Heuristic",
+        "Admissible"
+      ]
+    },
+    {
+      "canonical_name": "Heuristic nhất quán (Consistent Heuristic)",
+      "aliases": [
+        "Consistent Heuristic",
+        "Monotonic Heuristic"
+      ]
+    },
+    {
+      "canonical_name": "Tìm kiếm leo đồi (Hill Climbing)",
+      "aliases": [
+        "Hill Climbing",
+        "Leo đồi"
+      ]
+    },
+    {
+      "canonical_name": "Mô phỏng tôi thép (Simulated Annealing)",
+      "aliases": [
+        "Simulated Annealing",
+        "Luyện kim"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,212 @@
+[
+  {
+    "id": 1,
+    "start_sec": 0.0,
+    "end_sec": 12.5,
+    "text": "Các bạn ổn định chỗ ngồi nhé, hôm nay chúng ta tiếp tục với Chapter 2 về Intelligent Agents.",
+    "label": "hành chính",
+    "terms": ["Chapter 2", "Intelligent Agents"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 1"
+  },
+  {
+    "id": 2,
+    "start_sec": 13.0,
+    "end_sec": 28.0,
+    "text": "Như trên slide có ghi, an agent is anything that can be viewed as perceiving its environment through sensors and acting upon that environment through actuators.",
+    "label": "đọc lại slide",
+    "terms": ["agent", "environment", "sensors", "actuators"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 2"
+  },
+  {
+    "id": 3,
+    "start_sec": 28.5,
+    "end_sec": 48.0,
+    "text": "Nói một cách nôm na dễ hiểu, tác tử có thể là con người với mắt mũi tai là cảm biến, tay chân là bộ tác động. Nhưng trong phần mềm, cảm biến là các hàm nhận input như file hay network packet, còn bộ tác động là xuất màn hình hoặc ghi cơ sở dữ liệu.",
+    "label": "giảng thêm",
+    "terms": ["tác tử", "cảm biến", "bộ tác động", "input", "network packet"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 2"
+  },
+  {
+    "id": 4,
+    "start_sec": 48.5,
+    "end_sec": 62.0,
+    "text": "Bạn lớp phó cuối giờ nhớ gửi cho thầy danh sách vắng nhé, hôm nay thấy vắng hơi nhiều đó.",
+    "label": "nói chuyện ngoài lề",
+    "terms": [],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 2"
+  },
+  {
+    "id": 5,
+    "start_sec": 63.0,
+    "end_sec": 81.0,
+    "text": "Tiếp theo là khái niệm cực kỳ quan trọng: Rationality, tức là tính duy lý. Thế nào là một rational agent? Slide định nghĩa là for each possible percept sequence, a rational agent should select an action that is expected to maximize its performance measure.",
+    "label": "đọc lại slide",
+    "terms": ["Rationality", "rational agent", "percept sequence", "performance measure"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 5"
+  },
+  {
+    "id": 6,
+    "start_sec": 81.5,
+    "end_sec": 105.0,
+    "text": "Lưu ý chỗ này rất hay ra thi trắc nghiệm: Rationality hoàn toàn khác với Omniscience tức là toàn năng hay biết trước tương lai. Một tác tử duy lý đưa ra quyết định tối ưu dựa trên những gì nó đã quan sát được trong percept sequence, chứ không phải nó biết trước mọi thứ.",
+    "label": "giảng thêm",
+    "terms": ["Rationality", "Omniscience", "percept sequence", "tối ưu"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 5"
+  },
+  {
+    "id": 7,
+    "start_sec": 106.0,
+    "end_sec": 128.0,
+    "text": "Để đặc tả một bài toán tác tử thông minh, các em luôn phải dùng mô hình PEAS. Chữ P là Performance measure, E là Environment, A là Actuators và S là Sensors.",
+    "label": "đọc lại slide",
+    "terms": ["PEAS", "Performance measure", "Environment", "Actuators", "Sensors"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 9"
+  },
+  {
+    "id": 8,
+    "start_sec": 128.5,
+    "end_sec": 156.0,
+    "text": "Ví dụ cụ thể với xe tự hành Automated taxi: P sẽ là độ an toàn, tốc độ, sự thoải mái và lợi nhuận. E là đường sá, người đi bộ, thời tiết. A là tay lái, chân ga, chân phanh. S là camera, radar, GPS, đồng hồ tốc độ. Khi làm bài tập nhóm 1, các em phải kẻ bảng phân tích PEAS cho hệ thống của nhóm mình.",
+    "label": "giảng thêm",
+    "terms": ["Automated taxi", "PEAS", "radar", "GPS"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 10"
+  },
+  {
+    "id": 9,
+    "start_sec": 157.0,
+    "end_sec": 178.0,
+    "text": "Nhân tiện thầy nhắc luôn: Bài tập nhóm 1 phân tích PEAS này các em nộp trên hệ thống LMS trước 23h59 ngày 25 tháng 10 nhé. Nộp file PDF kèm mã nguồn nếu có mô phỏng.",
+    "label": "hành chính",
+    "terms": ["PEAS", "LMS", "PDF"],
+    "is_deadline": true,
+    "slide_ref": "Chapter 2 - Slide 10"
+  },
+  {
+    "id": 10,
+    "start_sec": 179.0,
+    "end_sec": 204.0,
+    "text": "Bây giờ sang phần phân loại môi trường Environment types. Ta có: Fully observable đối lập với Partially observable. Deterministic đối lập với Stochastic. Episodic đối lập với Sequential. Static đối lập với Dynamic. Và Discrete đối lập với Continuous.",
+    "label": "đọc lại slide",
+    "terms": ["Environment types", "Fully observable", "Partially observable", "Deterministic", "Stochastic", "Episodic", "Sequential", "Static", "Dynamic", "Discrete", "Continuous"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 13"
+  },
+  {
+    "id": 11,
+    "start_sec": 205.0,
+    "end_sec": 235.0,
+    "text": "Môi trường khó nhất cho AI là môi trường Partially observable, Stochastic, Sequential, Dynamic và Continuous. Ví dụ như lái xe ngoài đời thực hoặc thị trường chứng khoán. Còn cờ vua chess là Fully observable, Deterministic, Static và Discrete nên thuật toán giải quyết dễ hơn nhiều.",
+    "label": "giảng thêm",
+    "terms": ["Partially observable", "Stochastic", "Sequential", "Dynamic", "Continuous", "Deterministic", "Discrete"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 2 - Slide 14"
+  },
+  {
+    "id": 12,
+    "start_sec": 236.0,
+    "end_sec": 262.0,
+    "text": "Chuyển sang Chapter 3: Solving Problems by Searching. Một problem-solving agent cần xác định: Initial state, Actions, Transition model, Goal test và Path cost.",
+    "label": "đọc lại slide",
+    "terms": ["Chapter 3", "Problem-solving agent", "Initial state", "Actions", "Transition model", "Goal test", "Path cost"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 6"
+  },
+  {
+    "id": 13,
+    "start_sec": 263.0,
+    "end_sec": 298.0,
+    "text": "Toàn bộ các trạng thái sinh ra từ initial state qua actions tạo thành State space tức không gian trạng thái. Để tìm kiếm đường đi, thuật toán xây dựng một Search tree. Chú ý phân biệt State space là đồ thị cố định của bài toán, còn Search tree là cây do thuật toán duyệt sinh ra, có thể chứa các nhánh trùng lặp nếu có chu trình.",
+    "label": "giảng thêm",
+    "terms": ["initial state", "actions", "State space", "không gian trạng thái", "Search tree", "chu trình"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 11"
+  },
+  {
+    "id": 14,
+    "start_sec": 299.0,
+    "end_sec": 328.0,
+    "text": "Độ phức tạp của thuật toán tìm kiếm được đo bằng 4 tiêu chí: Completeness tính đầy đủ, Time complexity độ phức tạp thời gian, Space complexity độ phức tạp không gian, và Optimality tính tối ưu. Trong đó b là branching factor tức hệ số phân nhánh, d là depth của lời giải nông nhất, và m là maximum depth của cây.",
+    "label": "đọc lại slide",
+    "terms": ["Completeness", "Time complexity", "Space complexity", "Optimality", "branching factor", "depth"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 18"
+  },
+  {
+    "id": 15,
+    "start_sec": 329.0,
+    "end_sec": 365.0,
+    "text": "So sánh giữa BFS Breadth-First Search và DFS Depth-First Search: BFS đảm bảo Complete và Optimal nếu chi phí mỗi bước bằng nhau, nhưng tốn bộ nhớ kinh khủng, O của b mũ d. Trong khi đó DFS tốn bộ nhớ rất ít chỉ O của b nhân m, nhưng có thể rơi vào vòng lặp vô tận và không tối ưu. Vì vậy trong thực tế người ta hay dùng Iterative Deepening DFS để kết hợp ưu điểm của cả hai.",
+    "label": "giảng thêm",
+    "terms": ["BFS", "Breadth-First Search", "DFS", "Depth-First Search", "Complete", "Optimal", "Iterative Deepening DFS"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 25"
+  },
+  {
+    "id": 16,
+    "start_sec": 366.0,
+    "end_sec": 395.0,
+    "text": "Khi mỗi bước đi có chi phí khác nhau, BFS không còn tối ưu nữa mà ta phải dùng Uniform Cost Search hay thuật toán Dijkstra. Thuật toán này mở rộng nút có đường đi g of n thấp nhất trước.",
+    "label": "đọc lại slide",
+    "terms": ["Uniform Cost Search", "Dijkstra", "g(n)"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 28"
+  },
+  {
+    "id": 17,
+    "start_sec": 396.0,
+    "end_sec": 435.0,
+    "text": "Nhưng tất cả các thuật toán trên đều là Uninformed Search, tức là tìm kiếm mù, không biết đích ở đâu để hướng tới. Sang Informed Search, ta dùng hàm Heuristic h of n ước lượng chi phí từ nút n tới đích. Ví dụ bài toán tìm đường từ Arad đến Bucharest trên bản đồ Romania, h of n là khoảng cách đường chim bay Straight-line distance.",
+    "label": "giảng thêm",
+    "terms": ["Uninformed Search", "Informed Search", "Heuristic", "h(n)", "Straight-line distance"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 35"
+  },
+  {
+    "id": 18,
+    "start_sec": 436.0,
+    "end_sec": 472.0,
+    "text": "Thuật toán quan trọng nhất của chương này là A* Search. Hàm đánh giá f of n bằng g of n cộng h of n. Trong đó g of n là chi phí thực tế từ điểm xuất phát đến n, còn h of n là chi phí ước lượng từ n đến đích. Như vậy f of n chính là ước lượng tổng chi phí của đường đi tốt nhất đi qua n.",
+    "label": "đọc lại slide",
+    "terms": ["A* Search", "f(n)", "g(n)", "h(n)"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 39"
+  },
+  {
+    "id": 19,
+    "start_sec": 473.0,
+    "end_sec": 515.0,
+    "text": "Điều kiện để A* tối ưu là gì? Nếu tìm kiếm trên cây Tree Search thì h of n phải Admissible, nghĩa là không bao giờ đánh giá quá cao chi phí thực tế. Còn nếu tìm kiếm trên đồ thị Graph Search thì h of n cần thêm điều kiện Consistent hay Monotonic, tức là thỏa mãn bất đẳng thức tam giác. Nhớ ghi chú lại định lý này vào vở để ôn thi.",
+    "label": "giảng thêm",
+    "terms": ["A*", "Tree Search", "Admissible", "Graph Search", "Consistent", "Monotonic"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 42"
+  },
+  {
+    "id": 20,
+    "start_sec": 516.0,
+    "end_sec": 550.0,
+    "text": "Trước khi kết thúc buổi học, thầy nhắc bài tập tuần sau: Các em cài đặt thuật toán A* bằng Python giải bài toán 8-puzzle và so sánh số nút sinh ra giữa heuristic h1 đếm số ô sai vị trí và heuristic h2 tổng khoảng cách Manhattan. Hạn nộp là trước 21h thứ Tư tuần tới trên hệ thống nộp bài.",
+    "label": "hành chính",
+    "terms": ["A*", "Python", "8-puzzle", "heuristic", "Manhattan distance"],
+    "is_deadline": true,
+    "slide_ref": "Chapter 3 - Slide 46"
+  },
+  {
+    "id": 21,
+    "start_sec": 551.0,
+    "end_sec": 600.0,
+    "text": "Buổi học hôm nay kết thúc tại đây, các em có thắc mắc gì về A* hay Heuristic thì ở lại hỏi thầy nhé. Chào cả lớp.",
+    "label": "hành chính",
+    "terms": ["A*", "Heuristic"],
+    "is_deadline": false,
+    "slide_ref": "Chapter 3 - Slide 47"
+  }
+]

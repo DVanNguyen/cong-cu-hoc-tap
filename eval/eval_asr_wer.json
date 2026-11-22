@@ -1,0 +1,256 @@
+[
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 1,
+    "start_sec": 0.0,
+    "end_sec": 12.5,
+    "ground_truth_text": "Hôm nay chúng ta bắt đầu Chapter 2 về Intelligent Agents trong hệ thống trí tuệ nhân tạo.",
+    "domain_terms": [
+      "Chapter 2",
+      "Intelligent Agents"
+    ],
+    "baseline_hypothesis": "Hôm nay chúng ta bắt đầu chapter 2 về in te li gần tây dần trong hệ thống trí tuệ nhân tạo.",
+    "prompted_hypothesis": "Hôm nay chúng ta bắt đầu Chapter 2 về Intelligent Agents trong hệ thống trí tuệ nhân tạo."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 2,
+    "start_sec": 13.0,
+    "end_sec": 28.0,
+    "ground_truth_text": "Một agent tương tác với environment thông qua sensors và actuators để nhận thức và hành động.",
+    "domain_terms": [
+      "agent",
+      "environment",
+      "sensors",
+      "actuators"
+    ],
+    "baseline_hypothesis": "Một ê dần tương tác với en vai rơn mừn thông qua xen xơ và ác chuây tơ để nhận thức và hành động.",
+    "prompted_hypothesis": "Một agent tương tác với environment thông qua sensors và actuators để nhận thức và hành động."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 3,
+    "start_sec": 28.5,
+    "end_sec": 48.0,
+    "ground_truth_text": "Trong phần mềm, sensors là input packet hoặc file, còn actuators là API response hoặc database write.",
+    "domain_terms": [
+      "sensors",
+      "actuators",
+      "input packet",
+      "database write"
+    ],
+    "baseline_hypothesis": "Trong phần mềm, xen xơ là in pút pắc két hoặc file, còn ác chuây tơ là API re bông hoặc data bây rai.",
+    "prompted_hypothesis": "Trong phần mềm, sensors là input packet hoặc file, còn actuators là API response hoặc database write."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 4,
+    "start_sec": 48.5,
+    "end_sec": 65.0,
+    "ground_truth_text": "Hàm tác tử agent function f ánh xạ từ percept sequence sang action.",
+    "domain_terms": [
+      "agent function",
+      "percept sequence",
+      "action"
+    ],
+    "baseline_hypothesis": "Hàm tác tử ê dần phăng sừn f ánh xạ từ pơ xép xi quừn sang ác sừn.",
+    "prompted_hypothesis": "Hàm tác tử agent function f ánh xạ từ percept sequence sang action."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 5,
+    "start_sec": 65.5,
+    "end_sec": 85.0,
+    "ground_truth_text": "Mô hình PEAS bao gồm Performance measure, Environment, Actuators, và Sensors.",
+    "domain_terms": [
+      "PEAS",
+      "Performance measure",
+      "Environment",
+      "Actuators",
+      "Sensors"
+    ],
+    "baseline_hypothesis": "Mô hình pi i ây ét bao gồm pơ pho mừn me dơ, en vai rơn mừn, ác chuây tơ, và xen xơ.",
+    "prompted_hypothesis": "Mô hình pi i ây ét bao gồm Performance measure, Environment, Actuators, và Sensors."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 6,
+    "start_sec": 85.5,
+    "end_sec": 105.0,
+    "ground_truth_text": "Đối với xe tự hành automated taxi, performance measure là an toàn, tốc độ, và tiện nghi hành khách.",
+    "domain_terms": [
+      "automated taxi",
+      "performance measure"
+    ],
+    "baseline_hypothesis": "Đối với xe tự hành ô tô ma tịt tắc xi, pơ pho mừn me dơ là an toàn, tốc độ, và tiện nghi hành khách.",
+    "prompted_hypothesis": "Đối với xe tự hành automated taxi, performance measure là an toàn, tốc độ, và tiện nghi hành khách."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 7,
+    "start_sec": 105.5,
+    "end_sec": 125.0,
+    "ground_truth_text": "Môi trường fully observable cho phép agent quan sát toàn bộ trạng thái hệ thống tại mọi thời điểm.",
+    "domain_terms": [
+      "fully observable",
+      "agent",
+      "state"
+    ],
+    "baseline_hypothesis": "Môi trường phu ly ọp dơ vơ bồ cho phép ê dần quan sát toàn bộ trạng thái hệ thống tại mọi thời điểm.",
+    "prompted_hypothesis": "Môi trường fully observable cho phép agent quan sát toàn bộ trạng thái hệ thống tại mọi thời điểm."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_01_agents.wav",
+    "segment_id": 8,
+    "start_sec": 125.5,
+    "end_sec": 145.0,
+    "ground_truth_text": "Ngược lại, partially observable environment chứa nhiều yếu tố ẩn hoặc nhiễu trong sensor.",
+    "domain_terms": [
+      "partially observable environment",
+      "sensor"
+    ],
+    "baseline_hypothesis": "Ngược lại, pát ly ọp dơ vơ bồ en vai rơn mừn chứa nhiều yếu tố ẩn hoặc nhiễu trong xen xơ.",
+    "prompted_hypothesis": "Ngược lại, partially observable environment chứa nhiều yếu tố ẩn hoặc nhiễu trong sensor."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_02_search.wav",
+    "segment_id": 9,
+    "start_sec": 0.0,
+    "end_sec": 20.0,
+    "ground_truth_text": "Sang Chapter 3, chúng ta khảo sát bài toán State Space Search trong không gian trạng thái.",
+    "domain_terms": [
+      "State Space Search",
+      "không gian trạng thái"
+    ],
+    "baseline_hypothesis": "Sang chapter 3, chúng ta khảo sát bài toán xờ tết xờ bây sơ trong không gian trạng thái.",
+    "prompted_hypothesis": "Sang Chapter 3, chúng ta khảo sát bài toán State Space Search trong không gian trạng thái."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_02_search.wav",
+    "segment_id": 10,
+    "start_sec": 20.5,
+    "end_sec": 40.0,
+    "ground_truth_text": "Thuật toán Breadth-First Search duyệt theo chiều rộng, dùng queue FIFO và đảm bảo tính optimal nếu chi phí đồng nhất.",
+    "domain_terms": [
+      "Breadth-First Search",
+      "queue FIFO",
+      "optimal"
+    ],
+    "baseline_hypothesis": "Thuật toán bét phớt sơ duyệt theo chiều rộng, dùng quy ép ai ép ô và đảm bảo tính ọp ti mồ nếu chi phí đồng nhất.",
+    "prompted_hypothesis": "Thuật toán Breadth-First Search duyệt theo chiều rộng, dùng queue FIFO và đảm bảo tính optimal nếu chi phí đồng nhất."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_02_search.wav",
+    "segment_id": 11,
+    "start_sec": 40.5,
+    "end_sec": 60.0,
+    "ground_truth_text": "Trong khi đó Depth-First Search dùng stack LIFO, tiết kiệm memory nhưng có thể rơi vào infinite loop.",
+    "domain_terms": [
+      "Depth-First Search",
+      "stack LIFO",
+      "memory",
+      "infinite loop"
+    ],
+    "baseline_hypothesis": "Trong khi đó đép phớt sơ dùng xờ tắc l ai ép ô, tiết kiệm me mo ri nhưng có thể rơi vào in phi nít lúp.",
+    "prompted_hypothesis": "Trong khi đó Depth-First Search dùng stack LIFO, tiết kiệm memory nhưng có thể rơi vào infinite loop."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_02_search.wav",
+    "segment_id": 12,
+    "start_sec": 60.5,
+    "end_sec": 80.0,
+    "ground_truth_text": "Uniform Cost Search mở rộng node có đường đi ngắn nhất g(n), tương đương với thuật toán Dijkstra.",
+    "domain_terms": [
+      "Uniform Cost Search",
+      "Dijkstra",
+      "g(n)"
+    ],
+    "baseline_hypothesis": "Du ni phom cốt sơ mở rộng nốt có đường đi ngắn nhất g(n), tương đương với thuật toán đíc tra.",
+    "prompted_hypothesis": "Uniform Cost Search mở rộng node có đường đi ngắn nhất g(n), tương đương với thuật toán Dijkstra."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_03_heuristic.wav",
+    "segment_id": 13,
+    "start_sec": 0.0,
+    "end_sec": 22.0,
+    "ground_truth_text": "Heuristic Search sử dụng hàm lượng giá h(n) để ước lượng chi phí từ node hiện tại đến goal state.",
+    "domain_terms": [
+      "Heuristic Search",
+      "h(n)",
+      "goal state"
+    ],
+    "baseline_hypothesis": "Hiu rít tích sơ sử dụng hàm lượng giá h(n) để ước lượng chi phí từ nốt hiện tại đến gôn xờ tết.",
+    "prompted_hypothesis": "Heuristic Search sử dụng hàm lượng giá h(n) để ước lượng chi phí từ node hiện tại đến goal state."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_03_heuristic.wav",
+    "segment_id": 14,
+    "start_sec": 22.5,
+    "end_sec": 45.0,
+    "ground_truth_text": "Thuật toán A* kết hợp f(n) = g(n) + h(n), cân bằng giữa chi phí thực tế và ước lượng heuristic.",
+    "domain_terms": [
+      "A*",
+      "f(n)",
+      "g(n)",
+      "h(n)",
+      "heuristic"
+    ],
+    "baseline_hypothesis": "Thuật toán a sao kết hợp f(n) = g(n) + h(n), cân bằng giữa chi phí thực tế và ước lượng hiu rít tích.",
+    "prompted_hypothesis": "Thuật toán a sao kết hợp f(n) = g(n) + h(n), cân bằng giữa chi phí thực tế và ước lượng heuristic."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_03_heuristic.wav",
+    "segment_id": 15,
+    "start_sec": 45.5,
+    "end_sec": 68.0,
+    "ground_truth_text": "Một heuristic được gọi là admissible nếu h(n) không bao giờ đánh giá vượt quá chi phí thực tế true cost.",
+    "domain_terms": [
+      "admissible heuristic",
+      "true cost"
+    ],
+    "baseline_hypothesis": "Một hiu rít tích được gọi là át mít xơ bồ nếu h(n) không bao giờ đánh giá vượt quá chi phí thực tế trù cốt.",
+    "prompted_hypothesis": "Một heuristic được gọi là admissible hiu rít tích nếu h(n) không bao giờ đánh giá vượt quá chi phí thực tế true cost."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_03_heuristic.wav",
+    "segment_id": 16,
+    "start_sec": 68.5,
+    "end_sec": 90.0,
+    "ground_truth_text": "Điều kiện consistency hay monotonicity yêu cầu h(n) <= c(n, a, n') + h(n') cho mọi bước chuyển trạng thái.",
+    "domain_terms": [
+      "consistency",
+      "monotonicity",
+      "trạng thái"
+    ],
+    "baseline_hypothesis": "Điều kiện con xít tân xi hay mô nô tô ni xi ti yêu cầu h(n) <= c(n, a, n') + h(n') cho mọi bước chuyển trạng thái.",
+    "prompted_hypothesis": "Điều kiện consistency hay monotonicity yêu cầu h(n) <= c(n, a, n') + h(n') cho mọi bước chuyển trạng thái."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_03_heuristic.wav",
+    "segment_id": 17,
+    "start_sec": 90.5,
+    "end_sec": 110.0,
+    "ground_truth_text": "Phương pháp Hill Climbing Search leo đồi có thể bị kẹt ở local extrema hoặc plateau.",
+    "domain_terms": [
+      "Hill Climbing Search",
+      "local extrema",
+      "plateau"
+    ],
+    "baseline_hypothesis": "Phương pháp hin clam binh sơ leo đồi có thể bị kẹt ở lô cồ ếch xờ tri ma hoặc pla tô.",
+    "prompted_hypothesis": "Phương pháp Hill Climbing Search leo đồi có thể bị kẹt ở local extrema hoặc plateau."
+  },
+  {
+    "audio_path": "dataset_eval/audio/lecture_03_heuristic.wav",
+    "segment_id": 18,
+    "start_sec": 110.5,
+    "end_sec": 130.0,
+    "ground_truth_text": "Để thoát khỏi cực trị cục bộ, Simulated Annealing chấp nhận các bước đi xấu hơn với xác suất giảm dần theo nhiệt độ T.",
+    "domain_terms": [
+      "Simulated Annealing",
+      "cực trị cục bộ",
+      "nhiệt độ T"
+    ],
+    "baseline_hypothesis": "Để thoát khỏi cực trị cục bộ, si miu lây tựt ơ ni linh chấp nhận các bước đi xấu hơn với xác suất giảm dần theo nhiệt độ T.",
+    "prompted_hypothesis": "Để thoát khỏi cực trị cục bộ, Simulated Annealing chấp nhận các bước đi xấu hơn với xác suất giảm dần theo nhiệt độ T."
+  }
+]

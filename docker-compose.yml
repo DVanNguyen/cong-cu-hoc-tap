@@ -1,0 +1,107 @@
+version: '3.8'
+
+services:
+  # 1. Máy chủ Backend Laravel
+  laravel-app:
+    build:
+      context: ../focusboard-api
+      dockerfile: Dockerfile
+    container_name: study_assistant_laravel
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../focusboard-api:/var/www/html
+      - shared_storage:/var/www/html/storage/app/public
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=focusboard
+      - DB_USERNAME=root
+      - DB_PASSWORD=root_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AI_SERVICE_URL=http://python-ai:8001
+      - AI_WEBHOOK_SECRET=super_secret_hmac_key_2026
+    depends_on:
+      - mysql
+      - redis
+
+  # 2. Laravel Queue Worker (Xử lý bất đồng bộ & đẩy job sang Python)
+  laravel-worker:
+    build:
+      context: ../focusboard-api
+      dockerfile: Dockerfile
+    container_name: study_assistant_worker
+    command: php artisan queue:work redis --tries=3 --timeout=600
+    volumes:
+      - ../focusboard-api:/var/www/html
+      - shared_storage:/var/www/html/storage/app/public
+    environment:
+      - DB_CONNECTION=mysql
+      - DB_HOST=mysql
+      - DB_PORT=3306
+      - DB_DATABASE=focusboard
+      - DB_USERNAME=root
+      - DB_PASSWORD=root_password
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - AI_SERVICE_URL=http://python-ai:8001
+      - AI_WEBHOOK_SECRET=super_secret_hmac_key_2026
+    depends_on:
+      - mysql
+      - redis
+
+  # 3. Cơ sở dữ liệu quan hệ MySQL
+  mysql:
+    image: mysql:8.0
+    container_name: study_assistant_mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_DATABASE: focusboard
+      MYSQL_ROOT_PASSWORD: root_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  # 4. Hàng đợi & Pub/Sub Redis (Cho Queue và Server-Sent Events)
+  redis:
+    image: redis:7-alpine
+    container_name: study_assistant_redis
+    ports:
+      - "6379:6379"
+
+  # 5. Cơ sở dữ liệu Vector Qdrant (Cho Embedding Slide, Khái niệm & Công việc)
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: study_assistant_qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # 6. Dịch vụ AI Python (FastAPI + Whisper + LLM + DTW)
+  python-ai:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: study_assistant_ai
+    ports:
+      - "8001:8001"
+    volumes:
+      - ./ai-service:/app
+      - shared_storage:/var/www/html/storage/app/public
+      - ./dataset_eval:/app/dataset_eval
+    environment:
+      - REDIS_URL=redis://redis:6379/0
+      - QDRANT_URL=http://qdrant:6333
+      - LARAVEL_WEBHOOK_URL=http://laravel-app:8000/api/study-ai/internal/ai-webhook
+      - AI_WEBHOOK_SECRET=super_secret_hmac_key_2026
+    depends_on:
+      - redis
+      - qdrant
+
+volumes:
+  mysql_data:
+  qdrant_data:
+  shared_storage:
