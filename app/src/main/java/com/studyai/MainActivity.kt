@@ -116,6 +116,9 @@ class MainActivity : ComponentActivity() {
                             onNavigateToChapterSlide = { targetLectureId, targetSlideNo, targetSec ->
                                 viewModel.jumpToChapterSlide(targetLectureId, targetSlideNo, targetSec)
                             },
+                            onSelectCourse = { courseId ->
+                                viewModel.switchCourse(courseId)
+                            },
                             isDarkTheme = isDarkTheme,
                             onToggleDarkTheme = { isDarkTheme = !isDarkTheme },
                             selectedLanguageMode = selectedLanguageMode,

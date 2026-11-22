@@ -1,6 +1,7 @@
 package com.studyai.ui.notes
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,9 +17,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.studyai.ui.dictionary.CrossChapterLinkUiModel
@@ -53,6 +54,14 @@ data class NoteUi(
     val endTimeSec: Float
 )
 
+data class ConceptContextChoice(
+    val id: String,
+    val term: String,
+    val courseName: String,
+    val location: String,
+    val summary: String
+)
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LectureNoteScreen(
@@ -71,17 +80,31 @@ fun LectureNoteScreen(
 ) {
     val defaultChapters = remember {
         listOf(
-            ChapterUiModel(1L, "Chapter 1: Tổng quan AI & Tác tử", 25),
-            ChapterUiModel(2L, "Chapter 2: Không gian Trạng thái & BFS/DFS", 25),
-            ChapterUiModel(3L, "Chapter 3: Tìm kiếm có Thông tin & A*", 25),
-            ChapterUiModel(4L, "Chapter 4: Tìm kiếm Cục bộ", 25),
-            ChapterUiModel(5L, "Chapter 5: Mô hình Sinh Sâu (GAN)", 25)
+            ChapterUiModel(1L, "Chương 1: Tổng quan AI & Tác tử", 25),
+            ChapterUiModel(2L, "Chương 2: Không gian Trạng thái & BFS/DFS", 25),
+            ChapterUiModel(3L, "Chương 3: Tìm kiếm có Thông tin & A*", 25),
+            ChapterUiModel(4L, "Chương 4: Tìm kiếm Cục bộ", 25),
+            ChapterUiModel(5L, "Chương 5: Mô hình Sinh Sâu (GAN)", 25)
         )
     }
     val activeChapters = if (chapters.isNotEmpty()) chapters else defaultChapters
 
     var isPlaying by remember { mutableStateOf(false) }
     var currentPlaybackSec by remember { mutableFloatStateOf(0f) }
+    var showDisambiguationSheet by remember { mutableStateOf(false) }
+    var selectedDisambiguationTerm by remember { mutableStateOf<String?>(null) }
+    var confusionPinned by remember { mutableStateOf(false) }
+
+    val sampleContexts = remember {
+        listOf(
+            ConceptContextChoice("1", "Tác tử thông minh", "Trí tuệ Nhân tạo (AI)", "Chương 1 • Slide 4", "Thực thể nhận thức môi trường qua Sensors và tối đa hóa độ đo hiệu năng (PEAS)."),
+            ConceptContextChoice("2", "Tác tử thông minh", "Học máy (ML)", "Chương 6 • Slide 3", "Agent trong Học tăng cường (RL) học chính sách tối đa hóa phần thưởng tích lũy."),
+            ConceptContextChoice("3", "Entropy", "Học máy (ML)", "Chương 2 • Slide 7", "Độ bất định phân lớp dùng để tách nút trong cây quyết định ID3 / C4.5."),
+            ConceptContextChoice("4", "Entropy", "Lý thuyết Thông tin", "Chương 1 • Slide 3", "Số bit trung bình tối thiểu cần thiết để mã hóa một nguồn tin rời rạc theo Shannon."),
+            ConceptContextChoice("5", "Transaction", "Hệ quản trị CSDL", "Bài 9 • Slide 14", "Khối lệnh đảm bảo 4 thuộc tính ACID (BEGIN TRAN / COMMIT / ROLLBACK)."),
+            ConceptContextChoice("6", "Transaction", "Hệ điều hành", "Chương 5 • Slide 10", "Giao tác đồng thời liên quan đến tranh chấp khóa và giải thuật tránh Deadlock.")
+        )
+    }
 
     LaunchedEffect(targetAudioSec) {
         targetAudioSec?.let { sec ->
@@ -95,124 +118,125 @@ fun LectureNoteScreen(
     val safeSlideIdx = currentSlideIdx.coerceIn(0, (slides.size - 1).coerceAtLeast(0))
     val currentSlide = slides.getOrNull(safeSlideIdx)
 
-    Scaffold(
-        topBar = {
-            Column {
-                TopAppBar(
-                    title = {
-                        Column {
-                            Text(lectureTitle, fontWeight = FontWeight.Bold, fontSize = 16.sp, maxLines = 1)
-                            Text(
-                                "Trang ${safeSlideIdx + 1}/${slides.size.coerceAtLeast(1)} • Căn gióng đồng bộ thời gian thực",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.background)
+    ) {
+        // 1. Thanh chọn Chapter nhanh (Material 3 Expressive Chips)
+        LazyRow(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            items(activeChapters, key = { it.id }) { chap ->
+                val isSelected = chap.id == currentLectureId
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelectLecture(chap.id) },
+                    label = {
+                        Text(
+                            text = "Chương ${chap.id}",
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                            fontSize = 12.sp
+                        )
+                    },
+                    leadingIcon = if (isSelected) {
+                        {
+                            Icon(
+                                Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(14.dp)
                             )
                         }
-                    }
+                    } else null,
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
                 )
-                // Thanh chọn Chapter nhanh (Pillar 3 Cross-Chapter Quick Selector)
-                LazyRow(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                        .padding(horizontal = 12.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(activeChapters, key = { it.id }) { chap ->
-                        val isSelected = chap.id == currentLectureId
-                        FilterChip(
-                            selected = isSelected,
-                            onClick = { onSelectLecture(chap.id) },
-                            label = {
-                                Text(
-                                    text = "Chương ${chap.id}",
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
-                                    fontSize = 12.sp
-                                )
-                            },
-                            leadingIcon = if (isSelected) {
-                                {
-                                    Icon(
-                                        Icons.Default.Check,
-                                        contentDescription = null,
-                                        modifier = Modifier.size(14.dp)
-                                    )
-                                }
-                            } else null,
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
-                }
             }
         }
-    ) { padding ->
-        Column(
+
+        LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(padding)
+                .padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // 1. Khung Trình chiếu Slide hiện tại
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(12.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = CardDefaults.cardColors(containerColor = Color(0xFFF1F5F9))
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Slide ${currentSlide?.slideNumber ?: (safeSlideIdx + 1)}",
-                            fontWeight = FontWeight.ExtraBold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        if (currentSlide != null) {
+            // 2. Thẻ Slide Bài giảng
+            item {
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(18.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+                ) {
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Surface(
                                 color = MaterialTheme.colorScheme.primaryContainer,
-                                shape = RoundedCornerShape(6.dp)
+                                shape = RoundedCornerShape(8.dp)
                             ) {
                                 Text(
-                                    text = "Mốc bài giảng: ${formatSec(currentSlide.startTimeSec)} - ${formatSec(currentSlide.endTimeSec)}",
+                                    text = "Slide ${currentSlide?.slideNumber ?: (safeSlideIdx + 1)}",
                                     style = MaterialTheme.typography.labelSmall,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                                 )
                             }
+                            if (currentSlide != null) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Mốc bài giảng: ${formatSec(currentSlide.startTimeSec)} – ${formatSec(currentSlide.endTimeSec)}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
                         }
-                    }
 
-                    Spacer(modifier = Modifier.height(8.dp))
+                        Spacer(modifier = Modifier.height(10.dp))
 
-                    Text(
-                        text = currentSlide?.extractedText ?: "Chưa có nội dung slide",
-                        style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 6
-                    )
+                        Text(
+                            text = currentSlide?.extractedText ?: "Chưa có nội dung slide",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            lineHeight = 22.sp
+                        )
 
-                    // Thuật ngữ chuyên ngành trong slide
-                    if (currentSlide?.terms?.isNotEmpty() == true) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            currentSlide.terms.take(4).forEach { term ->
-                                SuggestionChip(
-                                    onClick = { onSelectTerm(term) },
-                                    label = { Text(term, style = MaterialTheme.typography.labelSmall) }
-                                )
+                        // Thuật ngữ chuyên ngành trong slide
+                        if (currentSlide?.terms?.isNotEmpty() == true) {
+                            Spacer(modifier = Modifier.height(10.dp))
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                currentSlide.terms.take(4).forEach { term ->
+                                    SuggestionChip(
+                                        onClick = { onSelectTerm(term) },
+                                        label = { Text(term, style = MaterialTheme.typography.labelSmall) }
+                                    )
+                                }
                             }
                         }
                     }
                 }
             }
 
-            // 1.5. Liên kết chéo liên chương (Nếu slide có trích dẫn/ôn lại bài trước)
+            // 3. Liên kết chéo liên chương (Nếu có)
             if (currentSlide?.crossChapterLinks?.isNotEmpty() == true) {
-                Box(modifier = Modifier.padding(horizontal = 12.dp)) {
+                item {
                     CrossChapterLinksSection(
                         links = currentSlide.crossChapterLinks,
                         onNavigateToChapterSlide = onNavigateToChapterSlide
@@ -220,60 +244,174 @@ fun LectureNoteScreen(
                 }
             }
 
-            // 2. Thanh điều hướng Chuyển Slide & Điều khiển Audio Player
-            Surface(
-                tonalElevation = 2.dp,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 6.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
+            // 4. Khái niệm liên quan (Chọn ngữ cảnh môn khi khái niệm trùng tên)
+            item {
+                OutlinedCard(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                    modifier = Modifier.fillMaxWidth()
                 ) {
-                    IconButton(
-                        onClick = { if (safeSlideIdx > 0) onSlideIdxChange(safeSlideIdx - 1) },
-                        enabled = safeSlideIdx > 0
-                    ) {
-                        Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Slide trước")
-                    }
-
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        IconButton(onClick = {
-                            isPlaying = !isPlaying
-                        }) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
                             Icon(
-                                imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
-                                contentDescription = "Phát/Tạm dừng",
-                                modifier = Modifier.size(36.dp),
-                                tint = MaterialTheme.colorScheme.primary
+                                imageVector = Icons.Default.Link,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = "Khái niệm liên quan (Chọn ngữ cảnh môn)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                        Spacer(modifier = Modifier.width(6.dp))
                         Text(
-                            text = formatSec(currentPlaybackSec),
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold
+                            text = "Khi khái niệm trùng tên giữa nhiều môn học, chạm vào thẻ để chọn định nghĩa phù hợp:",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 2.dp, bottom = 8.dp)
                         )
-                    }
 
-                    IconButton(
-                        onClick = { if (safeSlideIdx < slides.size - 1) onSlideIdxChange(safeSlideIdx + 1) },
-                        enabled = safeSlideIdx < slides.size - 1
-                    ) {
-                        Icon(Icons.Default.ArrowForwardIos, contentDescription = "Slide sau")
+                        val activeConcept = if (currentLectureId == 8L) "Transaction" else "Tác tử thông minh"
+                        Surface(
+                            onClick = {
+                                selectedDisambiguationTerm = activeConcept
+                                showDisambiguationSheet = true
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text(
+                                            text = activeConcept,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.onSurface
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = MaterialTheme.colorScheme.primaryContainer
+                                        ) {
+                                            Text(
+                                                text = if (currentLectureId == 8L) "Hệ quản trị CSDL" else "Trí tuệ Nhân tạo (AI)",
+                                                style = MaterialTheme.typography.labelSmall,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                            )
+                                        }
+                                    }
+                                    Text(
+                                        text = if (currentLectureId == 8L) "Bài 9 • Slide 14 — Đảm bảo tính toàn vẹn dữ liệu ACID" else "Chương 1 • Slide 4 — Nhận thức qua cảm biến & hành động theo mục tiêu",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                Icon(
+                                    imageVector = Icons.Default.Tune,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                        }
                     }
                 }
             }
 
-            // 3. Danh sách Ghi chú Bổ sung ngoài Slide (Novelty >= 0.28)
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .padding(horizontal = 14.dp, vertical = 8.dp)
-            ) {
+            // 5. Thanh điều khiển Audio Player & Nút Ghim Chưa hiểu
+            item {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            IconButton(
+                                onClick = { if (safeSlideIdx > 0) onSlideIdxChange(safeSlideIdx - 1) },
+                                enabled = safeSlideIdx > 0
+                            ) {
+                                Icon(Icons.Default.ArrowBackIosNew, contentDescription = "Slide trước", modifier = Modifier.size(18.dp))
+                            }
+
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                IconButton(onClick = { isPlaying = !isPlaying }) {
+                                    Icon(
+                                        imageVector = if (isPlaying) Icons.Default.PauseCircle else Icons.Default.PlayCircle,
+                                        contentDescription = "Phát/Tạm dừng",
+                                        modifier = Modifier.size(38.dp),
+                                        tint = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = formatSec(currentPlaybackSec),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+
+                            IconButton(
+                                onClick = { if (safeSlideIdx < slides.size - 1) onSlideIdxChange(safeSlideIdx + 1) },
+                                enabled = safeSlideIdx < slides.size - 1
+                            ) {
+                                Icon(Icons.Default.ArrowForwardIos, contentDescription = "Slide sau", modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        // Tính năng thực tế: Nút Ghim chỗ chưa hiểu (Confusion Pin)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        OutlinedButton(
+                            onClick = { confusionPinned = !confusionPinned },
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (confusionPinned) MaterialTheme.colorScheme.tertiaryContainer else Color.Transparent,
+                                contentColor = if (confusionPinned) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.tertiary
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Icon(
+                                imageVector = if (confusionPinned) Icons.Default.BookmarkAdded else Icons.Default.BookmarkAdd,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = if (confusionPinned) "Đã ghim mốc chưa hiểu (AI đang phân tích)" else "📌 Đánh dấu chỗ chưa hiểu (Ghim mốc để AI giải thích lại)",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
+            }
+
+            // 6. Danh sách Ghi chú Lời giảng Mở rộng (Novelty >= 0.28)
+            item {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,49 +420,130 @@ fun LectureNoteScreen(
                     Text(
                         text = "Ghi chú Lời giảng Mở rộng (${currentSlide?.notes?.size ?: 0}):",
                         style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
                         text = "Lọc bởi Novelty & MMR",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.secondary
+                        color = MaterialTheme.colorScheme.secondary,
+                        fontWeight = FontWeight.SemiBold
                     )
                 }
+            }
 
-                Spacer(modifier = Modifier.height(6.dp))
-
-                if (currentSlide?.notes.isNullOrEmpty()) {
-                    Box(
+            if (currentSlide?.notes.isNullOrEmpty()) {
+                item {
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
                         modifier = Modifier
-                            .fillMaxSize()
-                            .padding(24.dp),
-                        contentAlignment = Alignment.Center
+                            .fillMaxWidth()
+                            .padding(vertical = 12.dp)
                     ) {
                         Text(
                             text = "Trang slide này giảng viên đọc bám sát tài liệu,\nkhông phát sinh thông tin mở rộng ngoài slide.",
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(18.dp)
                         )
                     }
-                } else {
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxSize()
+                }
+            } else {
+                items(currentSlide!!.notes, key = { it.id }) { note ->
+                    val isHighlighted = isPlaying && currentPlaybackSec >= note.startTimeSec && currentPlaybackSec <= note.endTimeSec
+                    NoteCardItem(
+                        note = note,
+                        isHighlighted = isHighlighted,
+                        onJumpAudio = { sec ->
+                            currentPlaybackSec = sec
+                            isPlaying = true
+                            onSeekAudio(sec)
+                        }
+                    )
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
+        }
+    }
+
+    // Modal Sheet Chọn Ngữ cảnh Khái niệm (Concept Disambiguation)
+    if (showDisambiguationSheet && selectedDisambiguationTerm != null) {
+        val matchingContexts = sampleContexts.filter { it.term.equals(selectedDisambiguationTerm, ignoreCase = true) }
+        ModalBottomSheet(
+            onDismissRequest = { showDisambiguationSheet = false },
+            containerColor = MaterialTheme.colorScheme.surface
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 10.dp)
+            ) {
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "CHỌN NGỮ CẢNH KHÁI NIỆM",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                    )
+                }
+                Spacer(modifier = Modifier.height(6.dp))
+                Text(
+                    text = selectedDisambiguationTerm ?: "",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Text(
+                    text = "Khái niệm này xuất hiện ở nhiều môn học. Hãy chọn đúng môn bạn muốn gắn vào vở ghi chép:",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 2.dp, bottom = 14.dp)
+                )
+
+                matchingContexts.forEach { ctx ->
+                    Surface(
+                        onClick = { showDisambiguationSheet = false },
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 4.dp)
                     ) {
-                        items(currentSlide!!.notes, key = { it.id }) { note ->
-                            val isHighlighted = isPlaying && currentPlaybackSec >= note.startTimeSec && currentPlaybackSec <= note.endTimeSec
-                            NoteCardItem(
-                                note = note,
-                                isHighlighted = isHighlighted,
-                                onJumpAudio = { sec ->
-                                    currentPlaybackSec = sec
-                                    isPlaying = true
-                                    onSeekAudio(sec)
-                                }
+                        Column(modifier = Modifier.padding(12.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = ctx.courseName,
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                Text(
+                                    text = ctx.location,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = ctx.summary,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurface
                             )
                         }
                     }
                 }
+                Spacer(modifier = Modifier.height(28.dp))
             }
         }
     }
@@ -340,77 +559,96 @@ fun NoteCardItem(
 
     OutlinedCard(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(10.dp),
-        border = if (isHighlighted) {
-            CardDefaults.outlinedCardBorder().copy(
-                brush = SolidColor(MaterialTheme.colorScheme.primary),
-                width = 2.dp
-            )
-        } else {
-            CardDefaults.outlinedCardBorder()
-        },
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(
+            width = if (isHighlighted) 2.dp else 1.dp,
+            color = if (isHighlighted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.22f)
+        ),
         colors = CardDefaults.outlinedCardColors(
-            containerColor = if (isHighlighted) Color(0xFFF0FDF4) else MaterialTheme.colorScheme.surface
+            containerColor = if (isHighlighted) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.15f) else MaterialTheme.colorScheme.surface
         )
     ) {
-        Column(modifier = Modifier.padding(10.dp)) {
+        Column(modifier = Modifier.padding(12.dp)) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = Color(0xFFE8F5E9),
-                    shape = RoundedCornerShape(4.dp)
+                    color = MaterialTheme.colorScheme.secondaryContainer,
+                    shape = RoundedCornerShape(6.dp)
                 ) {
                     Text(
-                        text = "Novelty: ${String.format("%.2f", note.noveltyScore)}",
+                        text = "Giảng viên mở rộng",
                         style = MaterialTheme.typography.labelSmall,
-                        color = Color(0xFF2E7D32),
                         fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSecondaryContainer,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
 
-                AssistChip(
+                Surface(
                     onClick = { onJumpAudio(note.startTimeSec) },
-                    leadingIcon = {
+                    shape = RoundedCornerShape(12.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Icon(
-                            Icons.Default.VolumeUp,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp)
+                            imageVector = Icons.Default.PlayArrow,
+                            contentDescription = "Nghe lời giảng",
+                            modifier = Modifier.size(14.dp),
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                    },
-                    label = {
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = "${formatSec(note.startTimeSec)} - ${formatSec(note.endTimeSec)}",
-                            style = MaterialTheme.typography.labelSmall
+                            text = formatSec(note.startTimeSec),
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
                         )
                     }
-                )
+                }
             }
 
-            Spacer(modifier = Modifier.height(4.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "• ${note.bulletPoint}",
+                text = note.bulletPoint,
                 style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium
+                color = MaterialTheme.colorScheme.onSurface,
+                fontWeight = FontWeight.Normal
             )
 
-            if (note.verbatimQuote.isNotEmpty()) {
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = if (showQuote) "Ẩn bằng chứng gốc" else "Xem bằng chứng lời nói gốc",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.clickable { showQuote = !showQuote }
-                )
+            if (note.verbatimQuote.isNotBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Row(
+                    modifier = Modifier
+                        .clickable { showQuote = !showQuote }
+                        .padding(vertical = 2.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        imageVector = if (showQuote) Icons.Default.ExpandLess else Icons.Default.FormatQuote,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = if (showQuote) "Ẩn bằng chứng đối chiếu" else "Xem bằng chứng trích dẫn nguyên văn",
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
 
                 AnimatedVisibility(visible = showQuote) {
                     Surface(
-                        color = Color(0xFFF8FAFC),
-                        shape = RoundedCornerShape(6.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f),
+                        shape = RoundedCornerShape(8.dp),
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(top = 4.dp)
@@ -419,8 +657,8 @@ fun NoteCardItem(
                             text = "\"${note.verbatimQuote}\"",
                             style = MaterialTheme.typography.bodySmall,
                             fontStyle = FontStyle.Italic,
-                            modifier = Modifier.padding(8.dp),
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(10.dp)
                         )
                     }
                 }
@@ -429,9 +667,9 @@ fun NoteCardItem(
     }
 }
 
-fun formatSec(seconds: Float): String {
-    val secInt = seconds.toInt()
-    val m = secInt / 60
-    val s = secInt % 60
-    return "%02d:%02d".format(m, s)
+private fun formatSec(sec: Float): String {
+    val totalSec = sec.toInt()
+    val m = totalSec / 60
+    val s = totalSec % 60
+    return String.format("%02d:%02d", m, s)
 }

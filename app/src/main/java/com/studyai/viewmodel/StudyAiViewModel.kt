@@ -199,6 +199,11 @@ class StudyAiViewModel(
         }
     }
 
+    fun switchCourse(courseId: Long) {
+        val initialLectureId = if (courseId == 3L) 8L else 1L
+        loadAllData(courseId = courseId, lectureId = initialLectureId)
+    }
+
     fun switchLecture(lectureId: Long, targetSlideIdx: Int = 0, targetSec: Float? = null) {
         viewModelScope.launch {
             _isLoading.value = true

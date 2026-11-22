@@ -2,6 +2,7 @@ package com.studyai.ui.dictionary
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -387,7 +388,7 @@ fun ExternalReferenceCard(
 }
 
 // =========================================================================
-// 5. TOÀN CẢNH MÀN HÌNH TỪ ĐIỂN SỐNG (BỘ TỪ ĐIỂN MÔN HỌC)
+// 5. TOÀN CẢNH MÀN HÌNH TỪ ĐIỂN SỐNG (BỘ TỪ ĐIỂN MÔN HỌC & HỌC THUẬT QUỐC TẾ)
 // =========================================================================
 
 @Composable
@@ -397,114 +398,231 @@ fun CourseDictionaryScreen(
     onSelectConcept: (Long) -> Unit,
     onNavigateToChapterSlide: (Int, Int, Float) -> Unit = { _, _, _ -> }
 ) {
+    var searchQuery by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("ALL") } // ALL | LECTURE | ACADEMIC
+
+    val filteredEntries = remember(dictionaryEntries, searchQuery, selectedFilter) {
+        dictionaryEntries.filter { item ->
+            val matchQuery = searchQuery.isBlank() ||
+                    item.canonicalNameVi.contains(searchQuery, ignoreCase = true) ||
+                    item.canonicalNameEn.contains(searchQuery, ignoreCase = true)
+
+            val isAcademic = item.referencesCount >= 3 || item.abstractnessScore >= 0.75f
+            val matchFilter = when (selectedFilter) {
+                "LECTURE" -> !isAcademic
+                "ACADEMIC" -> isAcademic
+                else -> true
+            }
+            matchQuery && matchFilter
+        }
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFFF8FAFC))
-            .padding(16.dp)
+            .background(MaterialTheme.colorScheme.background)
+            .padding(horizontal = 16.dp)
     ) {
-        Text(
-            text = "TỪ ĐIỂN SỐNG MÔN HỌC",
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = courseTitle,
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.ExtraBold,
-            color = Color(0xFF0F172A)
-        )
-        Text(
-            text = "Bồi đắp kiến thức chuyên sâu & Tài liệu mở rộng cho các khái niệm cốt lõi (${dictionaryEntries.size} khái niệm)",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(top = 2.dp, bottom = 12.dp)
+        Spacer(modifier = Modifier.height(4.dp))
+
+        // Thanh tìm kiếm thuật ngữ
+        OutlinedTextField(
+            value = searchQuery,
+            onValueChange = { searchQuery = it },
+            placeholder = { Text("Tra khái niệm mới hoặc thuật ngữ...", style = MaterialTheme.typography.bodySmall) },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Default.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(20.dp)
+                )
+            },
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surface,
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+                focusedBorderColor = MaterialTheme.colorScheme.primary,
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+            ),
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
         )
 
-        LazyColumn(
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-            modifier = Modifier.fillMaxSize()
+        Spacer(modifier = Modifier.height(10.dp))
+
+        // Bộ lọc nguồn: Tất cả / Từ bài giảng / Học thuật quốc tế (Semantic Scholar • arXiv)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
         ) {
-            items(dictionaryEntries, key = { it.id }) { item ->
-                OutlinedCard(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onSelectConcept(item.id) },
-                    shape = RoundedCornerShape(12.dp),
-                    colors = CardDefaults.outlinedCardColors(containerColor = Color.White)
+            FilterChip(
+                selected = selectedFilter == "ALL",
+                onClick = { selectedFilter = "ALL" },
+                label = { Text("Tất cả (${dictionaryEntries.size})", style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                )
+            )
+            FilterChip(
+                selected = selectedFilter == "LECTURE",
+                onClick = { selectedFilter = "LECTURE" },
+                label = { Text("Từ bài giảng", style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+            )
+            FilterChip(
+                selected = selectedFilter == "ACADEMIC",
+                onClick = { selectedFilter = "ACADEMIC" },
+                label = { Text("Học thuật quốc tế", style = MaterialTheme.typography.labelSmall) },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
+                )
+            )
+        }
+
+        Spacer(modifier = Modifier.height(10.dp))
+
+        if (filteredEntries.isEmpty()) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 12.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(18.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
                 ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
+                    Text(
+                        text = "Chưa có trong bài giảng trước",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "StudyAI tự động kích hoạt truy vấn nguồn học thuật quốc tế (Semantic Scholar, arXiv, MIT OCW) cho từ khóa: \"$searchQuery\"",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Button(
+                        onClick = { /* Kích hoạt Semantic Scholar API Fallback */ },
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
+                    ) {
+                        Text("Tra cứu học thuật quốc tế ngay", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        } else {
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+                modifier = Modifier.fillMaxSize()
+            ) {
+                items(filteredEntries, key = { it.id }) { item ->
+                    val isAcademic = item.referencesCount >= 3 || item.abstractnessScore >= 0.75f
+                    OutlinedCard(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelectConcept(item.id) },
+                        shape = RoundedCornerShape(16.dp),
+                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                // Huy hiệu nguồn (Bài giảng vs Học thuật quốc tế)
+                                Surface(
+                                    color = if (isAcademic) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = if (isAcademic) "Semantic Scholar • arXiv" else "Chương ${item.firstIntroducedLectureId} • Slide ${item.firstIntroducedSlideNo}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isAcademic) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+
+                                // Huy hiệu độ trừu tượng
+                                Surface(
+                                    color = if (item.abstractnessScore >= 0.75f) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Trừu tượng: ${(item.abstractnessScore * 100).toInt()}%",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (item.abstractnessScore >= 0.75f) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(8.dp))
+
                             Text(
                                 text = item.canonicalNameVi,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF1E293B),
-                                modifier = Modifier.weight(1f)
+                                color = MaterialTheme.colorScheme.onSurface
                             )
-                            Surface(
-                                color = if (item.abstractnessScore >= 0.7f) Color(0xFFFFEBEE) else Color(0xFFE8F5E9),
-                                shape = RoundedCornerShape(6.dp)
-                            ) {
-                                Text(
-                                    text = "Độ trừu tượng: ${(item.abstractnessScore * 100).toInt()}%",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (item.abstractnessScore >= 0.7f) Color(0xFFC62828) else Color(0xFF2E7D32),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                                )
-                            }
-                        }
 
-                        Text(
-                            text = item.canonicalNameEn,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF64748B),
-                            fontWeight = FontWeight.Medium
-                        )
-
-                        Spacer(modifier = Modifier.height(6.dp))
-
-                        Text(
-                            text = item.definitionSummary.ifBlank { item.aiDeepExplanation },
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color(0xFF334155),
-                            maxLines = 3
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
                             Text(
-                                text = "Xuất hiện: Chương ${item.firstIntroducedLectureId} (Slide ${item.firstIntroducedSlideNo})",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF0284C7)
+                                text = item.canonicalNameEn,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
                             )
 
-                            Surface(
-                                color = Color(0xFFEFF6FF),
-                                shape = RoundedCornerShape(4.dp)
+                            Spacer(modifier = Modifier.height(6.dp))
+
+                            Text(
+                                text = item.definitionSummary.ifBlank { item.aiDeepExplanation },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 3
+                            )
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "${item.referencesCount} nguồn tham khảo",
+                                    text = if (isAcademic) "Chưa có ở bài trước -> Tra cứu học thuật" else "Đã giảng tại Chương ${item.firstIntroducedLectureId}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+
+                                Text(
+                                    text = "${item.referencesCount} nguồn tham khảo →",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = Color(0xFF1D4ED8),
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
                             }
                         }
                     }
                 }
+                item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
     }

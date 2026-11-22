@@ -6,47 +6,13 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.AutoAwesome
-import androidx.compose.material.icons.filled.AutoStories
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.DarkMode
-import androidx.compose.material.icons.filled.KeyboardArrowDown
-import androidx.compose.material.icons.filled.LightMode
-import androidx.compose.material.icons.filled.MenuBook
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Surface
-import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -55,21 +21,24 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.studyai.ui.capture.CaptureScreen
 import com.studyai.ui.dictionary.CourseDictionaryItemUi
 import com.studyai.ui.dictionary.CourseDictionaryScreen
 import com.studyai.ui.dictionary.LivingDictionaryBottomSheet
 import com.studyai.ui.dictionary.LivingDictionaryUiModel
 import com.studyai.ui.graph.ConceptEdgeUi
 import com.studyai.ui.graph.ConceptNodeUi
-import com.studyai.ui.graph.KnowledgeGraphScreen
+import com.studyai.ui.graph.KnowledgeRoadmapScreen
 import com.studyai.ui.notes.ChapterUiModel
 import com.studyai.ui.notes.LectureNoteScreen
 import com.studyai.ui.notes.SlideUi
 
 enum class StudyAiTab(val title: String, val shortTitle: String, val icon: ImageVector) {
-    NOTES("Ghi chú bài giảng", "Ghi chú", Icons.Default.MenuBook),
-    GRAPH("Đồ thị tri thức", "Đồ thị", Icons.Default.AccountTree),
-    DICTIONARY("Từ điển sống", "Từ điển", Icons.Default.AutoStories),
+    NOTES("Ghi chú", "Ghi chú", Icons.Default.MenuBook),
+    CAPTURE("Thu âm", "Thu âm", Icons.Default.Mic),
+    ROADMAP("Hệ thống", "Hệ thống", Icons.Default.AccountTree),
+    DICTIONARY("Từ điển", "Từ điển", Icons.Default.AutoStories),
 }
 
 enum class LectureLanguageMode(
@@ -81,6 +50,12 @@ enum class LectureLanguageMode(
     VI("vi", "VI", "Tiếng Việt / Trộn thuật ngữ"),
     EN("en", "EN", "Full English (MIT / CS50...)"),
 }
+
+data class CourseChoice(
+    val id: Long,
+    val name: String,
+    val meta: String
+)
 
 @Composable
 fun MainStudyAiScreen(
@@ -102,7 +77,7 @@ fun MainStudyAiScreen(
     onSelectTerm: (String) -> Unit = {},
     onDismissConceptDetail: () -> Unit = {},
     onNavigateToChapterSlide: (Int, Int, Float) -> Unit = { _, _, _ -> },
-    // Các tham số mở rộng (có giá trị mặc định để tương thích 100% với code cũ)
+    onSelectCourse: (Long) -> Unit = {},
     isDarkTheme: Boolean = false,
     onToggleDarkTheme: () -> Unit = {},
     selectedLanguageMode: LectureLanguageMode = LectureLanguageMode.AUTO,
@@ -111,6 +86,17 @@ fun MainStudyAiScreen(
     onRetryLoad: () -> Unit = {},
 ) {
     var selectedTab by remember { mutableStateOf(StudyAiTab.NOTES) }
+
+    val courses = remember {
+        listOf(
+            CourseChoice(1L, "Trí tuệ Nhân tạo (AI)", "VKU • 6 chương • 18 khái niệm"),
+            CourseChoice(2L, "Học máy (Machine Learning)", "VKU • 5 chương • 14 khái niệm"),
+            CourseChoice(3L, "Hệ quản trị CSDL (SQL Server)", "HCMUE / VKU • 10 bài • 12 khái niệm")
+        )
+    }
+
+    var selectedCourseId by remember { mutableLongStateOf(if (currentLectureId == 8L) 3L else 1L) }
+    val currentCourse = courses.find { it.id == selectedCourseId } ?: courses[0]
 
     val handleNavigateToChapterSlide: (Int, Int, Float) -> Unit = { lecId, slideNo, sec ->
         selectedTab = StudyAiTab.NOTES
@@ -126,8 +112,12 @@ fun MainStudyAiScreen(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             StudyAiTopHeader(
-                lectureTitle = currentLectureTitle,
-                selectedTab = selectedTab,
+                course = currentCourse,
+                courses = courses,
+                onSelectCourse = { course ->
+                    selectedCourseId = course.id
+                    onSelectCourse(course.id)
+                },
                 selectedLanguageMode = selectedLanguageMode,
                 onLanguageModeChange = onLanguageModeChange,
                 isDarkTheme = isDarkTheme,
@@ -137,10 +127,7 @@ fun MainStudyAiScreen(
         bottomBar = {
             FloatingCapsuleBottomBar(
                 selectedTab = selectedTab,
-                onSelectTab = { selectedTab = it },
-                slideCount = sampleSlides.size,
-                nodeCount = sampleNodes.size,
-                termCount = dictionaryEntries.size,
+                onSelectTab = { selectedTab = it }
             )
         },
     ) { innerPadding ->
@@ -159,7 +146,7 @@ fun MainStudyAiScreen(
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
                 Crossfade(
                     targetState = selectedTab,
-                    animationSpec = tween(durationMillis = 220),
+                    animationSpec = tween(durationMillis = 200),
                     label = "studyai_tab_transition",
                 ) { tab ->
                     when (tab) {
@@ -180,18 +167,32 @@ fun MainStudyAiScreen(
                             )
                         }
 
-                        StudyAiTab.GRAPH -> {
-                            KnowledgeGraphScreen(
-                                courseTitle = "Trí tuệ Nhân tạo (AI)",
-                                nodes = sampleNodes,
-                                edges = sampleEdges,
+                        StudyAiTab.CAPTURE -> {
+                            CaptureScreen(
+                                currentCourseName = currentCourse.name,
+                                selectedLanguage = selectedLanguageMode.shortLabel,
+                                onRunBatchSync = { _, _ ->
+                                    selectedTab = StudyAiTab.NOTES
+                                },
+                                onJumpToSlide = { slideNo ->
+                                    selectedTab = StudyAiTab.NOTES
+                                    onJumpToSlide(currentLectureId.toInt(), slideNo)
+                                }
+                            )
+                        }
+
+                        StudyAiTab.ROADMAP -> {
+                            KnowledgeRoadmapScreen(
+                                courseTitle = currentCourse.name,
+                                conceptNodes = sampleNodes,
+                                conceptEdges = sampleEdges,
                                 onJumpToSlide = handleJumpToSlide,
                             )
                         }
 
                         StudyAiTab.DICTIONARY -> {
                             CourseDictionaryScreen(
-                                courseTitle = "Trí tuệ Nhân tạo (AI)",
+                                courseTitle = currentCourse.name,
                                 dictionaryEntries = dictionaryEntries,
                                 onSelectConcept = onSelectConcept,
                                 onNavigateToChapterSlide = handleNavigateToChapterSlide,
@@ -215,78 +216,132 @@ fun MainStudyAiScreen(
 
 @Composable
 private fun StudyAiTopHeader(
-    lectureTitle: String,
-    selectedTab: StudyAiTab,
+    course: CourseChoice,
+    courses: List<CourseChoice>,
+    onSelectCourse: (CourseChoice) -> Unit,
     selectedLanguageMode: LectureLanguageMode,
     onLanguageModeChange: (LectureLanguageMode) -> Unit,
     isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
 ) {
+    var courseMenuExpanded by remember { mutableStateOf(false) }
     var langMenuExpanded by remember { mutableStateOf(false) }
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
+        tonalElevation = 1.dp,
         shadowElevation = 2.dp,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .padding(horizontal = 16.dp, vertical = 10.dp)
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Brand badge + Title
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier.weight(1f),
-                ) {
-                    Box(
+                // Course Switcher Trigger
+                Box(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
-                            .size(38.dp)
                             .clip(RoundedCornerShape(12.dp))
-                            .background(
-                                Brush.linearGradient(
-                                    colors = listOf(
-                                        MaterialTheme.colorScheme.primary,
-                                        MaterialTheme.colorScheme.secondary,
-                                    )
-                                )
-                            ),
-                        contentAlignment = Alignment.Center,
+                            .clickable { courseMenuExpanded = true }
+                            .padding(end = 6.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AutoAwesome,
-                            contentDescription = "StudyAI",
-                            tint = MaterialTheme.colorScheme.onPrimary,
-                            modifier = Modifier.size(20.dp),
-                        )
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(11.dp))
+                                .background(
+                                    Brush.linearGradient(
+                                        colors = listOf(
+                                            MaterialTheme.colorScheme.primary,
+                                            MaterialTheme.colorScheme.secondary,
+                                        )
+                                    )
+                                ),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.AutoAwesome,
+                                contentDescription = "StudyAI",
+                                tint = MaterialTheme.colorScheme.onPrimary,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.width(10.dp))
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(
+                                    text = course.name,
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                            }
+                            Text(
+                                text = course.meta,
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.width(10.dp))
-
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "StudyAI",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                        )
-                        Text(
-                            text = if (selectedTab == StudyAiTab.NOTES) lectureTitle else selectedTab.title,
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
+                    DropdownMenu(
+                        expanded = courseMenuExpanded,
+                        onDismissRequest = { courseMenuExpanded = false },
+                    ) {
+                        courses.forEach { c ->
+                            DropdownMenuItem(
+                                text = {
+                                    Column {
+                                        Text(
+                                            text = c.name,
+                                            fontWeight = if (c.id == course.id) FontWeight.Bold else FontWeight.Normal,
+                                        )
+                                        Text(
+                                            text = c.meta,
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                },
+                                trailingIcon = if (c.id == course.id) {
+                                    {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    }
+                                } else null,
+                                onClick = {
+                                    courseMenuExpanded = false
+                                    onSelectCourse(c)
+                                },
+                            )
+                        }
                     }
                 }
 
-                Spacer(modifier = Modifier.width(8.dp))
+                Spacer(modifier = Modifier.width(6.dp))
 
                 // Bộ chọn ngôn ngữ ASR (Auto / VI / EN)
                 Box {
@@ -300,26 +355,27 @@ private fun StudyAiTopHeader(
                         ),
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Translate,
                                 contentDescription = "Ngôn ngữ bài giảng",
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(15.dp),
+                                modifier = Modifier.size(14.dp),
                             )
-                            Spacer(modifier = Modifier.width(4.dp))
+                            Spacer(modifier = Modifier.width(3.dp))
                             Text(
                                 text = selectedLanguageMode.shortLabel,
-                                style = MaterialTheme.typography.labelLarge,
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                             )
                             Icon(
                                 imageVector = Icons.Default.KeyboardArrowDown,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                modifier = Modifier.size(16.dp),
+                                modifier = Modifier.size(15.dp),
                             )
                         }
                     }
@@ -333,11 +389,7 @@ private fun StudyAiTopHeader(
                                 text = {
                                     Text(
                                         text = mode.fullLabel,
-                                        fontWeight = if (mode == selectedLanguageMode) {
-                                            FontWeight.SemiBold
-                                        } else {
-                                            FontWeight.Normal
-                                        },
+                                        fontWeight = if (mode == selectedLanguageMode) FontWeight.SemiBold else FontWeight.Normal,
                                     )
                                 },
                                 trailingIcon = if (mode == selectedLanguageMode) {
@@ -349,9 +401,7 @@ private fun StudyAiTopHeader(
                                             modifier = Modifier.size(18.dp),
                                         )
                                     }
-                                } else {
-                                    null
-                                },
+                                } else null,
                                 onClick = {
                                     langMenuExpanded = false
                                     onLanguageModeChange(mode)
@@ -377,106 +427,71 @@ private fun StudyAiTopHeader(
 @Composable
 private fun FloatingCapsuleBottomBar(
     selectedTab: StudyAiTab,
-    onSelectTab: (StudyAiTab) -> Unit,
-    slideCount: Int,
-    nodeCount: Int,
-    termCount: Int,
+    onSelectTab: (StudyAiTab) -> Unit
 ) {
     Box(
         modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
         Surface(
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(26.dp),
             color = MaterialTheme.colorScheme.surface,
-            tonalElevation = 6.dp,
+            tonalElevation = 4.dp,
             shadowElevation = 8.dp,
             border = BorderStroke(
                 width = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.28f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.22f),
             ),
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 8.dp, vertical = 6.dp),
-                horizontalArrangement = Arrangement.SpaceEvenly,
+                    .padding(horizontal = 4.dp, vertical = 5.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 StudyAiTab.values().forEach { tab ->
                     val isSelected = selectedTab == tab
-                    val badgeCount = when (tab) {
-                        StudyAiTab.NOTES -> slideCount
-                        StudyAiTab.GRAPH -> nodeCount
-                        StudyAiTab.DICTIONARY -> termCount
-                    }
                     val pillColor by animateColorAsState(
-                        targetValue = if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.surface
-                        },
-                        animationSpec = tween(200),
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surface,
+                        animationSpec = tween(180),
                         label = "tab_pill_bg",
                     )
                     val contentColor by animateColorAsState(
-                        targetValue = if (isSelected) {
-                            MaterialTheme.colorScheme.onPrimaryContainer
-                        } else {
-                            MaterialTheme.colorScheme.onSurfaceVariant
-                        },
-                        animationSpec = tween(200),
+                        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                        animationSpec = tween(180),
                         label = "tab_content_color",
                     )
 
-                    Row(
+                    Column(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(22.dp))
+                            .weight(1f)
+                            .clip(RoundedCornerShape(18.dp))
                             .background(pillColor)
                             .clickable { onSelectTab(tab) }
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.Center,
+                            .padding(vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
                     ) {
                         Icon(
                             imageVector = tab.icon,
                             contentDescription = tab.title,
                             tint = contentColor,
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(19.dp),
                         )
-                        Spacer(modifier = Modifier.width(6.dp))
+                        Spacer(modifier = Modifier.height(2.dp))
                         Text(
                             text = tab.shortTitle,
-                            style = MaterialTheme.typography.labelLarge,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
                             color = contentColor,
+                            fontSize = 11.sp,
                             maxLines = 1,
                         )
-                        if (badgeCount > 0) {
-                            Spacer(modifier = Modifier.width(5.dp))
-                            Box(
-                                modifier = Modifier
-                                    .clip(CircleShape)
-                                    .background(
-                                        if (isSelected) {
-                                            MaterialTheme.colorScheme.primary.copy(alpha = 0.16f)
-                                        } else {
-                                            MaterialTheme.colorScheme.surfaceVariant
-                                        }
-                                    )
-                                    .padding(horizontal = 6.dp, vertical = 1.dp),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = badgeCount.toString(),
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = contentColor,
-                                )
-                            }
-                        }
                     }
                 }
             }
@@ -491,45 +506,44 @@ private fun ErrorStatusBanner(
 ) {
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
-        shape = RoundedCornerShape(14.dp),
+        shape = RoundedCornerShape(12.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp),
+            .padding(horizontal = 14.dp, vertical = 6.dp),
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            Icon(
-                imageVector = Icons.Default.WarningAmber,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onErrorContainer,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = message,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onErrorContainer,
+            Row(
                 modifier = Modifier.weight(1f),
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Icon(
+                    imageVector = Icons.Default.WarningAmber,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(20.dp),
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = message,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
             TextButton(onClick = onRetry) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
-                    contentDescription = "Thử lại",
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    contentDescription = null,
                     modifier = Modifier.size(16.dp),
                 )
                 Spacer(modifier = Modifier.width(4.dp))
-                Text(
-                    text = "Thử lại",
-                    color = MaterialTheme.colorScheme.onErrorContainer,
-                    style = MaterialTheme.typography.labelLarge,
-                )
+                Text("Thử lại", style = MaterialTheme.typography.labelSmall)
             }
         }
     }
