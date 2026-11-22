@@ -6,14 +6,20 @@ import retrofit2.converter.gson.GsonConverterFactory
 import java.util.concurrent.TimeUnit
 
 object ApiClient {
-    // 10.0.2.2 là địa chỉ IP của máy Host khi chạy trên Android Emulator
-    // Đối với thiết bị thật, đổi thành IP LAN (ví dụ: 192.168.1.x)
-    var baseUrl: String = "http://10.0.2.2:8000/"
+    // Ngrok Public Tunnel URL: Cho phép điện thoại thật và máy ảo kết nối mượt mà
+    var baseUrl: String = "https://unripened-un-nonorientable.ngrok-free.dev/"
 
     private val okHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
+        .addInterceptor { chain ->
+            val request = chain.request().newBuilder()
+                .addHeader("ngrok-skip-browser-warning", "true")
+                .addHeader("User-Agent", "StudyAiAndroid/1.0")
+                .build()
+            chain.proceed(request)
+        }
+        .connectTimeout(20, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(15, TimeUnit.SECONDS)
+        .writeTimeout(20, TimeUnit.SECONDS)
         .build()
 
     val apiService: StudyAiApiService by lazy {
