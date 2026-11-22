@@ -1,0 +1,1140 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StudyAI — Mobile UI Redesign Prototype</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+    :root {
+      --bg-outer: #eef2f7;
+      --bg-app: #f8fafc;
+      --bg-surface: #ffffff;
+      --bg-surface-2: #f1f5f9;
+      --border-subtle: #e2e8f0;
+      --text-primary: #0f172a;
+      --text-secondary: #475569;
+      --text-muted: #64748b;
+      --primary: #4338ca;
+      --primary-soft: #e0e7ff;
+      --primary-text: #312e81;
+      --teal: #0d9488;
+      --teal-soft: #ccfbf1;
+      --teal-text: #115e59;
+      --amber: #d97706;
+      --amber-soft: #fef3c7;
+      --amber-text: #92400e;
+      --rose: #e11d48;
+      --rose-soft: #ffe4e6;
+      --rose-text: #9f1239;
+    }
+
+    body.dark {
+      --bg-outer: #020617;
+      --bg-app: #0b1120;
+      --bg-surface: #111827;
+      --bg-surface-2: #1e293b;
+      --border-subtle: #263248;
+      --text-primary: #f8fafc;
+      --text-secondary: #cbd5e1;
+      --text-muted: #94a3b8;
+      --primary: #818cf8;
+      --primary-soft: rgba(99, 102, 241, 0.22);
+      --primary-text: #c7d2fe;
+      --teal: #2dd4bf;
+      --teal-soft: rgba(20, 184, 166, 0.2);
+      --teal-text: #99f6e4;
+      --amber: #fbbf24;
+      --amber-soft: rgba(245, 158, 11, 0.18);
+      --amber-text: #fde68a;
+      --rose: #fb7185;
+      --rose-soft: rgba(244, 63, 94, 0.2);
+      --rose-text: #fecdd3;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      background: var(--bg-outer);
+      color: var(--text-primary);
+      margin: 0;
+      min-height: 100vh;
+      transition: background 0.2s ease, color 0.2s ease;
+    }
+
+    .app-bg { background: var(--bg-app); }
+    .surface { background: var(--bg-surface); border: 1px solid var(--border-subtle); }
+    .surface-2 { background: var(--bg-surface-2); }
+    .txt-primary { color: var(--text-primary); }
+    .txt-secondary { color: var(--text-secondary); }
+    .txt-muted { color: var(--text-muted); }
+    .pill-primary { background: var(--primary-soft); color: var(--primary-text); }
+    .pill-teal { background: var(--teal-soft); color: var(--teal-text); }
+    .pill-amber { background: var(--amber-soft); color: var(--amber-text); }
+    .pill-rose { background: var(--rose-soft); color: var(--rose-text); }
+
+    .phone-frame {
+      width: 100%;
+      max-width: 412px;
+      height: 820px;
+      max-height: calc(100vh - 32px);
+      border-radius: 34px;
+      overflow: hidden;
+      border: 6px solid #1e293b;
+      box-shadow: 0 24px 60px rgba(15, 23, 42, 0.28);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+    .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+    @keyframes pulseBar {
+      0%, 100% { transform: scaleY(0.35); }
+      50% { transform: scaleY(1); }
+    }
+    .wave-bar {
+      animation: pulseBar 0.9s ease-in-out infinite;
+      transform-origin: center;
+    }
+  </style>
+</head>
+<body class="flex flex-col lg:flex-row items-center lg:items-start justify-center gap-6 p-4 lg:p-6">
+
+  <!-- PHONE PROTOTYPE -->
+  <div class="phone-frame app-bg" id="phoneFrame">
+
+    <!-- TOP BAR -->
+    <header class="surface border-x-0 border-t-0 px-4 pt-3 pb-2.5 shrink-0 z-20">
+      <div class="flex items-center justify-between gap-2">
+        <!-- Course Switcher Trigger -->
+        <button id="courseSwitcherBtn" class="flex items-center gap-2.5 min-w-0 text-left rounded-xl py-1 pr-2 hover:opacity-90 transition">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-teal-500 flex items-center justify-center text-white shrink-0 shadow-sm">
+            <i data-lucide="sparkles" class="w-4 h-4"></i>
+          </div>
+          <div class="min-w-0">
+            <div class="flex items-center gap-1">
+              <span id="currentCourseName" class="font-bold text-sm txt-primary truncate">Trí tuệ Nhân tạo (AI)</span>
+              <i data-lucide="chevron-down" class="w-4 h-4 txt-muted shrink-0"></i>
+            </div>
+            <div id="currentCourseMeta" class="text-[11px] txt-muted truncate">VKU • 6 chương • 18 khái niệm</div>
+          </div>
+        </button>
+
+        <!-- Right Controls: Language + Theme -->
+        <div class="flex items-center gap-1.5 shrink-0">
+          <button id="langToggleBtn" class="pill-teal px-2.5 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1 transition hover:opacity-90" title="Chọn ngôn ngữ ASR">
+            <i data-lucide="languages" class="w-3.5 h-3.5"></i>
+            <span id="langLabel">Auto</span>
+          </button>
+          <button id="themeToggleBtn" class="surface-2 w-8 h-8 rounded-full flex items-center justify-center txt-secondary hover:opacity-80 transition" title="Đổi Sáng/Tối">
+            <i id="themeIcon" data-lucide="moon" class="w-4 h-4"></i>
+          </button>
+        </div>
+      </div>
+    </header>
+
+    <!-- MAIN SCROLLABLE CONTENT -->
+    <main id="mainContent" class="flex-1 overflow-y-auto no-scrollbar px-4 pt-3 pb-24 space-y-3.5"></main>
+
+    <!-- BOTTOM NAVIGATION BAR (4 evenly spaced tabs - zero overflow) -->
+    <nav class="absolute bottom-3 left-3 right-3 z-20">
+      <div class="surface rounded-2xl shadow-lg px-1.5 py-1.5 grid grid-cols-4 gap-1">
+        <button data-tab="notes" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+          <i data-lucide="book-open-text" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[11px] font-semibold leading-tight">Ghi chú</span>
+        </button>
+        <button data-tab="capture" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+          <i data-lucide="mic" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[11px] font-semibold leading-tight">Thu âm</span>
+        </button>
+        <button data-tab="roadmap" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+          <i data-lucide="git-branch" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[11px] font-semibold leading-tight">Hệ thống</span>
+        </button>
+        <button data-tab="dictionary" class="nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition">
+          <i data-lucide="library" class="w-4 h-4 mb-0.5"></i>
+          <span class="text-[11px] font-semibold leading-tight">Từ điển</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- MODAL OVERLAY (Course Picker / Concept Disambiguation / Academic Detail) -->
+    <div id="modalBackdrop" class="hidden absolute inset-0 bg-slate-950/55 backdrop-blur-[2px] z-30 flex items-end justify-center">
+      <div id="modalSheet" class="surface w-full rounded-t-3xl p-4 pb-6 max-h-[82%] overflow-y-auto no-scrollbar shadow-2xl">
+        <div class="w-10 h-1 rounded-full bg-slate-400/40 mx-auto mb-3"></div>
+        <div id="modalBody"></div>
+      </div>
+    </div>
+
+    <!-- TOAST -->
+    <div id="toast" class="hidden absolute top-16 left-4 right-4 z-40 bg-slate-900 text-white text-xs font-medium px-3.5 py-2.5 rounded-xl shadow-lg flex items-center gap-2">
+      <i data-lucide="check-circle-2" class="w-4 h-4 text-teal-400 shrink-0"></i>
+      <span id="toastMsg"></span>
+    </div>
+  </div>
+
+  <!-- RIGHT SIDEBAR: DESIGN NOTES FOR AGENT -->
+  <aside class="w-full max-w-md space-y-3">
+    <div class="surface rounded-2xl p-4 shadow-sm">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="pill-primary px-2.5 py-0.5 rounded-full text-[11px] font-bold">BẢN MẪU TƯƠNG TÁC</span>
+        <span class="text-xs txt-muted">Material 3 • Mobile-First</span>
+      </div>
+      <h1 class="text-base font-bold txt-primary mb-1.5">StudyAI Redesign — Bấm thử trực tiếp</h1>
+      <p class="text-xs txt-secondary leading-relaxed">
+        Bản mẫu này giải quyết toàn bộ lỗi hiển thị từ 3 ảnh chụp màn hình (lỗi nền trắng lẫn Dark Mode, thanh bottom bar tràn viền, chữ đồ thị đè nhau) và minh họa đầy đủ 4 luồng tính năng mới:
+      </p>
+      <ul class="mt-2.5 space-y-1.5 text-xs txt-secondary">
+        <li class="flex items-start gap-2">
+          <span class="font-bold text-indigo-500">1.</span>
+          <span><b>Chọn môn học:</b> Bấm vào tên môn ở góc trái trên cùng để chuyển giữa <i>Trí tuệ Nhân tạo</i>, <i>Học máy</i> và <i>SQL Server</i>.</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="font-bold text-indigo-500">2.</span>
+          <span><b>Thu âm bám Slide & Tải file:</b> Mở tab <b>Thu âm</b> để thử chế độ <i>Gửi slide trước → Bật nghe giảng trực tiếp</i> hoặc <i>Tải lên Slide + Audio</i> (Auto/VI/EN).</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="font-bold text-indigo-500">3.</span>
+          <span><b>Chọn nghĩa khái niệm theo môn:</b> Trong tab <b>Ghi chú</b>, bấm vào chip màu tím/xanh (như <i>Entropy</i> hoặc <i>Tác tử</i>) để chọn định nghĩa đúng môn/chương khi khái niệm trùng tên.</span>
+        </li>
+        <li class="flex items-start gap-2">
+          <span class="font-bold text-indigo-500">4.</span>
+          <span><b>Hệ thống hoá kiến thức & Từ điển học thuật:</b> Mở tab <b>Hệ thống</b> (xem dạng <i>Lộ trình phân tầng</i> thay vì đè chữ, kèm chế độ <i>Sơ đồ thu phóng</i>) và tab <b>Từ điển</b> (lọc nguồn <i>Bài giảng</i> vs <i>Học thuật quốc tế</i>).</span>
+        </li>
+      </ul>
+    </div>
+  </aside>
+
+  <script>
+    const COURSES = {
+      ai: {
+        id: 'ai',
+        name: 'Trí tuệ Nhân tạo (AI)',
+        meta: 'VKU • 6 chương • 18 khái niệm',
+        chapters: ['Chương 1', 'Chương 2', 'Chương 3', 'Chương 5'],
+        activeChapter: 0,
+        slides: [
+          {
+            no: 4,
+            title: 'Tác tử thông minh & Môi trường PEAS',
+            time: '12:15 – 16:40',
+            slideBullets: [
+              'Định nghĩa Intelligent Agent nhận thức qua cảm biến (Sensors) và hành động qua bộ chấp hành (Actuators).',
+              'Khung đánh giá PEAS: Performance, Environment, Actuators, Sensors.'
+            ],
+            aiAdditions: [
+              {
+                tag: 'Giảng viên mở rộng',
+                time: '13:42',
+                quote: '“Đi thi thầy hay hỏi ví dụ xe tự lái: đừng nhầm Camera là Actuator, nó là Sensor; còn vô lăng và phanh mới là Actuator.”',
+                type: 'exam'
+              },
+              {
+                tag: 'Liên hệ thực tế',
+                time: '15:10',
+                quote: '“Khái niệm hàm đánh giá mục tiêu ở đây khá gần với hàm mục tiêu tối ưu hóa, các em sẽ gặp lại khi học A* và Học máy.”',
+                type: 'addition'
+              }
+            ],
+            linkedConcepts: [
+              {
+                term: 'Tác tử thông minh',
+                selectedContextId: 'ai_ch1',
+                contexts: [
+                  { id: 'ai_ch1', course: 'Trí tuệ Nhân tạo (AI)', location: 'Chương 1 • Slide 4', summary: 'Thực thể nhận thức môi trường qua Sensors và tối đa hóa độ đo hiệu năng (PEAS).' },
+                  { id: 'ai_ch5', course: 'Trí tuệ Nhân tạo (AI)', location: 'Chương 5 • Slide 1', summary: 'Tác tử đối kháng trong trò chơi tổng bằng 0 (Minimax & Alpha-Beta Pruning).' },
+                  { id: 'ml_rl', course: 'Học máy (ML)', location: 'Chương 6 • Slide 3', summary: 'Agent trong Học tăng cường (RL) học chính sách π(a|s) dựa trên phần thưởng tích lũy.' }
+                ]
+              },
+              {
+                term: 'Thuật toán A*',
+                selectedContextId: 'ai_ch3',
+                contexts: [
+                  { id: 'ai_ch3', course: 'Trí tuệ Nhân tạo (AI)', location: 'Chương 3 • Slide 6', summary: 'Tìm kiếm có thông tin dùng f(n) = g(n) + h(n) với heuristic chấp nhận được.' },
+                  { id: 'algo_ch4', course: 'Phân tích & Thiết kế Thuật toán', location: 'Chương 4 • Slide 9', summary: 'Mở rộng của Dijkstra trên đồ thị có trọng số dương bằng hàm ước lượng khoảng cách.' }
+                ]
+              }
+            ]
+          }
+        ],
+        warning: "Khái niệm 'Thuật toán A*' được nhắc tại Chương 1 trước khi định nghĩa chính thức ở Chương 3 (Slide 6).",
+        tiers: [
+          {
+            level: 'Tầng 1 • Nền tảng',
+            progress: 100,
+            items: [
+              { id: 'agent', short: 'Agent', title: 'Tác tử thông minh', sub: 'Chương 1 • Slide 4', mastered: true, prereq: [] },
+              { id: 'peas', short: 'PEAS', title: 'Mô hình môi trường PEAS', sub: 'Chương 1 • Slide 6', mastered: true, prereq: ['Agent'] }
+            ]
+          },
+          {
+            level: 'Tầng 2 • Tìm kiếm & Heuristic',
+            progress: 65,
+            items: [
+              { id: 'bfs', short: 'BFS', title: 'Tìm kiếm theo chiều rộng', sub: 'Chương 2 • Slide 8', mastered: true, prereq: ['Agent'] },
+              { id: 'astar', short: 'A*', title: 'Thuật toán tìm kiếm A*', sub: 'Chương 3 • Slide 6', mastered: false, warning: true, prereq: ['BFS', 'Heuristic'] }
+            ]
+          },
+          {
+            level: 'Tầng 3 • Tối ưu & Học sâu',
+            progress: 30,
+            items: [
+              { id: 'sa', short: 'SA', title: 'Mô phỏng tôi thép', sub: 'Chương 4 • Slide 11', mastered: false, prereq: ['A*'] },
+              { id: 'gan', short: 'GAN', title: 'Mạng đối nghịch tạo sinh', sub: 'Chương 6 • Slide 12', mastered: false, prereq: ['SA'] }
+            ]
+          }
+        ],
+        dictionary: [
+          {
+            term: 'Mạng đối nghịch tạo sinh',
+            en: 'Generative Adversarial Network (GAN)',
+            abstractness: 88,
+            sourceType: 'academic',
+            sourceBadge: 'Semantic Scholar • arXiv',
+            where: 'Chưa có ở bài trước → Tra cứu học thuật',
+            def: 'Kiến trúc học sâu gồm 2 mạng Generator và Discriminator đối kháng nhau trong trò chơi minimax để sinh dữ liệu chân thực.',
+            refs: ['Goodfellow et al. (2014) — arXiv:1406.2661', 'MIT 6.S191 Deep Generative Modeling', 'Stanford CS231n Lecture Notes']
+          },
+          {
+            term: 'Mô phỏng tôi thép',
+            en: 'Simulated Annealing',
+            abstractness: 82,
+            sourceType: 'lecture',
+            sourceBadge: 'Chương 4 • Slide 11',
+            where: 'Đã giảng tại Chương 4 (Slide 11)',
+            def: 'Thuật toán tối ưu ngẫu nhiên cho phép chấp nhận bước đi xấu hơn với xác suất giảm dần theo nhiệt độ T để thoát cực trị địa phương.',
+            refs: ['Trích giảng viên (18:24): “Nhiệt độ cao ban đầu giúp nhảy khỏi bẫy local optimum”', 'Russell & Norvig — AIMA Ch. 4']
+          },
+          {
+            term: 'Admissible Heuristic',
+            en: 'Hàm đánh giá chấp nhận được',
+            abstractness: 76,
+            sourceType: 'academic',
+            sourceBadge: 'MIT OCW • Semantic Scholar',
+            where: 'Chưa có ở bài trước → Tra cứu học thuật',
+            def: 'Hàm ước lượng h(n) không bao giờ đánh giá quá cao chi phí thực tế từ trạng thái n đến đích, đảm bảo tính tối ưu của A*.',
+            refs: ['Hart, Nilsson & Raphael (1968) — IEEE TSSC', 'UC Berkeley CS188 Informed Search']
+          }
+        ]
+      },
+      ml: {
+        id: 'ml',
+        name: 'Học máy (Machine Learning)',
+        meta: 'VKU • 5 chương • 14 khái niệm',
+        chapters: ['Chương 1', 'Chương 2: Cây quyết định', 'Chương 3: K-Means'],
+        activeChapter: 1,
+        slides: [
+          {
+            no: 7,
+            title: 'Cây quyết định: Entropy & Information Gain',
+            time: '09:10 – 14:25',
+            slideBullets: [
+              'Entropy đo độ hỗn loạn của tập dữ liệu nhãn tại một nút.',
+              'ID3 chọn thuộc tính tối đa hóa Information Gain ở mỗi bước phân nhánh.'
+            ],
+            aiAdditions: [
+              {
+                tag: 'Mẹo giải bài tập',
+                time: '11:05',
+                quote: '“Khi tính log2(0) quy ước bằng 0; nếu tất cả mẫu cùng 1 lớp thì Entropy = 0 ngay, không cần bấm máy.”',
+                type: 'exam'
+              }
+            ],
+            linkedConcepts: [
+              {
+                term: 'Entropy',
+                selectedContextId: 'ml_dt',
+                contexts: [
+                  { id: 'ml_dt', course: 'Học máy (ML)', location: 'Chương 2 • Slide 7', summary: 'Độ bất định phân lớp H(S) = -Σ p_i log2(p_i) dùng để tách nút trong cây quyết định ID3/C4.5.' },
+                  { id: 'info_th', course: 'Lý thuyết Thông tin', location: 'Chương 1 • Slide 3', summary: 'Số bit trung bình tối thiểu cần thiết để mã hóa một nguồn tin rời rạc theo Shannon.' }
+                ]
+              }
+            ]
+          }
+        ],
+        warning: null,
+        tiers: [
+          {
+            level: 'Tầng 1 • Học có giám sát cơ bản',
+            progress: 90,
+            items: [
+              { id: 'lr', short: 'LR', title: 'Hồi quy tuyến tính', sub: 'Chương 1 • Slide 5', mastered: true, prereq: [] },
+              { id: 'entropy', short: 'H(S)', title: 'Entropy & Gini Index', sub: 'Chương 2 • Slide 7', mastered: true, prereq: [] }
+            ]
+          },
+          {
+            level: 'Tầng 2 • Phân lớp & Phân cụm',
+            progress: 50,
+            items: [
+              { id: 'id3', short: 'ID3', title: 'Cây quyết định ID3 / CART', sub: 'Chương 2 • Slide 12', mastered: true, prereq: ['H(S)'] },
+              { id: 'kmeans', short: 'KM', title: 'Phân cụm K-Means', sub: 'Chương 3 • Slide 4', mastered: false, prereq: ['LR'] }
+            ]
+          }
+        ],
+        dictionary: [
+          {
+            term: 'Information Gain',
+            en: 'Độ lợi thông tin',
+            abstractness: 74,
+            sourceType: 'lecture',
+            sourceBadge: 'Chương 2 • Slide 8',
+            where: 'Đã giảng tại Chương 2 (Slide 8)',
+            def: 'Mức giảm Entropy kỳ vọng sau khi phân chia tập dữ liệu theo một thuộc tính cụ thể.',
+            refs: ['Trích giảng viên (12:18): “Thuộc tính nào làm giảm độ hỗn loạn mạnh nhất thì đưa lên gốc.”']
+          },
+          {
+            term: 'K-Means++ Initialization',
+            en: 'Khởi tạo tâm cụm K-Means++',
+            abstractness: 81,
+            sourceType: 'academic',
+            sourceBadge: 'Stanford CS229 • Semantic Scholar',
+            where: 'Chưa có ở bài trước → Tra cứu học thuật',
+            def: 'Thuật toán chọn tâm cụm ban đầu theo xác suất tỉ lệ với bình phương khoảng cách tới tâm gần nhất để tránh hội tụ vào cực trị xấu.',
+            refs: ['Arthur & Vassilvitskii (2007) — SODA', 'Stanford CS229 Unsupervised Learning']
+          }
+        ]
+      },
+      sql: {
+        id: 'sql',
+        name: 'Hệ quản trị CSDL (SQL)',
+        meta: 'HCMUE / VKU • 10 bài • 12 khái niệm',
+        chapters: ['Bài 9: T-SQL', 'Bài 10: Stored Procedure'],
+        activeChapter: 0,
+        slides: [
+          {
+            no: 5,
+            title: 'Biến cục bộ, Cấu trúc rẽ nhánh & TRY-CATCH trong T-SQL',
+            time: '06:20 – 11:05',
+            slideBullets: [
+              'Khai báo biến bằng DECLARE @tenBien kieuDuLieu và gán bằng SET hoặc SELECT.',
+              'Bắt lỗi runtime bằng khối BEGIN TRY ... END TRY BEGIN CATCH ... END CATCH.'
+            ],
+            aiAdditions: [
+              {
+                tag: 'Lưu ý thực hành',
+                time: '08:45',
+                quote: '“Khác với SET chỉ gán 1 giá trị, lệnh SELECT có thể gán nhiều biến cùng lúc từ kết quả truy vấn.”',
+                type: 'addition'
+              }
+            ],
+            linkedConcepts: [
+              {
+                term: 'Transaction',
+                selectedContextId: 'sql_b9',
+                contexts: [
+                  { id: 'sql_b9', course: 'Hệ quản trị CSDL (SQL)', location: 'Bài 9 • Slide 14', summary: 'Khối lệnh đảm bảo ACID (BEGIN TRAN / COMMIT / ROLLBACK) kết hợp TRY-CATCH.' },
+                  { id: 'os_tx', course: 'Hệ điều hành', location: 'Chương 5 • Slide 10', summary: 'Giao tác đồng thời liên quan đến khóa (Lock) và tránh Deadlock.' }
+                ]
+              }
+            ]
+          }
+        ],
+        warning: null,
+        tiers: [
+          {
+            level: 'Tầng 1 • Nền tảng T-SQL',
+            progress: 100,
+            items: [
+              { id: 'var', short: '@Var', title: 'Biến & Kiểu dữ liệu T-SQL', sub: 'Bài 9 • Slide 5', mastered: true, prereq: [] },
+              { id: 'sp', short: 'SP', title: 'Stored Procedure & Tham số', sub: 'Bài 10 • Slide 3', mastered: false, prereq: ['@Var'] }
+            ]
+          }
+        ],
+        dictionary: [
+          {
+            term: 'Stored Procedure',
+            en: 'Thủ tục lưu trữ',
+            abstractness: 65,
+            sourceType: 'lecture',
+            sourceBadge: 'Bài 10 • Slide 3',
+            where: 'Đã giảng tại Bài 10 (Slide 3)',
+            def: 'Tập hợp các câu lệnh SQL được biên dịch sẵn và lưu trong CSDL, hỗ trợ tham số đầu vào/đầu ra giúp tái sử dụng và bảo mật.',
+            refs: ['Microsoft SQL Server Docs — Stored Procedures']
+          }
+        ]
+      }
+    };
+
+    const state = {
+      courseId: 'ai',
+      tab: 'notes',
+      langIdx: 0,
+      langs: ['Auto', 'VI', 'EN'],
+      dark: false,
+      roadmapMode: 'layered', // 'layered' | 'graph'
+      dictFilter: 'all', // 'all' | 'lecture' | 'academic'
+      dictQuery: '',
+      captureMode: 'live', // 'live' | 'upload'
+      isRecording: false,
+      recordSec: 0,
+      recordTimer: null,
+      liveSlideLoaded: 'MIT_6S191_Lecture1.pdf (42 slides)',
+      liveNotes: [
+        { slide: 'Slide 4', time: '01:12', text: 'Giảng viên giải thích Perceptron thực chất là tổng có trọng số đi qua hàm kích hoạt phi tuyến (ReLU / Sigmoid).' }
+      ]
+    };
+
+    const mainContent = document.getElementById('mainContent');
+    const modalBackdrop = document.getElementById('modalBackdrop');
+    const modalBody = document.getElementById('modalBody');
+
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      document.getElementById('toastMsg').textContent = msg;
+      t.classList.remove('hidden');
+      clearTimeout(window._toastT);
+      window._toastT = setTimeout(() => t.classList.add('hidden'), 2600);
+    }
+
+    function openModal(html) {
+      modalBody.innerHTML = html;
+      modalBackdrop.classList.remove('hidden');
+      lucide.createIcons();
+    }
+
+    function closeModal() {
+      modalBackdrop.classList.add('hidden');
+    }
+
+    modalBackdrop.addEventListener('click', (e) => {
+      if (e.target === modalBackdrop) closeModal();
+    });
+
+    function updateHeader() {
+      const c = COURSES[state.courseId];
+      document.getElementById('currentCourseName').textContent = c.name;
+      document.getElementById('currentCourseMeta').textContent = c.meta;
+      document.getElementById('langLabel').textContent = state.langs[state.langIdx];
+    }
+
+    function updateNav() {
+      document.querySelectorAll('.nav-btn').forEach(btn => {
+        const active = btn.dataset.tab === state.tab;
+        btn.className = active
+          ? 'nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition pill-primary'
+          : 'nav-btn flex flex-col items-center justify-center py-1.5 rounded-xl transition txt-muted hover:opacity-80';
+      });
+    }
+
+    function renderNotes() {
+      const c = COURSES[state.courseId];
+      const slide = c.slides[0];
+      return `
+        <!-- Chapter chips -->
+        <div class="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          ${c.chapters.map((ch, idx) => `
+            <button data-ch="${idx}" class="ch-btn shrink-0 px-3 py-1.5 rounded-full text-xs font-semibold transition ${
+              idx === c.activeChapter ? 'pill-primary' : 'surface txt-secondary'
+            }">${ch}</button>
+          `).join('')}
+        </div>
+
+        <!-- Slide Card -->
+        <section class="surface rounded-2xl p-3.5 shadow-sm space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <span class="pill-primary px-2.5 py-0.5 rounded-full text-[11px] font-bold">Slide ${slide.no}</span>
+            <span class="surface-2 px-2.5 py-0.5 rounded-full text-[11px] font-medium txt-secondary flex items-center gap-1">
+              <i data-lucide="clock" class="w-3 h-3"></i> ${slide.time}
+            </span>
+          </div>
+          <h2 class="text-sm font-bold txt-primary leading-snug">${slide.title}</h2>
+          <ul class="space-y-1.5 text-xs txt-secondary pl-4 list-disc">
+            ${slide.slideBullets.map(b => `<li>${b}</li>`).join('')}
+          </ul>
+        </section>
+
+        <!-- Smart AI Additions -->
+        <section class="space-y-2">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold uppercase tracking-wider txt-muted">Ghi chú AI bám theo lời giảng</h3>
+            <span class="text-[11px] txt-muted">Lọc Novelty + MMR</span>
+          </div>
+          ${slide.aiAdditions.map(a => `
+            <div class="surface rounded-2xl p-3.5 shadow-sm space-y-1.5">
+              <div class="flex items-center justify-between gap-2">
+                <span class="${a.type === 'exam' ? 'pill-amber' : 'pill-teal'} px-2 py-0.5 rounded-full text-[11px] font-semibold">
+                  ${a.tag}
+                </span>
+                <button data-seek="${a.time}" class="seek-btn pill-primary px-2 py-0.5 rounded-full text-[11px] font-semibold flex items-center gap-1">
+                  <i data-lucide="play" class="w-3 h-3"></i> ${a.time}
+                </button>
+              </div>
+              <p class="text-xs txt-primary leading-relaxed italic">${a.quote}</p>
+            </div>
+          `).join('')}
+        </section>
+
+        <!-- Cross-course Concept Disambiguation -->
+        <section class="surface rounded-2xl p-3.5 shadow-sm space-y-2.5">
+          <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-1.5">
+              <i data-lucide="link-2" class="w-4 h-4 text-indigo-500"></i>
+              <h3 class="text-xs font-bold txt-primary">Khái niệm liên quan (Chọn ngữ cảnh môn)</h3>
+            </div>
+          </div>
+          <p class="text-[11px] txt-muted leading-snug">
+            Khi giảng viên nhắc lại khái niệm trùng tên giữa nhiều môn, chạm vào thẻ để chọn đúng định nghĩa muốn gắn vào ghi chú:
+          </p>
+          <div class="space-y-2">
+            ${slide.linkedConcepts.map((lc, i) => {
+              const chosen = lc.contexts.find(x => x.id === lc.selectedContextId) || lc.contexts[0];
+              return `
+                <button data-concept-idx="${i}" class="concept-pick-btn w-full text-left surface-2 rounded-xl p-2.5 flex items-center justify-between gap-2 hover:opacity-90 transition">
+                  <div class="min-w-0">
+                    <div class="flex items-center gap-1.5 flex-wrap">
+                      <span class="text-xs font-bold txt-primary">${lc.term}</span>
+                      <span class="pill-primary px-1.5 py-0.5 rounded text-[10px] font-semibold">${chosen.course}</span>
+                    </div>
+                    <div class="text-[11px] txt-muted truncate mt-0.5">${chosen.location} — ${chosen.summary}</div>
+                  </div>
+                  <i data-lucide="sliders-horizontal" class="w-4 h-4 txt-muted shrink-0"></i>
+                </button>
+              `;
+            }).join('')}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderCapture() {
+      const mm = String(Math.floor(state.recordSec / 60)).padStart(2, '0');
+      const ss = String(state.recordSec % 60).padStart(2, '0');
+      return `
+        <!-- Mode Switcher -->
+        <div class="surface rounded-2xl p-1 grid grid-cols-2 gap-1">
+          <button data-cap="live" class="cap-mode-btn py-2 rounded-xl text-xs font-semibold transition ${
+            state.captureMode === 'live' ? 'pill-primary' : 'txt-secondary'
+          }">Ghi chú bám Slide trực tiếp</button>
+          <button data-cap="upload" class="cap-mode-btn py-2 rounded-xl text-xs font-semibold transition ${
+            state.captureMode === 'upload' ? 'pill-primary' : 'txt-secondary'
+          }">Tải Slide + Ghi âm có sẵn</button>
+        </div>
+
+        ${state.captureMode === 'live' ? `
+          <!-- Pre-loaded Slide -->
+          <div class="surface rounded-2xl p-3.5 shadow-sm space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold txt-primary">1. Slide đã gửi trước buổi học</span>
+              <button id="changeSlideBtn" class="text-[11px] font-semibold text-indigo-500">Đổi file</button>
+            </div>
+            <div class="surface-2 rounded-xl p-2.5 flex items-center gap-2.5">
+              <div class="w-9 h-9 rounded-lg pill-rose flex items-center justify-center shrink-0">
+                <i data-lucide="file-text" class="w-4 h-4"></i>
+              </div>
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-semibold txt-primary truncate">${state.liveSlideLoaded}</div>
+                <div class="text-[11px] txt-muted">Đã bóc tách 38 thuật ngữ làm Hotwords ASR</div>
+              </div>
+              <span class="pill-teal px-2 py-0.5 rounded-full text-[10px] font-bold">Sẵn sàng</span>
+            </div>
+          </div>
+
+          <!-- Live Recorder Card -->
+          <div class="surface rounded-2xl p-4 shadow-sm text-center space-y-3">
+            <div class="flex items-center justify-between text-xs">
+              <span class="font-bold txt-primary">2. Chế độ nghe giảng bám Slide</span>
+              <span class="pill-teal px-2 py-0.5 rounded-full text-[10px] font-semibold">Ngôn ngữ: ${state.langs[state.langIdx]}</span>
+            </div>
+            <div class="text-2xl font-extrabold tracking-tight txt-primary tabular-nums">${mm}:${ss}</div>
+            <div class="flex items-center justify-center gap-1 h-8">
+              ${[0.4,0.8,0.6,1,0.5,0.9,0.7,0.4,0.85,0.6,0.95,0.5].map((h, i) => `
+                <span class="w-1.5 rounded-full ${state.isRecording ? 'bg-rose-500 wave-bar' : 'bg-slate-400/40'}"
+                      style="height:${Math.round(h*28)}px; animation-delay:${i*0.07}s"></span>
+              `).join('')}
+            </div>
+            <button id="recordToggleBtn" class="w-full py-2.5 rounded-xl font-bold text-xs text-white flex items-center justify-center gap-2 shadow-sm transition ${
+              state.isRecording ? 'bg-rose-600 hover:bg-rose-700' : 'bg-indigo-600 hover:bg-indigo-700'
+            }">
+              <i data-lucide="${state.isRecording ? 'square' : 'mic'}" class="w-4 h-4"></i>
+              <span>${state.isRecording ? 'Dừng & Chốt vở ghi chép' : 'Bắt đầu ghi âm bám Slide'}</span>
+            </button>
+          </div>
+
+          <!-- Real-time Smart Notes Feed -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-bold uppercase tracking-wider txt-muted">AI đang tự động chèn vào Slide</span>
+              <span class="text-[11px] txt-muted">${state.liveNotes.length} ghi chú</span>
+            </div>
+            ${state.liveNotes.map(n => `
+              <div class="surface rounded-2xl p-3 space-y-1">
+                <div class="flex items-center justify-between">
+                  <span class="pill-primary px-2 py-0.5 rounded-full text-[10px] font-bold">${n.slide}</span>
+                  <span class="text-[11px] txt-muted">${n.time}</span>
+                </div>
+                <p class="text-xs txt-primary leading-relaxed">${n.text}</p>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <!-- Batch Upload Form -->
+          <div class="surface rounded-2xl p-4 shadow-sm space-y-3">
+            <h3 class="text-sm font-bold txt-primary">Xử lý bộ Slide & Ghi âm có sẵn</h3>
+            <p class="text-xs txt-muted">Phù hợp khi bạn tải bộ bài giảng từ MIT OCW, CS50 hoặc file ghi âm trên lớp.</p>
+
+            <div class="surface-2 rounded-xl p-3 border border-dashed border-indigo-400/50 flex items-center gap-3">
+              <i data-lucide="file-up" class="w-5 h-5 text-indigo-500 shrink-0"></i>
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-semibold txt-primary">File Slide (.pdf / .pptx)</div>
+                <div class="text-[11px] txt-muted truncate">6S191_MIT_DeepLearning_L1.pdf</div>
+              </div>
+              <span class="pill-teal px-2 py-0.5 rounded text-[10px] font-bold">Đã chọn</span>
+            </div>
+
+            <div class="surface-2 rounded-xl p-3 border border-dashed border-teal-400/50 flex items-center gap-3">
+              <i data-lucide="file-audio" class="w-5 h-5 text-teal-500 shrink-0"></i>
+              <div class="min-w-0 flex-1">
+                <div class="text-xs font-semibold txt-primary">File Ghi âm / Video (.mp3 / .mp4)</div>
+                <div class="text-[11px] txt-muted truncate">MIT_6S191_L1_2026.mp4 (68 phút)</div>
+              </div>
+              <span class="pill-teal px-2 py-0.5 rounded text-[10px] font-bold">Đã chọn</span>
+            </div>
+
+            <button id="runBatchBtn" class="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center justify-center gap-2 transition">
+              <i data-lucide="wand-2" class="w-4 h-4"></i>
+              <span>Chạy Căn gióng AI (${state.langs[state.langIdx]})</span>
+            </button>
+          </div>
+        `}
+      `;
+    }
+
+    function renderRoadmap() {
+      const c = COURSES[state.courseId];
+      return `
+        <!-- View Mode Toggle -->
+        <div class="flex items-center justify-between gap-2">
+          <div>
+            <h2 class="text-sm font-bold txt-primary">Hệ thống hoá môn học</h2>
+            <p class="text-[11px] txt-muted">Sắp xếp theo thứ tự tiên quyết (DAG)</p>
+          </div>
+          <div class="surface rounded-xl p-0.5 flex gap-0.5">
+            <button data-rm="layered" class="rm-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+              state.roadmapMode === 'layered' ? 'pill-primary' : 'txt-muted'
+            }">Lộ trình</button>
+            <button data-rm="graph" class="rm-btn px-2.5 py-1 rounded-lg text-[11px] font-semibold ${
+              state.roadmapMode === 'graph' ? 'pill-primary' : 'txt-muted'
+            }">Sơ đồ</button>
+          </div>
+        </div>
+
+        ${c.warning ? `
+          <div class="pill-rose rounded-2xl p-3 flex items-start gap-2">
+            <i data-lucide="alert-triangle" class="w-4 h-4 shrink-0 mt-0.5"></i>
+            <div class="text-xs leading-snug">
+              <b>Cảnh báo sư phạm:</b> ${c.warning}
+            </div>
+          </div>
+        ` : ''}
+
+        ${state.roadmapMode === 'layered' ? `
+          <!-- Clean Mobile-First Layered Roadmap (NO overlapping text!) -->
+          <div class="space-y-3">
+            ${c.tiers.map(tier => `
+              <div class="surface rounded-2xl p-3.5 shadow-sm space-y-2.5">
+                <div class="flex items-center justify-between gap-2">
+                  <span class="text-xs font-bold txt-primary">${tier.level}</span>
+                  <span class="text-[11px] font-semibold text-teal-600">${tier.progress}% nắm vững</span>
+                </div>
+                <div class="w-full h-1.5 surface-2 rounded-full overflow-hidden">
+                  <div class="h-full bg-gradient-to-r from-indigo-500 to-teal-500 rounded-full" style="width:${tier.progress}%"></div>
+                </div>
+                <div class="space-y-2 pt-1">
+                  ${tier.items.map(item => `
+                    <button data-node-id="${item.id}" class="node-card-btn w-full text-left surface-2 rounded-xl p-2.5 flex items-center gap-2.5 hover:opacity-90 transition">
+                      <div class="w-9 h-9 rounded-xl ${item.warning ? 'pill-rose' : (item.mastered ? 'pill-teal' : 'pill-primary')} flex items-center justify-center font-extrabold text-[11px] shrink-0">
+                        ${item.short}
+                      </div>
+                      <div class="min-w-0 flex-1">
+                        <div class="text-xs font-bold txt-primary truncate">${item.title}</div>
+                        <div class="text-[11px] txt-muted flex items-center gap-1.5 flex-wrap">
+                          <span>${item.sub}</span>
+                          ${item.prereq.length ? `<span>• Cần biết: <b>${item.prereq.join(', ')}</b></span>` : ''}
+                        </div>
+                      </div>
+                      <i data-lucide="chevron-right" class="w-4 h-4 txt-muted shrink-0"></i>
+                    </button>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        ` : `
+          <!-- Clean Zoomable Mini-Map with SHORT labels (no overlapping smudge!) -->
+          <div class="surface rounded-2xl p-3.5 shadow-sm space-y-2.5">
+            <div class="flex items-center justify-between">
+              <span class="text-xs font-semibold txt-secondary">Chạm nút để xem chi tiết & nhảy tới Slide</span>
+              <span class="pill-primary px-2 py-0.5 rounded-full text-[10px] font-bold">Nhãn rút gọn</span>
+            </div>
+            <svg viewBox="0 0 340 250" class="w-full h-60 surface-2 rounded-xl">
+              <defs>
+                <marker id="arrow" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto-start-reverse">
+                  <path d="M 0 1 L 10 5 L 0 9 z" fill="#6366f1"></path>
+                </marker>
+              </defs>
+              <!-- Edges -->
+              <line x1="95" y1="45" x2="225" y2="45" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />
+              <line x1="95" y1="62" x2="95" y2="112" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />
+              <line x1="115" y1="130" x2="220" y2="130" stroke="#e11d48" stroke-width="2" stroke-dasharray="4 3" marker-end="url(#arrow)" />
+              <line x1="245" y1="148" x2="170" y2="195" stroke="#6366f1" stroke-width="2" marker-end="url(#arrow)" />
+
+              <!-- Nodes with clean pill badges -->
+              <g class="cursor-pointer" data-svg-node="Tác tử thông minh (Chương 1 • Slide 4)">
+                <rect x="45" y="26" width="100" height="36" rx="12" fill="#4338ca" />
+                <text x="95" y="49" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">1. Agent</text>
+              </g>
+              <g class="cursor-pointer" data-svg-node="Mô hình PEAS (Chương 1 • Slide 6)">
+                <rect x="200" y="26" width="95" height="36" rx="12" fill="#0d9488" />
+                <text x="247" y="49" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">2. PEAS</text>
+              </g>
+              <g class="cursor-pointer" data-svg-node="Tìm kiếm BFS (Chương 2 • Slide 8)">
+                <rect x="45" y="112" width="100" height="36" rx="12" fill="#0d9488" />
+                <text x="95" y="135" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">3. BFS</text>
+              </g>
+              <g class="cursor-pointer" data-svg-node="Thuật toán A* (Chương 3 • Slide 6 — Cảnh báo dùng trước khi định nghĩa)">
+                <rect x="200" y="112" width="95" height="36" rx="12" fill="#e11d48" />
+                <text x="247" y="135" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">4. A* (!)</text>
+              </g>
+              <g class="cursor-pointer" data-svg-node="Mô phỏng tôi thép & GAN (Chương 4–6)">
+                <rect x="112" y="196" width="116" height="36" rx="12" fill="#4f46e5" />
+                <text x="170" y="219" text-anchor="middle" fill="#ffffff" font-size="12" font-weight="700">5. SA & GAN</text>
+              </g>
+            </svg>
+          </div>
+        `}
+      `;
+    }
+
+    function renderDictionary() {
+      const c = COURSES[state.courseId];
+      const filtered = c.dictionary.filter(item => {
+        const matchType = state.dictFilter === 'all' || item.sourceType === state.dictFilter;
+        const q = state.dictQuery.trim().toLowerCase();
+        const matchQ = !q || item.term.toLowerCase().includes(q) || item.en.toLowerCase().includes(q);
+        return matchType && matchQ;
+      });
+
+      return `
+        <!-- Search & Filter -->
+        <div class="space-y-2">
+          <div class="surface rounded-xl px-3 py-2 flex items-center gap-2">
+            <i data-lucide="search" class="w-4 h-4 txt-muted"></i>
+            <input id="dictSearchInput" value="${state.dictQuery}" placeholder="Tra khái niệm mới hoặc thuật ngữ..." class="bg-transparent text-xs txt-primary outline-none w-full" />
+          </div>
+          <div class="flex items-center gap-1.5">
+            <button data-df="all" class="df-btn px-2.5 py-1 rounded-full text-[11px] font-semibold ${state.dictFilter === 'all' ? 'pill-primary' : 'surface txt-secondary'}">Tất cả (${c.dictionary.length})</button>
+            <button data-df="lecture" class="df-btn px-2.5 py-1 rounded-full text-[11px] font-semibold ${state.dictFilter === 'lecture' ? 'pill-teal' : 'surface txt-secondary'}">Từ bài giảng</button>
+            <button data-df="academic" class="df-btn px-2.5 py-1 rounded-full text-[11px] font-semibold ${state.dictFilter === 'academic' ? 'pill-amber' : 'surface txt-secondary'}">Học thuật quốc tế</button>
+          </div>
+        </div>
+
+        <!-- Clean Cards (No duplicated title, badge stacked neatly) -->
+        <div class="space-y-2.5">
+          ${filtered.map((d, idx) => `
+            <button data-dict-idx="${idx}" class="dict-card-btn w-full text-left surface rounded-2xl p-3.5 shadow-sm space-y-2 hover:opacity-95 transition">
+              <div class="flex items-center justify-between gap-2">
+                <span class="${d.sourceType === 'academic' ? 'pill-amber' : 'pill-teal'} px-2 py-0.5 rounded-full text-[10px] font-bold">
+                  ${d.sourceBadge}
+                </span>
+                <span class="pill-rose px-2 py-0.5 rounded-full text-[10px] font-bold">Trừu tượng ${d.abstractness}%</span>
+              </div>
+              <div>
+                <div class="text-sm font-bold txt-primary leading-snug">${d.term}</div>
+                <div class="text-[11px] font-medium txt-muted">${d.en}</div>
+              </div>
+              <p class="text-xs txt-secondary leading-relaxed">${d.def}</p>
+              <div class="flex items-center justify-between pt-1 text-[11px]">
+                <span class="font-medium text-indigo-500">${d.where}</span>
+                <span class="txt-muted font-semibold">${d.refs.length} nguồn →</span>
+              </div>
+            </button>
+          `).join('')}
+
+          ${filtered.length === 0 ? `
+            <div class="surface rounded-2xl p-4 text-center space-y-2">
+              <div class="text-xs font-bold txt-primary">Chưa có trong bài giảng trước</div>
+              <p class="text-[11px] txt-muted">StudyAI sẽ tự động tra cứu nguồn học thuật quốc tế (Semantic Scholar, arXiv, MIT OCW) cho từ khóa “${state.dictQuery}”.</p>
+              <button id="simAcademicBtn" class="pill-amber px-3 py-1.5 rounded-xl text-xs font-bold">Tra cứu học thuật ngay</button>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
+    function render() {
+      updateHeader();
+      updateNav();
+      if (state.tab === 'notes') mainContent.innerHTML = renderNotes();
+      else if (state.tab === 'capture') mainContent.innerHTML = renderCapture();
+      else if (state.tab === 'roadmap') mainContent.innerHTML = renderRoadmap();
+      else mainContent.innerHTML = renderDictionary();
+
+      lucide.createIcons();
+      bindDynamicListeners();
+    }
+
+    function bindDynamicListeners() {
+      // Chapters
+      document.querySelectorAll('.ch-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          COURSES[state.courseId].activeChapter = Number(btn.dataset.ch);
+          showToast('Đã chuyển sang ' + COURSES[state.courseId].chapters[COURSES[state.courseId].activeChapter]);
+          render();
+        });
+      });
+
+      // Seek audio
+      document.querySelectorAll('.seek-btn').forEach(btn => {
+        btn.addEventListener('click', () => showToast('Đang phát lại lời giảng tại mốc ' + btn.dataset.seek));
+      });
+
+      // Cross-course Concept Disambiguation Modal
+      document.querySelectorAll('.concept-pick-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const idx = Number(btn.dataset.conceptIdx);
+          const concept = COURSES[state.courseId].slides[0].linkedConcepts[idx];
+          openModal(`
+            <div class="space-y-3">
+              <div>
+                <span class="pill-primary px-2 py-0.5 rounded-full text-[10px] font-bold">CHỌN NGỮ CẢNH KHÁI NIỆM</span>
+                <h3 class="text-base font-bold txt-primary mt-1">${concept.term}</h3>
+                <p class="text-xs txt-muted">Khái niệm này xuất hiện ở nhiều môn/chương khác nhau. Chọn định nghĩa bạn muốn gắn vào slide này:</p>
+              </div>
+              <div class="space-y-2">
+                ${concept.contexts.map(ctx => `
+                  <button data-pick-ctx="${ctx.id}" class="pick-ctx-btn w-full text-left p-3 rounded-2xl border transition ${
+                    ctx.id === concept.selectedContextId ? 'pill-primary border-indigo-500' : 'surface-2 border-transparent'
+                  }">
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-bold">${ctx.course}</span>
+                      <span class="text-[10px] font-semibold opacity-80">${ctx.location}</span>
+                    </div>
+                    <p class="text-xs mt-1 leading-relaxed opacity-90">${ctx.summary}</p>
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          `);
+          document.querySelectorAll('.pick-ctx-btn').forEach(pb => {
+            pb.addEventListener('click', () => {
+              concept.selectedContextId = pb.dataset.pickCtx;
+              closeModal();
+              showToast('Đã cập nhật liên kết khái niệm theo môn đã chọn');
+              render();
+            });
+          });
+        });
+      });
+
+      // Capture tab controls
+      document.querySelectorAll('.cap-mode-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.captureMode = btn.dataset.cap;
+          render();
+        });
+      });
+
+      const recBtn = document.getElementById('recordToggleBtn');
+      if (recBtn) {
+        recBtn.addEventListener('click', () => {
+          state.isRecording = !state.isRecording;
+          if (state.isRecording) {
+            showToast('Đang nghe giảng & tự động bám Slide...');
+            clearInterval(state.recordTimer);
+            state.recordTimer = setInterval(() => {
+              state.recordSec += 1;
+              if (state.recordSec === 3) {
+                state.liveNotes.unshift({
+                  slide: 'Slide 5',
+                  time: '00:03',
+                  text: 'AI phát hiện giảng viên chuyển sang Backpropagation (Chain Rule) → tự động gắn ghi chú vào Slide 5.'
+                });
+              }
+              if (state.tab === 'capture') render();
+            }, 1000);
+          } else {
+            clearInterval(state.recordTimer);
+            showToast('Đã dừng ghi âm & lưu vở ghi chép bám Slide');
+          }
+          render();
+        });
+      }
+
+      const changeSlideBtn = document.getElementById('changeSlideBtn');
+      if (changeSlideBtn) {
+        changeSlideBtn.addEventListener('click', () => {
+          state.liveSlideLoaded = state.liveSlideLoaded.includes('MIT')
+            ? 'CS50x_2026_Week3_Algorithms.pdf (54 slides)'
+            : 'MIT_6S191_Lecture1.pdf (42 slides)';
+          showToast('Đã nạp slide mới: ' + state.liveSlideLoaded);
+          render();
+        });
+      }
+
+      const batchBtn = document.getElementById('runBatchBtn');
+      if (batchBtn) {
+        batchBtn.addEventListener('click', () => {
+          showToast('Đang chạy Whisper (' + state.langs[state.langIdx] + ') + DTW căn gióng Slide...');
+          setTimeout(() => {
+            state.tab = 'notes';
+            render();
+          }, 900);
+        });
+      }
+
+      // Roadmap mode
+      document.querySelectorAll('.rm-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.roadmapMode = btn.dataset.rm;
+          render();
+        });
+      });
+
+      document.querySelectorAll('.node-card-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.tab = 'notes';
+          showToast('Đã nhảy tới Slide chứa khái niệm được chọn');
+          render();
+        });
+      });
+
+      document.querySelectorAll('[data-svg-node]').forEach(el => {
+        el.addEventListener('click', () => {
+          showToast(el.getAttribute('data-svg-node'));
+        });
+      });
+
+      // Dictionary controls
+      const searchInput = document.getElementById('dictSearchInput');
+      if (searchInput) {
+        searchInput.addEventListener('input', (e) => {
+          state.dictQuery = e.target.value;
+          render();
+          const newInp = document.getElementById('dictSearchInput');
+          if (newInp) { newInp.focus(); newInp.setSelectionRange(newInp.value.length, newInp.value.length); }
+        });
+      }
+
+      document.querySelectorAll('.df-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.dictFilter = btn.dataset.df;
+          render();
+        });
+      });
+
+      const simAcBtn = document.getElementById('simAcademicBtn');
+      if (simAcBtn) {
+        simAcBtn.addEventListener('click', () => {
+          COURSES[state.courseId].dictionary.unshift({
+            term: state.dictQuery,
+            en: 'Academic Lookup Result',
+            abstractness: 80,
+            sourceType: 'academic',
+            sourceBadge: 'Semantic Scholar • OpenAlex',
+            where: 'Mới tra cứu học thuật quốc tế',
+            def: 'Định nghĩa tổng hợp từ bài báo khoa học uy tín quốc tế (Semantic Scholar TL;DR + OpenAlex) khi khái niệm chưa xuất hiện ở các bài giảng trước.',
+            refs: ['Semantic Scholar Academic Graph API', 'OpenAlex Scholarly Works', 'arXiv.org']
+          });
+          state.dictQuery = '';
+          state.dictFilter = 'all';
+          showToast('Đã bổ sung khái niệm từ nguồn học thuật quốc tế');
+          render();
+        });
+      }
+
+      document.querySelectorAll('.dict-card-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const c = COURSES[state.courseId];
+          const filtered = c.dictionary.filter(item => {
+            const matchType = state.dictFilter === 'all' || item.sourceType === state.dictFilter;
+            const q = state.dictQuery.trim().toLowerCase();
+            return matchType && (!q || item.term.toLowerCase().includes(q) || item.en.toLowerCase().includes(q));
+          });
+          const item = filtered[Number(btn.dataset.dictIdx)];
+          if (!item) return;
+          openModal(`
+            <div class="space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="${item.sourceType === 'academic' ? 'pill-amber' : 'pill-teal'} px-2.5 py-0.5 rounded-full text-[11px] font-bold">${item.sourceBadge}</span>
+                <span class="pill-rose px-2 py-0.5 rounded-full text-[11px] font-bold">Độ trừu tượng ${item.abstractness}%</span>
+              </div>
+              <div>
+                <h3 class="text-base font-bold txt-primary">${item.term}</h3>
+                <div class="text-xs txt-muted">${item.en}</div>
+              </div>
+              <p class="text-xs txt-secondary leading-relaxed">${item.def}</p>
+              <div class="surface-2 rounded-xl p-3 space-y-1.5">
+                <div class="text-[11px] font-bold uppercase tracking-wider txt-muted">Nguồn tham khảo & Trích dẫn</div>
+                ${item.refs.map(r => `<div class="text-xs txt-primary">• ${r}</div>`).join('')}
+              </div>
+              <button id="closeDictModalBtn" class="w-full py-2.5 rounded-xl bg-indigo-600 text-white text-xs font-bold">Đóng</button>
+            </div>
+          `);
+          document.getElementById('closeDictModalBtn').addEventListener('click', closeModal);
+        });
+      });
+    }
+
+    // Top bar listeners
+    document.getElementById('courseSwitcherBtn').addEventListener('click', () => {
+      openModal(`
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-bold txt-primary">Chọn môn học</h3>
+            <span class="text-xs txt-muted">3 môn đang theo học</span>
+          </div>
+          <div class="space-y-2">
+            ${Object.values(COURSES).map(c => `
+              <button data-select-course="${c.id}" class="select-course-btn w-full text-left p-3 rounded-2xl border flex items-center justify-between gap-2 transition ${
+                c.id === state.courseId ? 'pill-primary border-indigo-500' : 'surface-2 border-transparent'
+              }">
+                <div>
+                  <div class="text-xs font-bold">${c.name}</div>
+                  <div class="text-[11px] opacity-80 mt-0.5">${c.meta}</div>
+                </div>
+                ${c.id === state.courseId ? '<i data-lucide="check" class="w-4 h-4"></i>' : ''}
+              </button>
+            `).join('')}
+          </div>
+        </div>
+      `);
+      document.querySelectorAll('.select-course-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          state.courseId = btn.dataset.selectCourse;
+          closeModal();
+          showToast('Đã chuyển môn: ' + COURSES[state.courseId].name);
+          render();
+        });
+      });
+    });
+
+    document.getElementById('langToggleBtn').addEventListener('click', () => {
+      state.langIdx = (state.langIdx + 1) % state.langs.length;
+      showToast('Chế độ nhận diện giọng nói: ' + state.langs[state.langIdx]);
+      render();
+    });
+
+    document.getElementById('themeToggleBtn').addEventListener('click', () => {
+      state.dark = !state.dark;
+      document.body.classList.toggle('dark', state.dark);
+      const icon = document.getElementById('themeIcon');
+      icon.setAttribute('data-lucide', state.dark ? 'sun' : 'moon');
+      lucide.createIcons();
+    });
+
+    document.querySelectorAll('.nav-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        state.tab = btn.dataset.tab;
+        render();
+      });
+    });
+
+    render();
+  </script>
+</body>
+</html>
