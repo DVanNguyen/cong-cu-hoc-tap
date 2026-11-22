@@ -1,7 +1,10 @@
 import os
 import re
+import logging
 from typing import Any, Dict, List, Optional, Tuple
 from faster_whisper import WhisperModel
+
+logger = logging.getLogger("asr_vad_service")
 
 # Bảng ánh xạ ngữ âm xác định cho các thuật ngữ phổ biến khi giảng viên đọc bằng tiếng Việt
 PHONETIC_TERM_ALIASES: Dict[str, List[str]] = {
@@ -68,10 +71,12 @@ class SlideAwareASREngine:
         if not slide_terms:
             return {"initial_prompt": None, "hotwords": None}
 
-        # Lọc trùng, bỏ khoảng trắng thừa và giữ tối đa 45 thuật ngữ quan trọng nhất
-        unique_terms = list(
-            dict.fromkeys(t.strip() for t in slide_terms if t and t.strip())
-        )[:45]
+        # Lọc trùng, chỉ giữ các từ/cụm từ ngắn (<= 4 từ, <= 40 ký tự) để không làm tràn context của Whisper
+        unique_terms = [
+            t.strip() for t in slide_terms
+            if t and t.strip() and len(t.split()) <= 4 and len(t) <= 40
+        ]
+        unique_terms = list(dict.fromkeys(unique_terms))[:20]
         if not unique_terms:
             return {"initial_prompt": None, "hotwords": None}
 
@@ -79,23 +84,29 @@ class SlideAwareASREngine:
         lang = SlideAwareASREngine.normalize_language(language)
 
         if lang == "en":
-            topic = course_title or "Computer Science"
+            topic = (course_title or "Computer Science")[:50]
             initial_prompt = (
-                f"University lecture on {topic}. "
-                f"Key technical terms covered in these slides include: {terms_csv}."
+                f"Lecture on {topic}. "
+                f"Key terms: {terms_csv}."
             )
         elif lang == "vi":
-            topic = course_title or "Trí tuệ nhân tạo"
+            topic = (course_title or "Khoa học máy tính")[:50]
             initial_prompt = (
                 f"Bài giảng môn {topic}. "
-                f"Trong slide này chúng ta xét các thuật ngữ: {terms_csv}."
+                f"Thuật ngữ: {terms_csv}."
             )
         else:
-            # Chế độ tự động (auto-detect): dùng prompt trung tính không ép ngôn ngữ
-            prefix = f"{course_title}. " if course_title else ""
+            prefix = f"{course_title[:50]}. " if course_title else ""
             initial_prompt = f"{prefix}Key terms: {terms_csv}."
 
+        # Giới hạn an toàn tuyệt đối 250 ký tự để không vượt quá 448 position encodings của Whisper
+        if len(initial_prompt) > 250:
+            initial_prompt = initial_prompt[:247] + "..."
+
         hotwords = " ".join(unique_terms)
+        if len(hotwords) > 250:
+            hotwords = hotwords[:250]
+
         return {
             "initial_prompt": initial_prompt,
             "hotwords": hotwords,
@@ -186,37 +197,49 @@ class SlideAwareASREngine:
             word_timestamps=True,
             beam_size=5,
             temperature=0.0,
+            max_new_tokens=384,
+            repetition_penalty=1.15,
+            no_repeat_ngram_size=3,
+            hallucination_silence_threshold=2.0,
         )
 
         detected_lang = getattr(info, "language", normalized_lang or "unknown")
         lang_prob = round(float(getattr(info, "language_probability", 1.0)), 4)
 
         output_segments: List[Dict[str, Any]] = []
-        for idx, seg in enumerate(segments_iter, start=1):
-            raw_text = " ".join(seg.text.split()).strip()
-            if not raw_text:
-                continue
+        try:
+            for idx, seg in enumerate(segments_iter, start=1):
+                raw_text = " ".join(seg.text.split()).strip()
+                if not raw_text:
+                    continue
 
-            final_text = (
-                self.recover_slide_domain_terms(
-                    raw_text,
-                    slide_terms or [],
-                    detected_language=detected_lang,
+                final_text = (
+                    self.recover_slide_domain_terms(
+                        raw_text,
+                        slide_terms or [],
+                        detected_language=detected_lang,
+                    )
+                    if (apply_glossary_post_fix and slide_terms)
+                    else raw_text
                 )
-                if (apply_glossary_post_fix and slide_terms)
-                else raw_text
-            )
 
-            output_segments.append(
-                {
-                    "segment_id": idx,
-                    "start_sec": round(float(seg.start), 2),
-                    "end_sec": round(float(seg.end), 2),
-                    "language": detected_lang,
-                    "raw_asr_text": raw_text,
-                    "text": final_text,
-                }
-            )
+                output_segments.append(
+                    {
+                        "segment_id": idx,
+                        "start_sec": round(float(seg.start), 2),
+                        "end_sec": round(float(seg.end), 2),
+                        "language": detected_lang,
+                        "raw_asr_text": raw_text,
+                        "text": final_text,
+                    }
+                )
+        except RuntimeError as e:
+            if "position" in str(e).lower() and "448" in str(e):
+                logger.warning(f"Whisper token positional limit (448) reached on long utterance: {e}. Preserved {len(output_segments)} segments.")
+            else:
+                logger.error(f"RuntimeError in ASR stream: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error in ASR stream: {e}")
 
         metadata = {
             "requested_language": normalized_lang or "auto",
