@@ -6,7 +6,7 @@ echo ======================================================================
 echo.
 
 echo [*] 1. Dang khoi dong Backend API (Laravel - Port 8000)...
-start "StudyAI - Laravel API (Port 8000)" cmd /k "cd /d c:\Users\Nguyen\AndroidStudioProjects\focusboard-api && php artisan serve --host=0.0.0.0 --port=8000"
+start "StudyAI - Laravel API (Port 8000)" cmd /k "cd /d c:\Users\Nguyen\AndroidStudioProjects\StudyAI\backend && php artisan serve --host=0.0.0.0 --port=8000"
 
 echo [*] 2. Dang khoi dong AI Microservice (FastAPI - Port 8001)...
 start "StudyAI - FastAPI AI Service (Port 8001)" cmd /k "cd /d c:\Users\Nguyen\AndroidStudioProjects\StudyAI\ai-service && python -m uvicorn main:app --host=0.0.0.0 --port=8001"
