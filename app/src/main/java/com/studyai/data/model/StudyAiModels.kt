@@ -376,3 +376,23 @@ data class VoiceprintStatusResponse(
     @SerializedName("created_at") val createdAt: String? = null
 )
 
+// ============================================================================
+// 5. DTO CHO CHỈNH SỬA / XÓA GHI CHÚ INLINE (TUẦN 4)
+// ============================================================================
+data class UpdateInlineNoteRequest(
+    @SerializedName("explanation_text") val explanationText: String
+)
+
+data class UpdateInlineNoteResponse(
+    val id: String = "",
+    @SerializedName("lecture_id") val lectureId: Long = 0L,
+    @SerializedName("block_id") val blockId: String? = null,
+    val explanationText: String = "",
+    @SerializedName("is_edited_by_user") val isEditedByUser: Boolean = true
+)
+
+data class DeleteInlineNoteResponse(
+    val deleted: Boolean = true,
+    val id: String = ""
+)
+

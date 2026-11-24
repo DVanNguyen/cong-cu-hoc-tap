@@ -48,6 +48,16 @@ Route::prefix('v1')->group(function () {
     Route::get('lectures/{lectureId}/inline-notes', [StudyAiUnifiedController::class, 'getLectureInlineNotes']);
     Route::patch('highlights/{highlightId}/select-context', [StudyAiUnifiedController::class, 'selectHighlightContext']);
 
+    // Phát audio bài giảng hỗ trợ tua (HTTP 206 Partial Content) cho ExoPlayer (Tuần 4)
+    Route::get('lectures/{lectureId}/audio', [StudyAiUnifiedController::class, 'streamLectureAudio']);
+
+    // Chỉnh sửa / xóa từng ghi chú inline (đồng bộ is_edited_by_user)
+    Route::put('inline-notes/{noteId}', [StudyAiUnifiedController::class, 'updateInlineNote']);
+    Route::delete('inline-notes/{noteId}', [StudyAiUnifiedController::class, 'deleteInlineNote']);
+
+    // Xuất toàn bộ vở ghi chép sạch dạng Markdown
+    Route::get('lectures/{lectureId}/export-markdown', [StudyAiUnifiedController::class, 'exportLectureMarkdown']);
+
     // =========================================================================
     // 5. Các endpoint hiện hữu (Chương trình học, Đồ thị tri thức & Từ điển sống)
     // =========================================================================

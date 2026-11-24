@@ -183,38 +183,28 @@ fun LivingDictionaryBottomSheet(
                 .padding(horizontal = 16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header: Tên khái niệm song ngữ + Chỉ số độ trừu tượng
+            // Header: Metadata nằm phía trên tiêu đề để tên thuật ngữ dài hiển thị trọn 100% chiều rộng
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "TỪ ĐIỂN SỐNG & MỞ RỘNG TRI THỨC",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = "${entry.canonicalNameVi} (${entry.canonicalNameEn})",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.ExtraBold
-                        )
-                    }
-                    Surface(
-                        color = Color(0xFFFFF3E0),
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "Độ trừu tượng: ${(entry.abstractnessScore * 100).toInt()}%",
-                            style = MaterialTheme.typography.labelSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFFE65100),
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                        )
-                    }
+                val originLink = entry.crossChapterLinks.firstOrNull()
+                val metaLine = if (originLink != null) {
+                    "Chương ${originLink.targetLectureOrder} • Slide ${originLink.targetSlideNumber} • ${entry.externalReferences.size} nguồn"
+                } else {
+                    "Từ điển sống • ${entry.externalReferences.size} nguồn tham khảo"
+                }
+                Column(modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        text = metaLine,
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "${entry.canonicalNameVi} (${entry.canonicalNameEn})",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
                 }
             }
 
@@ -539,38 +529,18 @@ fun CourseDictionaryScreen(
                         border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                            // Dòng metadata gọn nằm trên tiêu đề (không còn nhãn phần trăm bóp chữ)
+                            Surface(
+                                color = if (isAcademic) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                shape = RoundedCornerShape(8.dp)
                             ) {
-                                // Huy hiệu nguồn (Bài giảng vs Học thuật quốc tế)
-                                Surface(
-                                    color = if (isAcademic) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = if (isAcademic) "Semantic Scholar • arXiv" else "Chương ${item.firstIntroducedLectureId} • Slide ${item.firstIntroducedSlideNo}",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (isAcademic) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
-                                    )
-                                }
-
-                                // Huy hiệu độ trừu tượng
-                                Surface(
-                                    color = if (item.abstractnessScore >= 0.75f) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surfaceVariant,
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Text(
-                                        text = "Trừu tượng: ${(item.abstractnessScore * 100).toInt()}%",
-                                        style = MaterialTheme.typography.labelSmall,
-                                        fontWeight = FontWeight.Bold,
-                                        color = if (item.abstractnessScore >= 0.75f) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
-                                    )
-                                }
+                                Text(
+                                    text = "Chương ${item.firstIntroducedLectureId} • Slide ${item.firstIntroducedSlideNo} • ${item.referencesCount} nguồn",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isAcademic) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                )
                             }
 
                             Spacer(modifier = Modifier.height(8.dp))

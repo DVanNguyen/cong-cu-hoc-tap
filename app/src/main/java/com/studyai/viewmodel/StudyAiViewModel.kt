@@ -1,11 +1,14 @@
 package com.studyai.viewmodel
 
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import android.provider.OpenableColumns
 import android.util.Log
+import android.widget.Toast
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.google.gson.Gson
 import com.studyai.audio.ChunkedAudioRecorder
 import com.studyai.data.api.StudyAiApiService
 import com.studyai.data.model.*
@@ -34,13 +37,27 @@ import okhttp3.RequestBody.Companion.asRequestBody
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.File
 
+private data class LectureOfflineCachePayload(
+    val lectureId: Long,
+    val title: String,
+    val inlineNotes: LectureInlineNotesResponse? = null,
+    val workspace: LectureWorkspaceResponse? = null,
+    val cachedAtMs: Long = System.currentTimeMillis(),
+)
+
 class StudyAiViewModel(
-    private val apiService: StudyAiApiService
+    private val apiService: StudyAiApiService,
+    private val appContext: Context? = null,
 ) : ViewModel() {
 
     companion object {
         private const val TAG = "StudyAiViewModel"
     }
+
+    private val gson = Gson()
+
+    private val _isOfflineMode = MutableStateFlow(false)
+    val isOfflineMode: StateFlow<Boolean> = _isOfflineMode.asStateFlow()
 
     // =========================================================================
     // 1. Quản lý Môn học (Courses)
@@ -277,8 +294,68 @@ class StudyAiViewModel(
     }
 
     // =========================================================================
-    // HÀM XỬ LÝ VỞ GHI CHÉP INLINE & LIVE RECORDING
+    // HÀM XỬ LÝ VỞ GHI CHÉP INLINE, OFFLINE CACHE, CRUD & EXPORT (TUẦN 4)
     // =========================================================================
+    private fun lectureCacheFile(lectureId: Long): File? {
+        val ctx = appContext ?: return null
+        return File(ctx.filesDir, "cache_lecture_${lectureId}.json")
+    }
+
+    private fun saveLectureOfflineCache(
+        lectureId: Long,
+        title: String? = null,
+        inlineNotes: LectureInlineNotesResponse? = null,
+        workspace: LectureWorkspaceResponse? = null,
+    ) {
+        val file = lectureCacheFile(lectureId) ?: return
+        try {
+            val existing = loadLectureOfflineCache(lectureId)
+            val merged = LectureOfflineCachePayload(
+                lectureId = lectureId,
+                title = title ?: inlineNotes?.title ?: existing?.title ?: _currentLectureTitle.value,
+                inlineNotes = inlineNotes ?: existing?.inlineNotes,
+                workspace = workspace ?: existing?.workspace,
+                cachedAtMs = System.currentTimeMillis(),
+            )
+            file.writeText(gson.toJson(merged))
+        } catch (e: Exception) {
+            Log.w(TAG, "Không thể ghi cache offline cho bài giảng $lectureId: ${e.message}")
+        }
+    }
+
+    private fun loadLectureOfflineCache(lectureId: Long): LectureOfflineCachePayload? {
+        val file = lectureCacheFile(lectureId) ?: return null
+        if (!file.exists()) return null
+        return try {
+            gson.fromJson(file.readText(), LectureOfflineCachePayload::class.java)
+        } catch (e: Exception) {
+            Log.w(TAG, "Không thể đọc cache offline cho bài giảng $lectureId: ${e.message}")
+            null
+        }
+    }
+
+    private fun applyOfflineCacheIfAvailable(lectureId: Long): Boolean {
+        val cached = loadLectureOfflineCache(lectureId) ?: return false
+        var applied = false
+        cached.inlineNotes?.let { inline ->
+            _inlinePages.value = mapDtoToAnnotatedPages(inline.pages)
+            _generalNotes.value = inline.generalNotes ?: emptyList()
+            if (inline.title.isNotBlank()) _currentLectureTitle.value = inline.title
+            applied = true
+        }
+        cached.workspace?.let { ws ->
+            _slides.value = mapSlides(ws.slides)
+            applied = true
+        }
+        if (applied) {
+            _currentLectureId.value = lectureId
+            if (cached.title.isNotBlank()) _currentLectureTitle.value = cached.title
+            _isOfflineMode.value = true
+            _errorMessage.value = null
+        }
+        return applied
+    }
+
     fun loadLectureInlineNotes(lectureId: Long) {
         viewModelScope.launch {
             try {
@@ -287,11 +364,134 @@ class StudyAiViewModel(
                     val body = res.body()!!
                     _inlinePages.value = mapDtoToAnnotatedPages(body.pages)
                     _generalNotes.value = body.generalNotes ?: emptyList()
+                    if (body.title.isNotBlank()) _currentLectureTitle.value = body.title
+                    _isOfflineMode.value = false
+                    saveLectureOfflineCache(lectureId = lectureId, title = body.title, inlineNotes = body)
+                } else {
+                    applyOfflineCacheIfAvailable(lectureId)
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Lỗi loadLectureInlineNotes: ${e.message}")
+                applyOfflineCacheIfAvailable(lectureId)
             }
         }
+    }
+
+    fun updateInlineNote(noteId: String, newText: String) {
+        val cleaned = newText.trim()
+        if (cleaned.isEmpty()) return
+
+        // Cập nhật UI ngay lập tức
+        _inlinePages.value = _inlinePages.value.map { page ->
+            page.copy(
+                blocks = page.blocks.map { block ->
+                    block.copy(
+                        inlineNotes = block.inlineNotes.map { n ->
+                            if (n.id == noteId) n.copy(explanationText = cleaned) else n
+                        }
+                    )
+                }
+            )
+        }
+
+        val numericId = noteId.removePrefix("note_").toLongOrNull() ?: return
+        viewModelScope.launch {
+            try {
+                val res = apiService.updateInlineNote(numericId, UpdateInlineNoteRequest(cleaned))
+                if (res.isSuccessful) {
+                    loadLectureInlineNotes(_currentLectureId.value)
+                } else {
+                    _errorMessage.value = "Không thể lưu ghi chú lên máy chủ (${res.code()})."
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Lỗi kết nối khi cập nhật ghi chú: ${e.message}"
+            }
+        }
+    }
+
+    fun deleteInlineNote(noteId: String) {
+        // Xóa khỏi UI ngay lập tức
+        _inlinePages.value = _inlinePages.value.map { page ->
+            page.copy(
+                blocks = page.blocks.map { block ->
+                    block.copy(
+                        inlineNotes = block.inlineNotes.filterNot { it.id == noteId }
+                    )
+                }
+            )
+        }
+
+        val numericId = noteId.removePrefix("note_").toLongOrNull() ?: return
+        viewModelScope.launch {
+            try {
+                val res = apiService.deleteInlineNote(numericId)
+                if (res.isSuccessful) {
+                    loadLectureInlineNotes(_currentLectureId.value)
+                } else {
+                    _errorMessage.value = "Không thể xóa ghi chú trên máy chủ (${res.code()})."
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Lỗi kết nối khi xóa ghi chú: ${e.message}"
+            }
+        }
+    }
+
+    fun exportAndShareMarkdown(context: Context, lectureId: Long = _currentLectureId.value) {
+        viewModelScope.launch {
+            val markdown = try {
+                val res = apiService.exportLectureMarkdown(lectureId)
+                if (res.isSuccessful && res.body() != null) {
+                    res.body()!!.string()
+                } else {
+                    buildLocalMarkdownFallback()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "exportLectureMarkdown offline fallback: ${e.message}")
+                buildLocalMarkdownFallback()
+            }
+
+            if (markdown.isBlank()) {
+                Toast.makeText(context, "Chưa có nội dung ghi chú để xuất.", Toast.LENGTH_SHORT).show()
+                return@launch
+            }
+
+            // Lưu bản sao cục bộ lecture_{id}_notes.md trong thư mục app
+            try {
+                val outFile = File(context.filesDir, "lecture_${lectureId}_notes.md")
+                outFile.writeText(markdown)
+            } catch (_: Exception) {}
+
+            val sendIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/markdown"
+                putExtra(Intent.EXTRA_SUBJECT, "${_currentLectureTitle.value} - StudyAI Notes.md")
+                putExtra(Intent.EXTRA_TEXT, markdown)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context.startActivity(Intent.createChooser(sendIntent, "Xuất & Chia sẻ vở ghi chép (.md)"))
+        }
+    }
+
+    private fun buildLocalMarkdownFallback(): String {
+        val sb = StringBuilder()
+        sb.appendLine("# ${_currentLectureTitle.value}")
+        sb.appendLine()
+        _inlinePages.value.forEach { page ->
+            sb.appendLine("## Slide ${page.pageNumber}: ${page.slideTitle}")
+            sb.appendLine()
+            page.blocks.forEach { b ->
+                val confused = if (b.isMarkedConfused) " **[Cần xem lại]**" else ""
+                when (b.kind) {
+                    "heading" -> sb.appendLine("### ${b.originalSlideText}$confused")
+                    "formula" -> sb.appendLine("- `${b.originalSlideText}`$confused")
+                    else -> sb.appendLine("- ${b.originalSlideText}$confused")
+                }
+                b.inlineNotes.forEach { n ->
+                    sb.appendLine("  > **[${n.timestampLabel}]** ${n.explanationText}")
+                }
+            }
+            sb.appendLine()
+        }
+        return sb.toString()
     }
 
     fun toggleConfusedBlock(blockId: String) {
@@ -813,6 +1013,8 @@ class StudyAiViewModel(
                         ?: "Chapter $lectureId"
                     _currentLectureTitle.value = matchedTitle
                     _currentSlideIndex.value = 0
+                    _isOfflineMode.value = false
+                    saveLectureOfflineCache(lectureId = lectureId, title = matchedTitle, workspace = body)
                 }
 
                 // 2. Tải Knowledge Graph
@@ -870,7 +1072,9 @@ class StudyAiViewModel(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "loadAllData error", e)
-                _errorMessage.value = "Lỗi kết nối máy chủ StudyAI: ${e.localizedMessage ?: e.message ?: e.javaClass.simpleName}"
+                if (!applyOfflineCacheIfAvailable(lectureId)) {
+                    _errorMessage.value = "Lỗi kết nối máy chủ StudyAI: ${e.localizedMessage ?: e.message ?: e.javaClass.simpleName}"
+                }
             } finally {
                 _isLoading.value = false
             }
@@ -878,7 +1082,6 @@ class StudyAiViewModel(
     }
 
     fun switchCourse(courseId: Long) {
-        val initialLectureId = if (courseId == 3L) 8L else 1L
         selectCourse(courseId)
     }
 
@@ -900,9 +1103,13 @@ class StudyAiViewModel(
                     _currentLectureTitle.value = matchedTitle
                     _currentSlideIndex.value = targetSlideIdx.coerceIn(0, (mapped.size - 1).coerceAtLeast(0))
                     _targetAudioSec.value = targetSec
+                    _isOfflineMode.value = false
+                    saveLectureOfflineCache(lectureId = lectureId, title = matchedTitle, workspace = body)
                 }
             } catch (e: Exception) {
-                _errorMessage.value = "Không thể chuyển chương: ${e.message}"
+                if (!applyOfflineCacheIfAvailable(lectureId)) {
+                    _errorMessage.value = "Không thể chuyển chương: ${e.message}"
+                }
             } finally {
                 _isLoading.value = false
             }

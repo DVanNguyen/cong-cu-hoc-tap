@@ -21,14 +21,27 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.CloudOff
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Flag
 import androidx.compose.material.icons.filled.GraphicEq
+import androidx.compose.material.icons.filled.IosShare
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -46,7 +59,9 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.studyai.audio.AudioPlayerUiState
 
 enum class HighlightSourceType {
     PREVIOUS_LECTURE,   // Khái niệm đã học ở bài cũ -> Highlight xanh ngọc
@@ -84,20 +99,25 @@ data class AnnotatedSlidePageUi(
 )
 
 /**
- * Màn hình Vở Ghi Chép Nhúng Trực Tiếp Trên Slide:
- * - Copy toàn bộ nội dung từng trang slide thành 1 tài liệu ghi chú sạch, dễ đọc.
- * - Ghi chú phân tích của giảng viên được chèn NGAY DƯỚI ĐÚNG Ý (block) đang được giảng.
- * - Khái niệm đã học ở bài cũ (highlight xanh) & khái niệm mới từ nguồn học thuật quốc tế (highlight vàng)
- *   được đánh dấu ngay trong dòng chữ; chạm vào bật Pop-up gọn chỉ hiện đúng đoạn giải thích.
- * - Không còn các khung "Liên kết chéo" to chiếm màn hình hay thuật ngữ kỹ thuật (Novelty & MMR).
+ * Màn hình Vở Ghi Chép Nhúng Trực Tiếp Trên Slide (Tuần 4):
+ * - Tương thích Dark/Light Mode chuẩn độ tương phản qua MaterialTheme.colorScheme.
+ * - Hỗ trợ Sửa / Xóa từng ghi chú giảng viên (Menu 3 chấm).
+ * - Hỗ trợ Xuất vở ghi chép dạng Markdown (.md / Chia sẻ).
+ * - Hiển thị banner khi đang đọc từ bản cache ngoại tuyến.
  */
 @Composable
 fun InlineSlideNoteDocumentScreen(
     pages: List<AnnotatedSlidePageUi>,
+    isOfflineCache: Boolean = false,
     onToggleConfusedBlock: (blockId: String) -> Unit = {},
     onPlayTimestamp: (Float) -> Unit = {},
+    onUpdateNote: (noteId: String, newText: String) -> Unit = { _, _ -> },
+    onDeleteNote: (noteId: String) -> Unit = {},
+    onExportMarkdown: (() -> Unit)? = null,
 ) {
     var activePopupConcept by remember { mutableStateOf<InlineConceptHighlight?>(null) }
+    var editingNote by remember { mutableStateOf<InlineLecturerNote?>(null) }
+    var editDraftText by remember { mutableStateOf("") }
 
     LazyColumn(
         modifier = Modifier
@@ -106,9 +126,32 @@ fun InlineSlideNoteDocumentScreen(
         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Chú giải màu highlight siêu gọn ở đầu tài liệu để người dùng mới nhìn là hiểu ngay
+        if (isOfflineCache) {
+            item {
+                OfflineCacheBanner()
+            }
+        }
+
+        // Chú giải màu highlight siêu gọn + nút Xuất vở (.md)
         item {
-            HighlightLegendBar()
+            HighlightLegendAndExportBar(onExportMarkdown = onExportMarkdown)
+        }
+
+        if (pages.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text(
+                        text = "Chưa có trang slide hoặc ghi chú nào cho bài giảng này. Hãy sang tab Thu âm để tải Slide + Audio.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(16.dp),
+                    )
+                }
+            }
         }
 
         items(pages, key = { it.pageNumber }) { page ->
@@ -117,8 +160,55 @@ fun InlineSlideNoteDocumentScreen(
                 onClickConcept = { activePopupConcept = it },
                 onToggleConfusedBlock = onToggleConfusedBlock,
                 onPlayTimestamp = onPlayTimestamp,
+                onStartEditNote = { note ->
+                    editingNote = note
+                    editDraftText = note.explanationText
+                },
+                onDeleteNote = onDeleteNote,
             )
         }
+    }
+
+    // Dialog chỉnh sửa ghi chú
+    editingNote?.let { note ->
+        AlertDialog(
+            onDismissRequest = { editingNote = null },
+            title = {
+                Text(
+                    text = "Chỉnh sửa ghi chú (${note.timestampLabel})",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+            },
+            text = {
+                OutlinedTextField(
+                    value = editDraftText,
+                    onValueChange = { editDraftText = it },
+                    label = { Text("Nội dung ghi chú") },
+                    minLines = 3,
+                    maxLines = 8,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        val cleaned = editDraftText.trim()
+                        if (cleaned.isNotEmpty()) {
+                            onUpdateNote(note.id, cleaned)
+                        }
+                        editingNote = null
+                    }
+                ) {
+                    Text("Lưu thay đổi")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { editingNote = null }) {
+                    Text("Hủy")
+                }
+            },
+        )
     }
 
     // Pop-up gọn: chỉ hiển thị đúng đoạn giải thích ở bài cũ hoặc nguồn học thuật quốc tế
@@ -130,7 +220,7 @@ fun InlineSlideNoteDocumentScreen(
                 Icon(
                     imageVector = if (isAcademic) Icons.Default.Public else Icons.Default.School,
                     contentDescription = null,
-                    tint = if (isAcademic) Color(0xFFD97706) else Color(0xFF0D9488),
+                    tint = if (isAcademic) MaterialTheme.colorScheme.tertiary else MaterialTheme.colorScheme.secondary,
                 )
             },
             title = {
@@ -143,15 +233,19 @@ fun InlineSlideNoteDocumentScreen(
                     Surface(
                         shape = RoundedCornerShape(20.dp),
                         color = if (isAcademic) {
-                            Color(0xFFFEF3C7)
+                            MaterialTheme.colorScheme.tertiaryContainer
                         } else {
-                            Color(0xFFCCFBF1)
+                            MaterialTheme.colorScheme.secondaryContainer
                         },
                     ) {
                         Text(
                             text = concept.sourceLabel,
                             style = MaterialTheme.typography.labelSmall,
-                            color = if (isAcademic) Color(0xFF92400E) else Color(0xFF115E59),
+                            color = if (isAcademic) {
+                                MaterialTheme.colorScheme.onTertiaryContainer
+                            } else {
+                                MaterialTheme.colorScheme.onSecondaryContainer
+                            },
                             modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
                         )
                     }
@@ -174,27 +268,91 @@ fun InlineSlideNoteDocumentScreen(
 }
 
 @Composable
-private fun HighlightLegendBar() {
+private fun OfflineCacheBanner() {
+    Surface(
+        shape = RoundedCornerShape(12.dp),
+        color = MaterialTheme.colorScheme.tertiaryContainer,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.4f)),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.CloudOff,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+                modifier = Modifier.size(16.dp),
+            )
+            Text(
+                text = "Đang xem bản lưu ngoại tuyến (không có kết nối mạng)",
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+@Composable
+private fun HighlightLegendAndExportBar(
+    onExportMarkdown: (() -> Unit)? = null,
+) {
     Row(
         modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        LegendChip(
-            label = "Bài cũ",
-            bg = Color(0xFFCCFBF1),
-            fg = Color(0xFF115E59),
-        )
-        LegendChip(
-            label = "Học thuật",
-            bg = Color(0xFFFEF3C7),
-            fg = Color(0xFF92400E),
-        )
-        LegendChip(
-            label = "Chưa hiểu",
-            bg = Color(0xFFFFE4E6),
-            fg = Color(0xFF9F1239),
-        )
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            LegendChip(
+                label = "Bài cũ",
+                bg = MaterialTheme.colorScheme.secondaryContainer,
+                fg = MaterialTheme.colorScheme.onSecondaryContainer,
+            )
+            LegendChip(
+                label = "Học thuật",
+                bg = MaterialTheme.colorScheme.tertiaryContainer,
+                fg = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            LegendChip(
+                label = "Chưa hiểu",
+                bg = MaterialTheme.colorScheme.errorContainer,
+                fg = MaterialTheme.colorScheme.onErrorContainer,
+            )
+        }
+
+        if (onExportMarkdown != null) {
+            Surface(
+                onClick = onExportMarkdown,
+                shape = RoundedCornerShape(12.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.IosShare,
+                        contentDescription = "Xuất vở Markdown",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(14.dp),
+                    )
+                    Text(
+                        text = "Xuất .md",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
     }
 }
 
@@ -211,12 +369,164 @@ private fun LegendChip(label: String, bg: Color, fg: Color) {
     }
 }
 
+/**
+ * Thanh phát audio thu gọn gắn đáy màn hình (Media3 ExoPlayer).
+ * Hiển thị nút Play/Pause, thanh tua Slider mm:ss / mm:ss, nút tốc độ 1.0x..2.0x và nút đóng.
+ */
+@Composable
+fun CompactAudioPlayerBar(
+    audioState: AudioPlayerUiState,
+    onTogglePlayPause: () -> Unit,
+    onSeekToMs: (Long) -> Unit,
+    onCycleSpeed: () -> Unit,
+    onClose: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    if (!audioState.isVisible) return
+
+    val durationMs = audioState.durationMs.coerceAtLeast(1L)
+    val currentMs = audioState.currentPositionMs.coerceIn(0L, durationMs)
+    val sliderFraction = if (audioState.durationMs > 0L) {
+        (currentMs.toFloat() / durationMs.toFloat()).coerceIn(0f, 1f)
+    } else 0f
+
+    Surface(
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        tonalElevation = 6.dp,
+        shadowElevation = 6.dp,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f)),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp, vertical = 4.dp),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            if (!audioState.errorMessage.isNullOrBlank()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Text(
+                        text = audioState.errorMessage,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = onClose, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Đóng trình phát",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = onTogglePlayPause,
+                        modifier = Modifier.size(36.dp),
+                    ) {
+                        Icon(
+                            imageVector = if (audioState.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow,
+                            contentDescription = if (audioState.isPlaying) "Tạm dừng" else "Phát",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(22.dp),
+                        )
+                    }
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Slider(
+                            value = sliderFraction,
+                            onValueChange = { frac ->
+                                if (audioState.durationMs > 0L) {
+                                    onSeekToMs((frac * audioState.durationMs).toLong())
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(26.dp),
+                        )
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 4.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Text(
+                                text = formatMsLabel(audioState.currentPositionMs),
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                            Text(
+                                text = if (audioState.durationMs > 0L) formatMsLabel(audioState.durationMs) else "--:--",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.width(6.dp))
+
+                    Surface(
+                        onClick = onCycleSpeed,
+                        shape = RoundedCornerShape(10.dp),
+                        color = MaterialTheme.colorScheme.secondaryContainer,
+                    ) {
+                        val speedLabel = if (audioState.playbackSpeed % 1f == 0f) {
+                            "${audioState.playbackSpeed.toInt()}.0x"
+                        } else {
+                            "${audioState.playbackSpeed}x"
+                        }
+                        Text(
+                            text = speedLabel,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 4.dp),
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onClose,
+                        modifier = Modifier.size(30.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Đóng thanh phát",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+private fun formatMsLabel(ms: Long): String {
+    val totalSec = (ms / 1000L).coerceAtLeast(0L)
+    val mins = totalSec / 60L
+    val secs = totalSec % 60L
+    return "%02d:%02d".format(mins, secs)
+}
+
 @Composable
 private fun AnnotatedSlidePageCard(
     page: AnnotatedSlidePageUi,
     onClickConcept: (InlineConceptHighlight) -> Unit,
     onToggleConfusedBlock: (String) -> Unit,
     onPlayTimestamp: (Float) -> Unit,
+    onStartEditNote: (InlineLecturerNote) -> Unit,
+    onDeleteNote: (String) -> Unit,
 ) {
     Surface(
         shape = RoundedCornerShape(20.dp),
@@ -264,6 +574,8 @@ private fun AnnotatedSlidePageCard(
                     onClickConcept = onClickConcept,
                     onToggleConfused = { onToggleConfusedBlock(block.blockId) },
                     onPlayTimestamp = onPlayTimestamp,
+                    onStartEditNote = onStartEditNote,
+                    onDeleteNote = onDeleteNote,
                 )
             }
         }
@@ -276,17 +588,24 @@ private fun SlideBlockRow(
     onClickConcept: (InlineConceptHighlight) -> Unit,
     onToggleConfused: () -> Unit,
     onPlayTimestamp: (Float) -> Unit,
+    onStartEditNote: (InlineLecturerNote) -> Unit,
+    onDeleteNote: (String) -> Unit,
 ) {
     val containerColor = when {
-        block.isMarkedConfused -> Color(0xFFFFE4E6).copy(alpha = 0.65f)
-        block.isCurrentlySpoken -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+        block.isMarkedConfused -> MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.55f)
+        block.isCurrentlySpoken -> MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.50f)
         else -> Color.Transparent
     }
-    val borderColor = when {
-        block.isMarkedConfused -> Color(0xFFE11D48).copy(alpha = 0.55f)
-        block.isCurrentlySpoken -> MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
-        else -> Color.Transparent
+    val textColor = if (block.isMarkedConfused) {
+        MaterialTheme.colorScheme.onErrorContainer
+    } else {
+        MaterialTheme.colorScheme.onSurface
     }
+
+    val prevBg = MaterialTheme.colorScheme.secondaryContainer
+    val prevFg = MaterialTheme.colorScheme.onSecondaryContainer
+    val acadBg = MaterialTheme.colorScheme.tertiaryContainer
+    val acadFg = MaterialTheme.colorScheme.onTertiaryContainer
 
     Column(
         modifier = Modifier
@@ -318,8 +637,8 @@ private fun SlideBlockRow(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.Top,
         ) {
-            // Nội dung gốc từ slide với highlight inline có thể bấm
-            val annotatedText = remember(block.originalSlideText, block.highlights) {
+            // Nội dung gốc từ slide với highlight inline tương thích Dark/Light Mode
+            val annotatedText = remember(block.originalSlideText, block.highlights, prevBg, prevFg, acadBg, acadFg) {
                 buildAnnotatedString {
                     val base = if (block.kind == "bullet") "• ${block.originalSlideText}" else block.originalSlideText
                     append(base)
@@ -327,16 +646,8 @@ private fun SlideBlockRow(
                         val start = base.indexOf(hl.term, ignoreCase = true)
                         if (start >= 0) {
                             val end = start + hl.term.length
-                            val bg = if (hl.sourceType == HighlightSourceType.ACADEMIC_INTERNET) {
-                                Color(0xFFFEF3C7)
-                            } else {
-                                Color(0xFFCCFBF1)
-                            }
-                            val fg = if (hl.sourceType == HighlightSourceType.ACADEMIC_INTERNET) {
-                                Color(0xFF92400E)
-                            } else {
-                                Color(0xFF115E59)
-                            }
+                            val bg = if (hl.sourceType == HighlightSourceType.ACADEMIC_INTERNET) acadBg else prevBg
+                            val fg = if (hl.sourceType == HighlightSourceType.ACADEMIC_INTERNET) acadFg else prevFg
                             addStyle(
                                 style = SpanStyle(
                                     background = bg,
@@ -362,7 +673,7 @@ private fun SlideBlockRow(
             ClickableText(
                 text = annotatedText,
                 style = MaterialTheme.typography.bodyMedium.copy(
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = textColor,
                     fontWeight = if (block.kind == "heading") FontWeight.Bold else FontWeight.Normal,
                     fontStyle = if (block.kind == "formula") FontStyle.Italic else FontStyle.Normal,
                 ),
@@ -382,7 +693,7 @@ private fun SlideBlockRow(
             Icon(
                 imageVector = Icons.Default.Flag,
                 contentDescription = "Đánh dấu chưa hiểu đoạn này",
-                tint = if (block.isMarkedConfused) Color(0xFFE11D48) else MaterialTheme.colorScheme.outline,
+                tint = if (block.isMarkedConfused) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline,
                 modifier = Modifier
                     .padding(start = 6.dp, top = 2.dp)
                     .size(18.dp)
@@ -392,10 +703,12 @@ private fun SlideBlockRow(
 
         // Ghi chú giảng viên phân tích chèn TRỰC TIẾP ngay dưới ý slide tương ứng
         block.inlineNotes.forEach { note ->
+            var menuExpanded by remember(note.id) { mutableStateOf(false) }
+
             Surface(
                 shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.55f),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.25f)),
+                color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.50f),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.30f)),
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 10.dp),
@@ -409,7 +722,10 @@ private fun SlideBlockRow(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f),
+                        ) {
                             Icon(
                                 imageVector = Icons.Default.AutoAwesome,
                                 contentDescription = null,
@@ -422,31 +738,91 @@ private fun SlideBlockRow(
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
                             )
                         }
-                        Surface(
-                            onClick = { onPlayTimestamp(note.timestampSec) },
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                                verticalAlignment = Alignment.CenterVertically,
+
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Surface(
+                                onClick = { onPlayTimestamp(note.timestampSec) },
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.surface,
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.PlayArrow,
-                                    contentDescription = "Nghe lại",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(13.dp),
-                                )
-                                Text(
-                                    text = note.timestampLabel,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PlayArrow,
+                                        contentDescription = "Nghe lại",
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                    Text(
+                                        text = note.timestampLabel,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.primary,
+                                    )
+                                }
+                            }
+
+                            // Menu 3 chấm Sửa / Xóa ghi chú
+                            Box {
+                                IconButton(
+                                    onClick = { menuExpanded = true },
+                                    modifier = Modifier.size(26.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.MoreVert,
+                                        contentDescription = "Tùy chọn ghi chú",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                }
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false },
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Chỉnh sửa ghi chú") },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Edit,
+                                                contentDescription = null,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onStartEditNote(note)
+                                        },
+                                    )
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Xóa ghi chú",
+                                                color = MaterialTheme.colorScheme.error,
+                                            )
+                                        },
+                                        leadingIcon = {
+                                            Icon(
+                                                imageVector = Icons.Default.Delete,
+                                                contentDescription = null,
+                                                tint = MaterialTheme.colorScheme.error,
+                                                modifier = Modifier.size(18.dp),
+                                            )
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onDeleteNote(note.id)
+                                        },
+                                    )
+                                }
                             }
                         }
                     }
+
                     Text(
                         text = note.explanationText,
                         style = MaterialTheme.typography.bodyMedium,

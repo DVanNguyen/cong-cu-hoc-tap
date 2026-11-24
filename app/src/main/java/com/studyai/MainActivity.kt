@@ -50,7 +50,7 @@ class MainActivity : ComponentActivity() {
         object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 @Suppress("UNCHECKED_CAST")
-                return StudyAiViewModel(ApiClient.apiService) as T
+                return StudyAiViewModel(ApiClient.apiService, applicationContext) as T
             }
         }
     }
@@ -97,6 +97,7 @@ class MainActivity : ComponentActivity() {
                     val isVoiceTesting by viewModel.isVoiceTesting.collectAsState()
                     val voiceprintStatus by viewModel.voiceprintStatus.collectAsState()
                     val isEnrollingVoice by viewModel.isEnrollingVoice.collectAsState()
+                    val isOfflineMode by viewModel.isOfflineMode.collectAsState()
 
                     LaunchedEffect(selectedCourseId) {
                         viewModel.checkVoiceprintStatus(selectedCourseId)
@@ -179,6 +180,16 @@ class MainActivity : ComponentActivity() {
                             isEnrollingVoice = isEnrollingVoice,
                             onEnrollVoiceprint = { uri ->
                                 viewModel.enrollTeacherVoice(this@MainActivity, uri)
+                            },
+                            isOfflineCache = isOfflineMode,
+                            onUpdateInlineNote = { noteId, newText ->
+                                viewModel.updateInlineNote(noteId, newText)
+                            },
+                            onDeleteInlineNote = { noteId ->
+                                viewModel.deleteInlineNote(noteId)
+                            },
+                            onExportMarkdown = {
+                                viewModel.exportAndShareMarkdown(this@MainActivity, currentLectureId)
                             }
                         )
                     }

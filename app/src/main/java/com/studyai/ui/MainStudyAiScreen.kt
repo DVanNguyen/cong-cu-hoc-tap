@@ -18,10 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.studyai.audio.LectureAudioPlayer
+import com.studyai.data.api.ApiClient
 import com.studyai.ui.capture.SlideVaultAndCaptureScreen
 import com.studyai.ui.capture.VaultSlideFileUi
 import com.studyai.ui.course.CourseManagerBottomSheet
@@ -35,6 +38,7 @@ import com.studyai.ui.graph.ConceptNodeUi
 import com.studyai.ui.graph.KnowledgeRoadmapScreen
 import com.studyai.ui.notes.AnnotatedSlidePageUi
 import com.studyai.ui.notes.ChapterUiModel
+import com.studyai.ui.notes.CompactAudioPlayerBar
 import com.studyai.ui.notes.HighlightSourceType
 import com.studyai.ui.notes.InlineConceptHighlight
 import com.studyai.ui.notes.InlineLecturerNote
@@ -117,22 +121,37 @@ fun MainStudyAiScreen(
     voiceprintStatus: com.studyai.data.model.VoiceprintStatusResponse? = null,
     isEnrollingVoice: Boolean = false,
     onEnrollVoiceprint: ((android.net.Uri) -> Unit)? = null,
+    isOfflineCache: Boolean = false,
+    onUpdateInlineNote: (String, String) -> Unit = { _, _ -> },
+    onDeleteInlineNote: (String) -> Unit = {},
+    onExportMarkdown: (() -> Unit)? = null,
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val audioPlayer = remember(context) { LectureAudioPlayer(context, coroutineScope) }
+    val audioState by audioPlayer.state.collectAsState()
+
+    DisposableEffect(audioPlayer) {
+        onDispose { audioPlayer.release() }
+    }
+
+    val buildLectureAudioUrl: (Long) -> String = { lecId ->
+        val base = ApiClient.baseUrl.trimEnd('/')
+        "$base/api/v1/lectures/$lecId/audio"
+    }
+
+    LaunchedEffect(targetAudioSec, currentLectureId) {
+        if (targetAudioSec != null && targetAudioSec >= 0f) {
+            audioPlayer.loadAndSeek(buildLectureAudioUrl(currentLectureId), targetAudioSec)
+            onClearTargetAudio()
+        }
+    }
+
     var selectedTab by remember { mutableStateOf(StudyAiTab.NOTES) }
     var showCourseManagerSheet by remember { mutableStateOf(false) }
-    var isDocumentNoteMode by remember { mutableStateOf(true) }
 
-    val activeCourseList = if (courseList.isNotEmpty()) courseList else listOf(
-        CourseUiItem(1L, "Trí tuệ Nhân tạo (AI)", "IT-401", "TS. Huỳnh Công Pháp", 24),
-        CourseUiItem(2L, "Học máy (Machine Learning)", "IT-402", "VKU Faculty", 18),
-        CourseUiItem(3L, "Hệ quản trị CSDL (SQL Server)", "CS-301", "HCMUE / VKU", 12)
-    )
-
-    val activeSlideVault = if (slideVault.isNotEmpty()) slideVault else listOf(
-        VaultSlideFileUi("vault_1", "Bai_Giang_Duong_Cong_Hoc_Tap_VKU.pdf", 8, null),
-        VaultSlideFileUi("vault_2", "Chapter_1_Tong_Quan_AI_Agent.pptx", 16, null),
-        VaultSlideFileUi("vault_3", "T_SQL_Stored_Procedures.pdf", 12, null)
-    )
+    val activeCourseList = courseList
+    val activeSlideVault = slideVault
 
     var confusedBlocksState by remember { mutableStateOf(setOf<String>()) }
 
@@ -142,62 +161,15 @@ fun MainStudyAiScreen(
         }
     }
 
-    val currentCourse = courses.find { it.id == selectedCourseId } ?: courses[0]
+    val currentCourse = courses.find { it.id == selectedCourseId }
+        ?: courses.firstOrNull()
+        ?: CourseChoice(0L, "Chưa có môn học", "Bấm để tạo môn học đầu tiên")
 
     val annotatedSlidePages = remember(inlinePages, sampleSlides, confusedBlocksState) {
         if (inlinePages.isNotEmpty()) {
             inlinePages
         } else if (sampleSlides.isEmpty()) {
-            listOf(
-                AnnotatedSlidePageUi(
-                    pageNumber = 1,
-                    slideTitle = "Đường cong học tập VKU",
-                    blocks = listOf(
-                        SlideDocumentBlockUi(
-                            blockId = "s1_b1",
-                            kind = "heading",
-                            originalSlideText = "Đường cong học tập VKU (Learning Curve Theory)",
-                            isMarkedConfused = confusedBlocksState.contains("s1_b1"),
-                            highlights = listOf(
-                                InlineConceptHighlight(
-                                    term = "Đường cong học tập",
-                                    sourceType = HighlightSourceType.PREVIOUS_LECTURE,
-                                    sourceLabel = "Đã học ở Chương 1 • Slide 4",
-                                    explanation = "Khái niệm đã học ở Chương 1: Đo lường tốc độ nâng cao hiệu suất khi lặp lại công việc."
-                                )
-                            )
-                        ),
-                        SlideDocumentBlockUi(
-                            blockId = "s1_b2",
-                            kind = "bullet",
-                            originalSlideText = "Mỗi khi sản lượng tích lũy tăng gấp đôi, chi phí nhân công trên mỗi đơn vị giảm theo tỷ lệ phần trăm cố định.",
-                            isMarkedConfused = confusedBlocksState.contains("s1_b2"),
-                            inlineNotes = listOf(
-                                InlineLecturerNote(
-                                    id = "note_1",
-                                    explanationText = "Giảng viên lưu ý: Quy luật này áp dụng thực tế rất rõ trong sản xuất phần mềm và lắp ráp linh kiện bán dẫn.",
-                                    timestampSec = 45.0f,
-                                    timestampLabel = "00:45"
-                                )
-                            )
-                        ),
-                        SlideDocumentBlockUi(
-                            blockId = "s1_b3",
-                            kind = "formula",
-                            originalSlideText = "Phương trình toán học: Y = a * X^b",
-                            isMarkedConfused = confusedBlocksState.contains("s1_b3"),
-                            highlights = listOf(
-                                InlineConceptHighlight(
-                                    term = "Y = a * X^b",
-                                    sourceType = HighlightSourceType.ACADEMIC_INTERNET,
-                                    sourceLabel = "MIT OCW • Semantic Scholar",
-                                    explanation = "Mô hình toán học T.P. Wright (1936). a là chi phí đơn vị đầu tiên, b là hệ số độ dốc học tập (b < 0)."
-                                )
-                            )
-                        )
-                    )
-                )
-            )
+            emptyList()
         } else {
             sampleSlides.map { slide ->
                 val lines = slide.extractedText.lines().filter { it.isNotBlank() }
@@ -211,22 +183,25 @@ fun MainStudyAiScreen(
                         )
                     )
                 } else {
+                    val noteTargetIdx = 1.coerceAtMost(lines.lastIndex)
                     lines.mapIndexed { idx, line ->
                         val blockId = "s${slide.slideNumber}_b${idx + 1}"
                         val isHeading = idx == 0 || (line.length < 35 && !line.startsWith("-"))
                         val isFormula = line.contains("=") || line.contains("^") || line.contains("∑")
                         val kind = if (isHeading) "heading" else if (isFormula) "formula" else "bullet"
 
-                        val matchingNotes = slide.notes.map { n ->
-                            val mins = (n.startTimeSec / 60).toInt()
-                            val secs = (n.startTimeSec % 60).toInt()
-                            InlineLecturerNote(
-                                id = "note_${n.id}",
-                                explanationText = n.bulletPoint,
-                                timestampSec = n.startTimeSec,
-                                timestampLabel = "%02d:%02d".format(mins, secs)
-                            )
-                        }
+                        val matchingNotes = if (idx == noteTargetIdx) {
+                            slide.notes.map { n ->
+                                val mins = (n.startTimeSec / 60).toInt()
+                                val secs = (n.startTimeSec % 60).toInt()
+                                InlineLecturerNote(
+                                    id = "note_${n.id}",
+                                    explanationText = n.bulletPoint,
+                                    timestampSec = n.startTimeSec,
+                                    timestampLabel = "%02d:%02d".format(mins, secs)
+                                )
+                            }
+                        } else emptyList()
 
                         val highlights = slide.terms.filter { term -> line.contains(term, ignoreCase = true) }.map { term ->
                             InlineConceptHighlight(
@@ -242,7 +217,7 @@ fun MainStudyAiScreen(
                             kind = kind,
                             originalSlideText = line,
                             isMarkedConfused = confusedBlocksState.contains(blockId),
-                            inlineNotes = if (idx == 1 || idx == lines.size - 1) matchingNotes else emptyList(),
+                            inlineNotes = matchingNotes,
                             highlights = highlights
                         )
                     }
@@ -285,10 +260,19 @@ fun MainStudyAiScreen(
             )
         },
         bottomBar = {
-            FloatingCapsuleBottomBar(
-                selectedTab = selectedTab,
-                onSelectTab = { selectedTab = it }
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                CompactAudioPlayerBar(
+                    audioState = audioState,
+                    onTogglePlayPause = { audioPlayer.togglePlayPause() },
+                    onSeekToMs = { ms -> audioPlayer.seekToMs(ms) },
+                    onCycleSpeed = { audioPlayer.cycleSpeed() },
+                    onClose = { audioPlayer.close() },
+                )
+                FloatingCapsuleBottomBar(
+                    selectedTab = selectedTab,
+                    onSelectTab = { selectedTab = it }
+                )
+            }
         },
     ) { innerPadding ->
         Column(
@@ -301,6 +285,45 @@ fun MainStudyAiScreen(
                     message = errorMessage,
                     onRetry = onRetryLoad,
                 )
+            }
+
+            if (activeCourseList.isEmpty() && !isOfflineCache) {
+                Surface(
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = "Chưa có môn học nào",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                            Text(
+                                text = "Hãy tạo môn học để lưu Slide, giọng giảng viên và vở ghi chép.",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f),
+                            )
+                        }
+                        Spacer(Modifier.width(8.dp))
+                        Button(
+                            onClick = { showCourseManagerSheet = true },
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                        ) {
+                            Text("Tạo môn học đầu tiên", style = MaterialTheme.typography.labelSmall)
+                        }
+                    }
+                }
             }
 
             Box(modifier = Modifier.weight(1f).fillMaxWidth()) {
@@ -328,6 +351,7 @@ fun MainStudyAiScreen(
                                 }
                                 InlineSlideNoteDocumentScreen(
                                     pages = annotatedSlidePages,
+                                    isOfflineCache = isOfflineCache,
                                     onToggleConfusedBlock = { bId ->
                                         onToggleConfusedBlock(bId)
                                         confusedBlocksState = if (confusedBlocksState.contains(bId)) {
@@ -337,8 +361,11 @@ fun MainStudyAiScreen(
                                         }
                                     },
                                     onPlayTimestamp = { sec ->
-                                        onNavigateToChapterSlide(currentLectureId.toInt(), 1, sec)
-                                    }
+                                        audioPlayer.loadAndSeek(buildLectureAudioUrl(currentLectureId), sec)
+                                    },
+                                    onUpdateNote = onUpdateInlineNote,
+                                    onDeleteNote = onDeleteInlineNote,
+                                    onExportMarkdown = onExportMarkdown,
                                 )
                             }
                         }

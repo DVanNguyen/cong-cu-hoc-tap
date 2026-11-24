@@ -662,6 +662,229 @@ class StudyAiUnifiedController extends Controller
 
     /**
      * =========================================================================
+     * 3B. STREAM AUDIO (HTTP 206), CRUD INLINE NOTE & XUẤT MARKDOWN (TUẦN 4)
+     * =========================================================================
+     */
+    public function streamLectureAudio(int $lectureId)
+    {
+        $lecture = DB::table('lectures')->where('id', $lectureId)->first();
+        if (!$lecture || empty($lecture->audio_file_path)) {
+            return response()->json(['message' => 'Không tìm thấy file âm thanh của bài giảng.'], 404);
+        }
+
+        $rawPath = (string) $lecture->audio_file_path;
+        $resolvedPath = null;
+        $candidates = [
+            $rawPath,
+            storage_path('app/public/' . ltrim($rawPath, '/\\')),
+            storage_path('app/' . ltrim($rawPath, '/\\')),
+        ];
+        foreach ($candidates as $cand) {
+            if ($cand && file_exists($cand) && is_file($cand)) {
+                $resolvedPath = $cand;
+                break;
+            }
+        }
+
+        if (!$resolvedPath) {
+            return response()->json(['message' => 'File âm thanh không tồn tại trên máy chủ.'], 404);
+        }
+
+        $ext = strtolower(pathinfo($resolvedPath, PATHINFO_EXTENSION));
+        $mime = match ($ext) {
+            'm4a', 'mp4' => 'audio/mp4',
+            'mp3' => 'audio/mpeg',
+            'wav' => 'audio/wav',
+            'ogg' => 'audio/ogg',
+            'aac' => 'audio/aac',
+            default => 'application/octet-stream',
+        };
+
+        // BinaryFileResponse của Symfony/Laravel tự xử lý HTTP Range (206 Partial Content)
+        return response()->file($resolvedPath, [
+            'Content-Type' => $mime,
+            'Accept-Ranges' => 'bytes',
+        ]);
+    }
+
+    public function updateInlineNote(Request $request, int $noteId)
+    {
+        $validated = $request->validate([
+            'explanation_text' => 'required|string|max:2000',
+        ]);
+
+        $note = DB::table('inline_block_notes')->where('id', $noteId)->first();
+        if (!$note) {
+            return response()->json(['message' => 'Không tìm thấy ghi chú.'], 404);
+        }
+
+        $oldText = (string) $note->explanation_text;
+        $newText = trim($validated['explanation_text']);
+
+        DB::table('inline_block_notes')
+            ->where('id', $noteId)
+            ->update([
+                'explanation_text' => $newText,
+                'updated_at' => now(),
+            ]);
+
+        // Đồng bộ trạng thái is_edited_by_user = true sang bảng lecture_notes nếu khớp bài giảng & nội dung gốc
+        $slideIds = DB::table('slides')
+            ->where('lecture_id', $note->lecture_id)
+            ->pluck('id');
+        if ($slideIds->isNotEmpty()) {
+            DB::table('lecture_notes')
+                ->whereIn('slide_id', $slideIds)
+                ->where('bullet_content', $oldText)
+                ->update([
+                    'bullet_content' => $newText,
+                    'is_edited_by_user' => true,
+                    'updated_at' => now(),
+                ]);
+        }
+
+        return response()->json([
+            'id' => (string) $noteId,
+            'lecture_id' => (int) $note->lecture_id,
+            'block_id' => $note->block_id,
+            'explanationText' => $newText,
+            'is_edited_by_user' => true,
+        ]);
+    }
+
+    public function deleteInlineNote(int $noteId)
+    {
+        $note = DB::table('inline_block_notes')->where('id', $noteId)->first();
+        if (!$note) {
+            return response()->json(['message' => 'Không tìm thấy ghi chú.'], 404);
+        }
+
+        DB::table('inline_block_notes')->where('id', $noteId)->delete();
+
+        $slideIds = DB::table('slides')
+            ->where('lecture_id', $note->lecture_id)
+            ->pluck('id');
+        if ($slideIds->isNotEmpty()) {
+            DB::table('lecture_notes')
+                ->whereIn('slide_id', $slideIds)
+                ->where('bullet_content', $note->explanation_text)
+                ->delete();
+        }
+
+        return response()->json([
+            'deleted' => true,
+            'id' => (string) $noteId,
+        ]);
+    }
+
+    public function exportLectureMarkdown(int $lectureId)
+    {
+        $lecture = DB::table('lectures')->where('id', $lectureId)->first();
+        if (!$lecture) {
+            return response()->json(['message' => 'Không tìm thấy bài giảng.'], 404);
+        }
+
+        $course = DB::table('courses')->where('id', $lecture->course_id)->first();
+        $courseName = $course ? $course->name : "Môn học #{$lecture->course_id}";
+
+        $blocks = DB::table('lecture_slide_blocks')
+            ->where('lecture_id', $lectureId)
+            ->orderBy('slide_page')
+            ->orderBy('block_index')
+            ->get();
+
+        $inlineNotes = DB::table('inline_block_notes')
+            ->where('lecture_id', $lectureId)
+            ->orderBy('timestamp_start_sec')
+            ->get()
+            ->groupBy('block_id');
+
+        $lines = [];
+        $lines[] = "# {$lecture->title}";
+        $lines[] = "";
+        $lines[] = "- **Môn học:** {$courseName}";
+        if ($course && !empty($course->lecturer)) {
+            $lines[] = "- **Giảng viên:** {$course->lecturer}";
+        }
+        $lines[] = "- **Xuất lúc:** " . now()->format('d/m/Y H:i');
+        $lines[] = "";
+        $lines[] = "---";
+        $lines[] = "";
+
+        $formatTs = function (float $sec): string {
+            $s = max(0, (int) floor($sec));
+            return sprintf('%02d:%02d', intdiv($s, 60), $s % 60);
+        };
+
+        if ($blocks->isNotEmpty()) {
+            foreach ($blocks->groupBy('slide_page') as $pageNum => $pageBlocks) {
+                $lines[] = "## Slide {$pageNum}";
+                $lines[] = "";
+                foreach ($pageBlocks as $b) {
+                    $confusedTag = $b->is_confused ? ' **[Cần xem lại]**' : '';
+                    $text = trim((string) $b->original_slide_text);
+                    if ($b->kind === 'heading') {
+                        $lines[] = "### {$text}{$confusedTag}";
+                    } elseif ($b->kind === 'formula') {
+                        $lines[] = "- `{$text}`{$confusedTag}";
+                    } else {
+                        $lines[] = "- {$text}{$confusedTag}";
+                    }
+
+                    $bNotes = $inlineNotes->get($b->block_id) ?? collect();
+                    foreach ($bNotes as $n) {
+                        $ts = $formatTs((float) $n->timestamp_start_sec);
+                        $exp = trim((string) $n->explanation_text);
+                        $lines[] = "  > **[{$ts}]** {$exp}";
+                    }
+                }
+                $lines[] = "";
+            }
+        } else {
+            // Fallback cho bài giảng cũ chưa có lecture_slide_blocks
+            $slides = DB::table('slides')->where('lecture_id', $lectureId)->orderBy('slide_number')->get();
+            foreach ($slides as $sl) {
+                $sNum = $sl->slide_number ?? $sl->page_number ?? 1;
+                $lines[] = "## Slide {$sNum}: " . ($sl->title ?? '');
+                $lines[] = "";
+                $raw = trim((string) ($sl->raw_text ?? $sl->slide_text ?? ''));
+                if ($raw !== '') {
+                    $lines[] = $raw;
+                    $lines[] = "";
+                }
+                $sNotes = DB::table('lecture_notes as ln')
+                    ->leftJoin('evidences as ev', 'ln.evidence_id', '=', 'ev.id')
+                    ->where('ln.slide_id', $sl->id)
+                    ->select('ln.bullet_content', 'ev.start_time_sec')
+                    ->get();
+                foreach ($sNotes as $sn) {
+                    $ts = $formatTs((float) ($sn->start_time_sec ?? 0.0));
+                    $lines[] = "> **[{$ts}]** " . trim((string) $sn->bullet_content);
+                }
+                $lines[] = "";
+            }
+        }
+
+        $generalNotes = $inlineNotes->get(null) ?? collect();
+        if ($generalNotes->isNotEmpty()) {
+            $lines[] = "## Ghi chú bổ sung ngoài Slide";
+            $lines[] = "";
+            foreach ($generalNotes as $gn) {
+                $ts = $formatTs((float) $gn->timestamp_start_sec);
+                $lines[] = "> **[{$ts}]** " . trim((string) $gn->explanation_text);
+            }
+            $lines[] = "";
+        }
+
+        $markdown = implode("\n", $lines);
+        return response($markdown, 200, [
+            'Content-Type' => 'text/markdown; charset=utf-8',
+            'Content-Disposition' => "attachment; filename=\"lecture_{$lectureId}_notes.md\"",
+        ]);
+    }
+
+    /**
+     * =========================================================================
      * 4. CÁC ENDPOINT CŨ BẢO TỒN (WORKSPACE, KNOWLEDGE GRAPH, DICTIONARY, DASHBOARD)
      * =========================================================================
      */

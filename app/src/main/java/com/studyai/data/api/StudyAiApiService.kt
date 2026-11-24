@@ -3,6 +3,7 @@ package com.studyai.data.api
 import com.studyai.data.model.*
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
+import okhttp3.ResponseBody
 import retrofit2.Response
 import retrofit2.http.*
 
@@ -126,6 +127,22 @@ interface StudyAiApiService {
         @Path("highlightId") highlightId: Long,
         @Body request: SelectContextRequest
     ): Response<SelectContextResponse>
+
+    @PUT("api/v1/inline-notes/{noteId}")
+    suspend fun updateInlineNote(
+        @Path("noteId") noteId: Long,
+        @Body request: UpdateInlineNoteRequest
+    ): Response<UpdateInlineNoteResponse>
+
+    @DELETE("api/v1/inline-notes/{noteId}")
+    suspend fun deleteInlineNote(
+        @Path("noteId") noteId: Long
+    ): Response<DeleteInlineNoteResponse>
+
+    @GET("api/v1/lectures/{lectureId}/export-markdown")
+    suspend fun exportLectureMarkdown(
+        @Path("lectureId") lectureId: Long
+    ): Response<ResponseBody>
 
     // =========================================================================
     // 4. Các endpoint phục vụ 3 màn hình còn lại (Workspace, Graph, Dictionary)
