@@ -73,9 +73,9 @@ object ApiClient {
                 .build()
             chain.proceed(request)
         }
-        .connectTimeout(20, TimeUnit.SECONDS)
-        .readTimeout(30, TimeUnit.SECONDS)
-        .writeTimeout(20, TimeUnit.SECONDS)
+        .connectTimeout(60, TimeUnit.SECONDS)
+        .readTimeout(600, TimeUnit.SECONDS)
+        .writeTimeout(600, TimeUnit.SECONDS)
         .build()
 
     val apiService: StudyAiApiService by lazy {

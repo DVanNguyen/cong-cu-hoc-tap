@@ -23,6 +23,10 @@ __pycache__/
 venv/
 env/
 .pytest_cache/
+ai-service/.env
+ai-service/cache/
+*.png
+backend/check_db.php
 
 # Large audio & video binaries (transcripts and slide PDFs are tracked)
 *.wav

@@ -15,6 +15,7 @@ class Course extends Model
         'user_id',
         'code',
         'name',
+        'lecturer',
         'description',
         'syllabus_keywords',
     ];
@@ -31,6 +32,11 @@ class Course extends Model
     public function lectures(): HasMany
     {
         return $this->hasMany(Lecture::class)->orderBy('lecture_order', 'asc');
+    }
+
+    public function slideVaults(): HasMany
+    {
+        return $this->hasMany(CourseSlideVault::class);
     }
 
     public function concepts(): HasMany

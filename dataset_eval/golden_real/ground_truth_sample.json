@@ -1,0 +1,20 @@
+{
+  "lecture_id": "lecture_02_noisy_mid",
+  "teacher_enrollment_file": "enrollment_teacher_20s.wav",
+  "segments": [
+    {
+      "start_sec": 12.4,
+      "end_sec": 26.8,
+      "speaker": "TEACHER",
+      "slide_page": 4,
+      "reference_text": "Trong T-SQL, lệnh SELECT có thể gán nhiều biến cùng lúc từ bảng dữ liệu."
+    },
+    {
+      "start_sec": 27.1,
+      "end_sec": 31.5,
+      "speaker": "STUDENT_NOISE",
+      "slide_page": 4,
+      "reference_text": "Ê slide mấy rồi mày ơi cho tao mượn bút."
+    }
+  ]
+}

@@ -12,6 +12,7 @@ from app.api.lectures import router as lectures_router
 from app.api.graph import router as graph_router
 from app.api.week3 import router as week3_router
 from app.api.pipeline_routes import router as pipeline_router
+from app.api.ai_endpoints import router as ai_router
 
 app = FastAPI(
     title="StudyAI Assistant Service",
@@ -35,6 +36,8 @@ app.include_router(lectures_router, prefix="/api/v1")
 app.include_router(graph_router, prefix="/api/v1")
 app.include_router(week3_router, prefix="/api/v1")
 app.include_router(pipeline_router)
+app.include_router(ai_router, prefix="/ai")
+app.include_router(ai_router, prefix="/api/v1/ai")
 
 class HealthCheckResponse(BaseModel):
     status: str

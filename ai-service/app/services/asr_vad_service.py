@@ -80,32 +80,27 @@ class SlideAwareASREngine:
         if not unique_terms:
             return {"initial_prompt": None, "hotwords": None}
 
-        terms_csv = ", ".join(unique_terms)
+        # Lấy tối đa 10 thuật ngữ quan trọng nhất và giới hạn chiều dài prompt để không bao giờ vượt ngưỡng 448 tokens
+        terms_csv = ", ".join(unique_terms[:10])
         lang = SlideAwareASREngine.normalize_language(language)
 
         if lang == "en":
-            topic = (course_title or "Computer Science")[:50]
-            initial_prompt = (
-                f"Lecture on {topic}. "
-                f"Key terms: {terms_csv}."
-            )
+            topic = (course_title or "Computer Science")[:40]
+            initial_prompt = f"Lecture on {topic}. Terms: {terms_csv}."
         elif lang == "vi":
-            topic = (course_title or "Khoa học máy tính")[:50]
-            initial_prompt = (
-                f"Bài giảng môn {topic}. "
-                f"Thuật ngữ: {terms_csv}."
-            )
+            topic = (course_title or "Khoa học máy tính")[:40]
+            initial_prompt = f"Bài giảng môn {topic}. Thuật ngữ: {terms_csv}."
         else:
-            prefix = f"{course_title[:50]}. " if course_title else ""
+            prefix = f"{course_title[:40]}. " if course_title else ""
             initial_prompt = f"{prefix}Key terms: {terms_csv}."
 
-        # Giới hạn an toàn tuyệt đối 250 ký tự để không vượt quá 448 position encodings của Whisper
-        if len(initial_prompt) > 250:
-            initial_prompt = initial_prompt[:247] + "..."
+        # Giới hạn an toàn tuyệt đối 160 ký tự để prompt chỉ chiếm ~40-80 tokens
+        if len(initial_prompt) > 160:
+            initial_prompt = initial_prompt[:157] + "..."
 
-        hotwords = " ".join(unique_terms)
-        if len(hotwords) > 250:
-            hotwords = hotwords[:250]
+        hotwords = " ".join(unique_terms[:10])
+        if len(hotwords) > 160:
+            hotwords = hotwords[:160]
 
         return {
             "initial_prompt": initial_prompt,
@@ -197,7 +192,7 @@ class SlideAwareASREngine:
             word_timestamps=True,
             beam_size=5,
             temperature=0.0,
-            max_new_tokens=384,
+            max_new_tokens=224,
             repetition_penalty=1.15,
             no_repeat_ngram_size=3,
             hallucination_silence_threshold=2.0,

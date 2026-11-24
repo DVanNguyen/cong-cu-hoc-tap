@@ -22,7 +22,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.studyai.ui.capture.CaptureScreen
+import com.studyai.ui.capture.SlideVaultAndCaptureScreen
+import com.studyai.ui.capture.VaultSlideFileUi
+import com.studyai.ui.course.CourseManagerBottomSheet
+import com.studyai.ui.course.CourseUiItem
 import com.studyai.ui.dictionary.CourseDictionaryItemUi
 import com.studyai.ui.dictionary.CourseDictionaryScreen
 import com.studyai.ui.dictionary.LivingDictionaryBottomSheet
@@ -30,8 +33,13 @@ import com.studyai.ui.dictionary.LivingDictionaryUiModel
 import com.studyai.ui.graph.ConceptEdgeUi
 import com.studyai.ui.graph.ConceptNodeUi
 import com.studyai.ui.graph.KnowledgeRoadmapScreen
+import com.studyai.ui.notes.AnnotatedSlidePageUi
 import com.studyai.ui.notes.ChapterUiModel
-import com.studyai.ui.notes.LectureNoteScreen
+import com.studyai.ui.notes.HighlightSourceType
+import com.studyai.ui.notes.InlineConceptHighlight
+import com.studyai.ui.notes.InlineLecturerNote
+import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
+import com.studyai.ui.notes.SlideDocumentBlockUi
 import com.studyai.ui.notes.SlideUi
 
 enum class StudyAiTab(val title: String, val shortTitle: String, val icon: ImageVector) {
@@ -84,19 +92,162 @@ fun MainStudyAiScreen(
     onLanguageModeChange: (LectureLanguageMode) -> Unit = {},
     errorMessage: String? = null,
     onRetryLoad: () -> Unit = {},
+    courseList: List<CourseUiItem> = emptyList(),
+    selectedCourseId: Long = 1L,
+    onAddCourse: (String, String, String) -> Unit = { _, _, _ -> },
+    onUpdateCourse: (CourseUiItem) -> Unit = {},
+    onDeleteCourse: (CourseUiItem) -> Unit = {},
+    slideVault: List<VaultSlideFileUi> = emptyList(),
+    onUploadSlideToVault: (android.net.Uri) -> Unit = {},
+    inlinePages: List<AnnotatedSlidePageUi> = emptyList(),
+    onToggleConfusedBlock: (String) -> Unit = {},
+    isRecording: Boolean = false,
+    recordingElapsedSec: Int = 0,
+    onStartLiveFollow: (VaultSlideFileUi) -> Unit = {},
+    onStopLiveFollow: () -> Unit = {},
+    onMarkCurrentBlockConfused: () -> Unit = {},
+    isProcessingQueue: Boolean = false,
+    uploadProgress: Int = 0,
+    uploadStatusText: String = "",
+    onAnalyzeUploadedPair: (android.net.Uri, android.net.Uri) -> Unit = { _, _ -> },
 ) {
     var selectedTab by remember { mutableStateOf(StudyAiTab.NOTES) }
+    var showCourseManagerSheet by remember { mutableStateOf(false) }
+    var isDocumentNoteMode by remember { mutableStateOf(true) }
 
-    val courses = remember {
-        listOf(
-            CourseChoice(1L, "Trí tuệ Nhân tạo (AI)", "VKU • 6 chương • 18 khái niệm"),
-            CourseChoice(2L, "Học máy (Machine Learning)", "VKU • 5 chương • 14 khái niệm"),
-            CourseChoice(3L, "Hệ quản trị CSDL (SQL Server)", "HCMUE / VKU • 10 bài • 12 khái niệm")
-        )
+    val activeCourseList = if (courseList.isNotEmpty()) courseList else listOf(
+        CourseUiItem(1L, "Trí tuệ Nhân tạo (AI)", "IT-401", "TS. Huỳnh Công Pháp", 24),
+        CourseUiItem(2L, "Học máy (Machine Learning)", "IT-402", "VKU Faculty", 18),
+        CourseUiItem(3L, "Hệ quản trị CSDL (SQL Server)", "CS-301", "HCMUE / VKU", 12)
+    )
+
+    val activeSlideVault = if (slideVault.isNotEmpty()) slideVault else listOf(
+        VaultSlideFileUi("vault_1", "Bai_Giang_Duong_Cong_Hoc_Tap_VKU.pdf", 8, null),
+        VaultSlideFileUi("vault_2", "Chapter_1_Tong_Quan_AI_Agent.pptx", 16, null),
+        VaultSlideFileUi("vault_3", "T_SQL_Stored_Procedures.pdf", 12, null)
+    )
+
+    var confusedBlocksState by remember { mutableStateOf(setOf<String>()) }
+
+    val courses = remember(activeCourseList) {
+        activeCourseList.map { c ->
+            CourseChoice(c.id, c.name, "${c.code} • ${c.lecturer} • ${c.slideCount} slides")
+        }
     }
 
-    var selectedCourseId by remember { mutableLongStateOf(if (currentLectureId == 8L) 3L else 1L) }
     val currentCourse = courses.find { it.id == selectedCourseId } ?: courses[0]
+
+    val annotatedSlidePages = remember(inlinePages, sampleSlides, confusedBlocksState) {
+        if (inlinePages.isNotEmpty()) {
+            inlinePages
+        } else if (sampleSlides.isEmpty()) {
+            listOf(
+                AnnotatedSlidePageUi(
+                    pageNumber = 1,
+                    slideTitle = "Đường cong học tập VKU",
+                    blocks = listOf(
+                        SlideDocumentBlockUi(
+                            blockId = "s1_b1",
+                            kind = "heading",
+                            originalSlideText = "Đường cong học tập VKU (Learning Curve Theory)",
+                            isMarkedConfused = confusedBlocksState.contains("s1_b1"),
+                            highlights = listOf(
+                                InlineConceptHighlight(
+                                    term = "Đường cong học tập",
+                                    sourceType = HighlightSourceType.PREVIOUS_LECTURE,
+                                    sourceLabel = "Đã học ở Chương 1 • Slide 4",
+                                    explanation = "Khái niệm đã học ở Chương 1: Đo lường tốc độ nâng cao hiệu suất khi lặp lại công việc."
+                                )
+                            )
+                        ),
+                        SlideDocumentBlockUi(
+                            blockId = "s1_b2",
+                            kind = "bullet",
+                            originalSlideText = "Mỗi khi sản lượng tích lũy tăng gấp đôi, chi phí nhân công trên mỗi đơn vị giảm theo tỷ lệ phần trăm cố định.",
+                            isMarkedConfused = confusedBlocksState.contains("s1_b2"),
+                            inlineNotes = listOf(
+                                InlineLecturerNote(
+                                    id = "note_1",
+                                    explanationText = "Giảng viên lưu ý: Quy luật này áp dụng thực tế rất rõ trong sản xuất phần mềm và lắp ráp linh kiện bán dẫn.",
+                                    timestampSec = 45.0f,
+                                    timestampLabel = "00:45"
+                                )
+                            )
+                        ),
+                        SlideDocumentBlockUi(
+                            blockId = "s1_b3",
+                            kind = "formula",
+                            originalSlideText = "Phương trình toán học: Y = a * X^b",
+                            isMarkedConfused = confusedBlocksState.contains("s1_b3"),
+                            highlights = listOf(
+                                InlineConceptHighlight(
+                                    term = "Y = a * X^b",
+                                    sourceType = HighlightSourceType.ACADEMIC_INTERNET,
+                                    sourceLabel = "MIT OCW • Semantic Scholar",
+                                    explanation = "Mô hình toán học T.P. Wright (1936). a là chi phí đơn vị đầu tiên, b là hệ số độ dốc học tập (b < 0)."
+                                )
+                            )
+                        )
+                    )
+                )
+            )
+        } else {
+            sampleSlides.map { slide ->
+                val lines = slide.extractedText.lines().filter { it.isNotBlank() }
+                val blocks = if (lines.isEmpty()) {
+                    listOf(
+                        SlideDocumentBlockUi(
+                            blockId = "s${slide.slideNumber}_b1",
+                            kind = "bullet",
+                            originalSlideText = "Slide ${slide.slideNumber}",
+                            isMarkedConfused = confusedBlocksState.contains("s${slide.slideNumber}_b1")
+                        )
+                    )
+                } else {
+                    lines.mapIndexed { idx, line ->
+                        val blockId = "s${slide.slideNumber}_b${idx + 1}"
+                        val isHeading = idx == 0 || (line.length < 35 && !line.startsWith("-"))
+                        val isFormula = line.contains("=") || line.contains("^") || line.contains("∑")
+                        val kind = if (isHeading) "heading" else if (isFormula) "formula" else "bullet"
+
+                        val matchingNotes = slide.notes.map { n ->
+                            val mins = (n.startTimeSec / 60).toInt()
+                            val secs = (n.startTimeSec % 60).toInt()
+                            InlineLecturerNote(
+                                id = "note_${n.id}",
+                                explanationText = n.bulletPoint,
+                                timestampSec = n.startTimeSec,
+                                timestampLabel = "%02d:%02d".format(mins, secs)
+                            )
+                        }
+
+                        val highlights = slide.terms.filter { term -> line.contains(term, ignoreCase = true) }.map { term ->
+                            InlineConceptHighlight(
+                                term = term,
+                                sourceType = HighlightSourceType.ACADEMIC_INTERNET,
+                                sourceLabel = "Thuật ngữ bài giảng",
+                                explanation = "Thuật ngữ học thuật trích xuất từ bài giảng: $term"
+                            )
+                        }
+
+                        SlideDocumentBlockUi(
+                            blockId = blockId,
+                            kind = kind,
+                            originalSlideText = line,
+                            isMarkedConfused = confusedBlocksState.contains(blockId),
+                            inlineNotes = if (idx == 1 || idx == lines.size - 1) matchingNotes else emptyList(),
+                            highlights = highlights
+                        )
+                    }
+                }
+                AnnotatedSlidePageUi(
+                    pageNumber = slide.slideNumber,
+                    slideTitle = "Slide ${slide.slideNumber}: ${lines.firstOrNull() ?: ""}",
+                    blocks = blocks
+                )
+            }
+        }
+    }
 
     val handleNavigateToChapterSlide: (Int, Int, Float) -> Unit = { lecId, slideNo, sec ->
         selectedTab = StudyAiTab.NOTES
@@ -115,8 +266,10 @@ fun MainStudyAiScreen(
                 course = currentCourse,
                 courses = courses,
                 onSelectCourse = { course ->
-                    selectedCourseId = course.id
                     onSelectCourse(course.id)
+                },
+                onOpenCourseManager = {
+                    showCourseManagerSheet = true
                 },
                 selectedLanguageMode = selectedLanguageMode,
                 onLanguageModeChange = onLanguageModeChange,
@@ -151,32 +304,74 @@ fun MainStudyAiScreen(
                 ) { tab ->
                     when (tab) {
                         StudyAiTab.NOTES -> {
-                            LectureNoteScreen(
-                                lectureTitle = currentLectureTitle,
-                                currentLectureId = currentLectureId,
-                                chapters = chapters,
-                                onSelectLecture = onSelectLecture,
-                                slides = sampleSlides,
-                                currentSlideIdx = currentSlideIdx,
-                                onSlideIdxChange = onSlideIdxChange,
-                                targetAudioSec = targetAudioSec,
-                                onClearTargetAudio = onClearTargetAudio,
-                                onSeekAudio = { /* Điều khiển trình phát audio */ },
-                                onSelectTerm = onSelectTerm,
-                                onNavigateToChapterSlide = handleNavigateToChapterSlide,
-                            )
+                            Column(modifier = Modifier.fillMaxSize()) {
+                                Surface(
+                                    color = MaterialTheme.colorScheme.surface,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp, vertical = 8.dp)
+                                ) {
+                                    Text(
+                                        text = currentLectureTitle,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                                InlineSlideNoteDocumentScreen(
+                                    pages = annotatedSlidePages,
+                                    onToggleConfusedBlock = { bId ->
+                                        onToggleConfusedBlock(bId)
+                                        confusedBlocksState = if (confusedBlocksState.contains(bId)) {
+                                            confusedBlocksState - bId
+                                        } else {
+                                            confusedBlocksState + bId
+                                        }
+                                    },
+                                    onPlayTimestamp = { sec ->
+                                        onNavigateToChapterSlide(currentLectureId.toInt(), 1, sec)
+                                    }
+                                )
+                            }
                         }
 
                         StudyAiTab.CAPTURE -> {
-                            CaptureScreen(
-                                currentCourseName = currentCourse.name,
-                                selectedLanguage = selectedLanguageMode.shortLabel,
-                                onRunBatchSync = { _, _ ->
-                                    selectedTab = StudyAiTab.NOTES
+                            SlideVaultAndCaptureScreen(
+                                courseName = currentCourse.name,
+                                slideVault = activeSlideVault,
+                                liveAnnotatedPages = annotatedSlidePages,
+                                isRecording = isRecording,
+                                recordingElapsedLabel = "%02d:%02d".format(recordingElapsedSec / 60, recordingElapsedSec % 60),
+                                isProcessingQueue = isProcessingQueue,
+                                uploadProgress = uploadProgress,
+                                uploadStatusText = uploadStatusText,
+                                onUploadSlideToVault = { uri ->
+                                    onUploadSlideToVault(uri)
                                 },
-                                onJumpToSlide = { slideNo ->
-                                    selectedTab = StudyAiTab.NOTES
-                                    onJumpToSlide(currentLectureId.toInt(), slideNo)
+                                onStartLiveFollow = { slide ->
+                                    onStartLiveFollow(slide)
+                                },
+                                onStopLiveFollow = {
+                                    onStopLiveFollow()
+                                },
+                                onMarkCurrentBlockConfused = {
+                                    onMarkCurrentBlockConfused()
+                                    val firstBlock = annotatedSlidePages.firstOrNull()?.blocks?.firstOrNull()?.blockId
+                                    if (firstBlock != null) {
+                                        confusedBlocksState = confusedBlocksState + firstBlock
+                                    }
+                                },
+                                onToggleConfusedBlock = { bId ->
+                                    onToggleConfusedBlock(bId)
+                                    confusedBlocksState = if (confusedBlocksState.contains(bId)) {
+                                        confusedBlocksState - bId
+                                    } else {
+                                        confusedBlocksState + bId
+                                    }
+                                },
+                                onAnalyzeUploadedPair = { slideUri, audioUri ->
+                                    onAnalyzeUploadedPair(slideUri, audioUri)
                                 }
                             )
                         }
@@ -209,6 +404,28 @@ fun MainStudyAiScreen(
                         onNavigateToChapterSlide = handleNavigateToChapterSlide,
                     )
                 }
+
+                // Bottom Sheet "Quản lý môn học (Thêm / Sửa / Xóa)"
+                if (showCourseManagerSheet) {
+                    CourseManagerBottomSheet(
+                        courses = activeCourseList,
+                        selectedCourseId = selectedCourseId,
+                        onSelectCourse = { selected ->
+                            onSelectCourse(selected.id)
+                            showCourseManagerSheet = false
+                        },
+                        onAddCourse = { name, code, lecturer ->
+                            onAddCourse(name, code, lecturer)
+                        },
+                        onUpdateCourse = { updated ->
+                            onUpdateCourse(updated)
+                        },
+                        onDeleteCourse = { deleted ->
+                            onDeleteCourse(deleted)
+                        },
+                        onDismiss = { showCourseManagerSheet = false }
+                    )
+                }
             }
         }
     }
@@ -219,6 +436,7 @@ private fun StudyAiTopHeader(
     course: CourseChoice,
     courses: List<CourseChoice>,
     onSelectCourse: (CourseChoice) -> Unit,
+    onOpenCourseManager: () -> Unit = {},
     selectedLanguageMode: LectureLanguageMode,
     onLanguageModeChange: (LectureLanguageMode) -> Unit,
     isDarkTheme: Boolean,
@@ -243,13 +461,13 @@ private fun StudyAiTopHeader(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
-                // Course Switcher Trigger
+                // Course Switcher Trigger - Mở BottomSheet Quản Lý Môn Học
                 Box(modifier = Modifier.weight(1f)) {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         modifier = Modifier
                             .clip(RoundedCornerShape(12.dp))
-                            .clickable { courseMenuExpanded = true }
+                            .clickable { onOpenCourseManager() }
                             .padding(end = 6.dp)
                     ) {
                         Box(

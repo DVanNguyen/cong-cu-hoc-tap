@@ -83,6 +83,15 @@ class MainActivity : ComponentActivity() {
                     val selectedConceptDetail by viewModel.selectedConceptDetail.collectAsState()
                     val isLoading by viewModel.isLoading.collectAsState()
                     val errorMessage by viewModel.errorMessage.collectAsState()
+                    val courses by viewModel.courses.collectAsState()
+                    val selectedCourseId by viewModel.selectedCourseId.collectAsState()
+                    val slideVault by viewModel.slideVault.collectAsState()
+                    val inlinePages by viewModel.inlinePages.collectAsState()
+                    val isRecording by viewModel.isRecording.collectAsState()
+                    val recordingElapsedSec by viewModel.recordingElapsedSec.collectAsState()
+                    val isProcessingQueue by viewModel.isProcessingQueue.collectAsState()
+                    val uploadProgress by viewModel.uploadProgress.collectAsState()
+                    val uploadStatusText by viewModel.uploadStatusText.collectAsState()
 
                     if (isLoading && slides.isEmpty() && nodes.isEmpty() && dictionaryEntries.isEmpty()) {
                         StudyAiLoadingScreen()
@@ -127,7 +136,27 @@ class MainActivity : ComponentActivity() {
                             },
                             errorMessage = errorMessage,
                             onRetryLoad = {
-                                viewModel.loadAllData(courseId = 1L, lectureId = currentLectureId)
+                                viewModel.loadAllData(courseId = selectedCourseId, lectureId = currentLectureId)
+                            },
+                            courseList = courses,
+                            selectedCourseId = selectedCourseId,
+                            onAddCourse = { name, code, lecturer -> viewModel.addCourse(name, code, lecturer) },
+                            onUpdateCourse = { c -> viewModel.updateCourse(c.id, c.name, c.code, c.lecturer) },
+                            onDeleteCourse = { c -> viewModel.deleteCourse(c.id) },
+                            slideVault = slideVault,
+                            onUploadSlideToVault = { uri -> viewModel.uploadSlideToVault(this@MainActivity, uri) },
+                            inlinePages = inlinePages,
+                            onToggleConfusedBlock = { blockId -> viewModel.toggleConfusedBlock(blockId) },
+                            isRecording = isRecording,
+                            recordingElapsedSec = recordingElapsedSec,
+                            onStartLiveFollow = { slide -> viewModel.startLiveFollowRecording(this@MainActivity, slide) },
+                            onStopLiveFollow = { viewModel.stopLiveFollowRecording() },
+                            onMarkCurrentBlockConfused = { viewModel.markCurrentBlockConfused() },
+                            isProcessingQueue = isProcessingQueue,
+                            uploadProgress = uploadProgress,
+                            uploadStatusText = uploadStatusText,
+                            onAnalyzeUploadedPair = { slideUri, audioUri ->
+                                viewModel.uploadAndTrackLecture(this@MainActivity, slideUri, audioUri, null, selectedLanguageMode)
                             },
                         )
                     }

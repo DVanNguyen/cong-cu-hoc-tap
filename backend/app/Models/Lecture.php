@@ -57,4 +57,19 @@ class Lecture extends Model
     {
         return $this->hasMany(Evidence::class);
     }
+
+    public function slideBlocks(): HasMany
+    {
+        return $this->hasMany(LectureSlideBlock::class)->orderBy('slide_page')->orderBy('block_index');
+    }
+
+    public function inlineBlockNotes(): HasMany
+    {
+        return $this->hasMany(InlineBlockNote::class);
+    }
+
+    public function conceptHighlights(): HasMany
+    {
+        return $this->hasMany(BlockConceptHighlight::class);
+    }
 }

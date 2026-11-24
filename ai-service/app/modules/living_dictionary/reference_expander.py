@@ -173,6 +173,200 @@ async def fetch_semantic_scholar_papers(
     except Exception:
         return []
 
+async def fetch_openalex_works(
+    client: httpx.AsyncClient,
+    concept_en: str
+) -> List[Dict[str, Any]]:
+    """Truy vấn OpenAlex API (dự phòng khi Semantic Scholar bị rate-limit 429)."""
+    if not concept_en:
+        return []
+    url = "https://api.openalex.org/works"
+    params = {"search": concept_en, "per-page": 3}
+    try:
+        resp = await client.get(url, params=params, timeout=6.0)
+        if resp.status_code != 200:
+            return []
+        data = resp.json().get("results", [])
+        results = []
+        for w in data:
+            title = w.get("title") or ""
+            cites = w.get("cited_by_count") or 0
+            year = w.get("publication_year") or "N/A"
+            landing_url = w.get("doi") or w.get("id") or f"https://openalex.org/{w.get('id', '')}"
+            results.append({
+                "title": f"{title} ({year})",
+                "url": landing_url,
+                "source_provider": "OPENALEX",
+                "snippet_summary": f"Nghiên cứu học thuật OpenAlex ({cites} trích dẫn): {title}",
+                "citation_badge": "[OpenAlex]",
+            })
+        return results
+    except Exception:
+        return []
+
+async def fetch_arxiv_papers(
+    client: httpx.AsyncClient,
+    concept_en: str
+) -> List[Dict[str, Any]]:
+    """Truy vấn arXiv API bổ sung cho CS/AI/Toán/Vật lý."""
+    if not concept_en:
+        return []
+    url = "https://export.arxiv.org/api/query"
+    params = {"search_query": f"all:{concept_en}", "max_results": 2}
+    try:
+        resp = await client.get(url, params=params, timeout=6.0)
+        if resp.status_code != 200:
+            return []
+        xml_text = resp.text
+        import xml.etree.ElementTree as ET
+        root = ET.fromstring(xml_text)
+        ns = {"atom": "http://www.w3.org/2005/Atom"}
+        results = []
+        for entry in root.findall("atom:entry", ns):
+            title = entry.find("atom:title", ns)
+            summary = entry.find("atom:summary", ns)
+            id_elem = entry.find("atom:id", ns)
+            t_text = title.text.strip().replace("\n", " ") if title is not None else ""
+            s_text = summary.text.strip().replace("\n", " ")[:200] if summary is not None else ""
+            url_text = id_elem.text.strip() if id_elem is not None else "https://arxiv.org"
+            if t_text:
+                results.append({
+                    "title": f"{t_text} — arXiv",
+                    "url": url_text,
+                    "source_provider": "ARXIV",
+                    "snippet_summary": s_text or f"Preprint học thuật arXiv về {concept_en}.",
+                    "citation_badge": "[arXiv]",
+                })
+        return results
+    except Exception:
+        return []
+
+async def fetch_wikipedia_rest_summary(
+    client: httpx.AsyncClient,
+    term: str
+) -> Optional[Dict[str, Any]]:
+    """Truy vấn Wikipedia EN REST Summary: https://en.wikipedia.org/api/rest_v1/page/summary/{term}"""
+    if not term:
+        return None
+    slug = quote(term.strip().replace(" ", "_"))
+    url = f"https://en.wikipedia.org/api/rest_v1/page/summary/{slug}"
+    try:
+        resp = await client.get(url, timeout=6.0)
+        if resp.status_code == 200:
+            data = resp.json()
+            extract = data.get("extract", "")
+            title = data.get("title", term)
+            page_url = data.get("content_urls", {}).get("desktop", {}).get("page", f"https://en.wikipedia.org/wiki/{slug}")
+            return {
+                "title": f"{title} — Wikipedia",
+                "url": page_url,
+                "extract": extract,
+                "source_provider": "WIKIPEDIA_REST",
+            }
+    except Exception:
+        pass
+    return None
+
+# Bộ nhớ Cache TTL 7 ngày (604800 giây)
+_ACADEMIC_CACHE: Dict[str, Tuple[float, Dict[str, Any]]] = {}
+
+async def resolve_concept_two_tier(
+    term: str,
+    previous_lectures_concepts: Optional[List[Dict[str, Any]]] = None,
+    client: Optional[httpx.AsyncClient] = None,
+) -> Dict[str, Any]:
+    """
+    Chuỗi tra cứu 2 tầng cho thuật ngữ học thuật (Phase 2.3):
+    - Tầng 1: Tìm trong bài giảng trước của cùng môn (hoặc môn khác để thêm alternative_contexts).
+    - Tầng 2: Fallback học thuật quốc tế (Semantic Scholar -> OpenAlex -> arXiv -> Wikipedia EN REST).
+    """
+    clean_term = term.strip().lower()
+    from datetime import datetime
+    from zoneinfo import ZoneInfo
+    now = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).timestamp()
+
+    # Tầng 1: Kiểm tra trong bài giảng trước
+    if previous_lectures_concepts:
+        matched_prev = None
+        alternatives = []
+        for pc in previous_lectures_concepts:
+            c_name = pc.get("name", "").strip().lower()
+            c_aliases = [a.lower() for a in pc.get("aliases", [])]
+            if clean_term == c_name or clean_term in c_aliases:
+                if pc.get("is_same_course", True):
+                    matched_prev = pc
+                else:
+                    alternatives.append({
+                        "course_id": pc.get("course_id"),
+                        "course_name": pc.get("course_name", "Môn học khác"),
+                        "definition": pc.get("explanation") or pc.get("definition_summary", "")
+                    })
+        if matched_prev:
+            lec_title = matched_prev.get("lecture_title") or f"Chương {matched_prev.get('lecture_order', 1)}"
+            slide_no = matched_prev.get("slide_number", 1)
+            explanation = matched_prev.get("explanation") or matched_prev.get("definition_summary", "")
+            return {
+                "term": term,
+                "source_type": "previous_lecture",
+                "source_label": f"Đã học ở {lec_title} • Slide {slide_no}",
+                "explanation": explanation or f"Khái niệm đã được giảng viên giải thích chi tiết trong {lec_title}.",
+                "alternative_contexts": alternatives,
+            }
+
+    # Kiểm tra Cache
+    if clean_term in _ACADEMIC_CACHE:
+        cached_ts, cached_val = _ACADEMIC_CACHE[clean_term]
+        if now - cached_ts < 7 * 86400:
+            return cached_val
+
+    # Tầng 2: Tra cứu học thuật quốc tế
+    headers = {"User-Agent": "StudyAI-VKU-Academic/2.0 (student-academic-tool)"}
+    local_client = client or httpx.AsyncClient(headers=headers, timeout=6.0)
+
+    result_source = "Wikipedia EN"
+    result_explanation = f"{term} là một khái niệm chuyên sâu trong ngành Khoa học Máy tính & Trí tuệ Nhân tạo."
+    alternatives = []
+
+    try:
+        # Thử Semantic Scholar trước
+        s2_papers = await fetch_semantic_scholar_papers(local_client, term)
+        if s2_papers:
+            p = s2_papers[0]
+            result_source = "Semantic Scholar"
+            result_explanation = p["snippet_summary"]
+        else:
+            # Fallback 1: OpenAlex
+            alex = await fetch_openalex_works(local_client, term)
+            if alex:
+                result_source = "OpenAlex"
+                result_explanation = alex[0]["snippet_summary"]
+            else:
+                # Fallback 2: arXiv
+                arx = await fetch_arxiv_papers(local_client, term)
+                if arx:
+                    result_source = "arXiv"
+                    result_explanation = arx[0]["snippet_summary"]
+                else:
+                    # Fallback 3: Wikipedia EN REST Summary
+                    wiki = await fetch_wikipedia_rest_summary(local_client, term)
+                    if wiki and wiki.get("extract"):
+                        result_source = "Wikipedia EN"
+                        sentences = re.split(r"(?<=[.!?])\s+", wiki["extract"])
+                        result_explanation = " ".join(sentences[:2])
+    finally:
+        if client is None:
+            await local_client.aclose()
+
+    res = {
+        "term": term,
+        "source_type": "academic_internet",
+        "source_label": result_source,
+        "explanation": result_explanation,
+        "alternative_contexts": alternatives,
+    }
+    _ACADEMIC_CACHE[clean_term] = (now, res)
+    return res
+
 async def fetch_tavily_or_curated_tutorials(
     client: httpx.AsyncClient,
     concept_vi: str,

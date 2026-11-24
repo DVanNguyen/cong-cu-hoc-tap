@@ -607,3 +607,239 @@ def build_cross_chapter_links_endpoint(req: CrossChapterBuildRequest):
         occurrences=occ_dicts
     )
     return res
+
+# ============================================================================
+# 5. ENDPOINT: NON-MONOTONIC INLINE BLOCK-LEVEL ALIGNER
+# ============================================================================
+from app.modules.lecture_notes.inline_block_aligner import (
+    SlideBlock,
+    InlineNoteEvent,
+    split_slide_into_blocks,
+    NonMonotonicSlideTracker
+)
+
+class RawSlideInput(BaseModel):
+    page: int
+    raw_text: str
+
+class UtteranceInput(BaseModel):
+    transcript_text: str
+    start_sec: float
+    end_sec: float
+
+class InlineBlockAlignRequest(BaseModel):
+    slides: List[RawSlideInput]
+    utterances: List[UtteranceInput]
+    similarity_threshold: float = 0.32
+    novelty_note_threshold: float = 0.28
+
+@router.post("/inline-block/align")
+def align_inline_blocks_endpoint(req: InlineBlockAlignRequest):
+    """
+    Căn gióng theo từng ý (Block-Level) phi đơn điệu (Non-Monotonic):
+    1. Bóc tách từng slide thành các ý nhỏ (Heading, Bullet, Formula, Code).
+    2. Tracker duyệt từng câu nói của giảng viên, so khớp toàn cục để nhận diện đúng ý slide,
+       hỗ trợ nhảy cóc hoặc quay lại slide cũ mà không bị lệch.
+    3. Phân loại câu nói: highlight_only (đọc lại slide) vs attach_inline_note (giảng viên giải thích thêm).
+    4. Gom kết quả thành cấu trúc AnnotatedSlidePageUi sẵn sàng hiển thị trên giao diện Android.
+    """
+    all_blocks = []
+    blocks_by_page = {}
+    for s in req.slides:
+        b_list = split_slide_into_blocks(s.page, s.raw_text)
+        all_blocks.extend(b_list)
+        blocks_by_page[s.page] = b_list
+
+    tracker = NonMonotonicSlideTracker(
+        all_blocks,
+        similarity_threshold=req.similarity_threshold,
+        novelty_note_threshold=req.novelty_note_threshold
+    )
+
+    events = []
+    notes_by_block = {}
+    for u in req.utterances:
+        ev = tracker.process_utterance(u.transcript_text, u.start_sec, u.end_sec)
+        events.append(ev.model_dump())
+        if ev.action == "attach_inline_note" and ev.matched_block_id:
+            if ev.matched_block_id not in notes_by_block:
+                notes_by_block[ev.matched_block_id] = []
+            notes_by_block[ev.matched_block_id].append({
+                "note_id": f"note_{len(notes_by_block[ev.matched_block_id]) + 1}_{ev.matched_block_id}",
+                "content": ev.transcript_text,
+                "timestamp_sec": ev.start_sec,
+                "confidence": ev.confidence
+            })
+
+    annotated_pages = []
+    for s in req.slides:
+        b_list = blocks_by_page.get(s.page, [])
+        page_blocks = []
+        for b in b_list:
+            inline_notes = notes_by_block.get(b.block_id, [])
+            page_blocks.append({
+                "block_id": b.block_id,
+                "original_text": b.text,
+                "kind": b.kind,
+                "is_currently_lectured": False,
+                "is_marked_confused": False,
+                "highlights": [],
+                "inline_notes": inline_notes
+            })
+        annotated_pages.append({
+            "page_number": s.page,
+            "title": b_list[0].text if b_list else f"Slide {s.page}",
+            "blocks": page_blocks
+        })
+
+    return {
+        "status": "success",
+        "total_blocks": len(all_blocks),
+        "total_utterances": len(req.utterances),
+        "events": events,
+        "annotated_pages": annotated_pages
+    }
+
+
+# ============================================================================
+# 5. ENDPOINT TUẦN 1: HỢP NHẤT PIPELINE BÀI GIẢNG THẬT (END-TO-END)
+# Slide -> ASR + VAD -> DTW/Manual Alignment -> Note Synthesizer (Real LLM)
+# ============================================================================
+
+class ProcessLecturePipelineRequest(BaseModel):
+    lecture_id: int
+    course_title: str = "Khóa học"
+    slide_path: str
+    audio_path: str
+    language: Optional[str] = "auto"
+    slide_clicks: Optional[List[Dict[str, Any]]] = None
+    progress_webhook_url: Optional[str] = None
+    webhook_secret: Optional[str] = None
+
+
+def _send_progress_webhook(url: Optional[str], secret: Optional[str], status: str, percent: int, error_msg: Optional[str] = None):
+    if not url:
+        return
+    try:
+        import requests
+        headers = {"X-Webhook-Secret": secret} if secret else {}
+        requests.post(url, json={
+            "processing_status": status,
+            "progress_percent": percent,
+            "error_message": error_msg
+        }, headers=headers, timeout=5)
+    except Exception as e:
+        print(f"[WARN] Failed to send progress webhook to {url}: {e}")
+
+
+@router.post("/process-lecture")
+def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
+    """
+    Xử lý bài giảng từ A-Z theo hợp đồng Tuần 1:
+    1. Trích xuất slide & hotwords (15%)
+    2. Chạy Faster-Whisper + Silero VAD (45%)
+    3. Căn gióng theo click hoặc DTW (75%)
+    4. Gọi LLM thật (Gemini) tổng hợp ghi chú 3 tầng + kiểm chứng trích dẫn (90% -> 100%)
+    """
+    import os
+    from app.services.slide_extractor import extract_slide_deck
+    from app.services.asr_vad_service import SlideAwareASREngine
+    from app.services.manual_alignment_service import align_transcript_with_manual_clicks
+    from app.modules.lecture_notes.alignment import monotonic_dtw_alignment
+    from app.modules.lecture_notes.note_synthesizer import synthesize_slide_notes
+
+    # Kiểm tra sự tồn tại của tệp slide và audio
+    if not os.path.exists(req.slide_path):
+        raise ValueError(f"Không tìm thấy tệp slide tại: {req.slide_path}")
+    if not os.path.exists(req.audio_path):
+        raise ValueError(f"Không tìm thấy tệp audio tại: {req.audio_path}")
+
+    # BƯỚC 1: Trích xuất Slide (15%)
+    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "parsing_slides", 15)
+    slides_raw = extract_slide_deck(req.slide_path)
+    if not slides_raw:
+        raise ValueError("Tệp slide không chứa trang nào hoặc không thể đọc được nội dung.")
+
+    all_terms = []
+    for s in slides_raw:
+        all_terms.extend(s.get("extracted_terms", []))
+    unique_terms = list(dict.fromkeys(all_terms))[:25]
+
+    # BƯỚC 2: Chạy ASR + VAD (45%)
+    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "running_asr", 45)
+    asr_engine = SlideAwareASREngine()
+    segments, metadata = asr_engine.transcribe_with_metadata(
+        audio_path=req.audio_path,
+        slide_terms=unique_terms,
+        course_title=req.course_title,
+        language=req.language
+    )
+
+    # BƯỚC 3: Căn gióng Slide (75%)
+    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "aligning_slides", 75)
+    aligned_segments = []
+    if req.slide_clicks and len(req.slide_clicks) > 0:
+        aligned_segments = align_transcript_with_manual_clicks(segments, req.slide_clicks)
+    else:
+        # Căn gióng tự động bằng Monotonic DTW
+        assigned_pages = monotonic_dtw_alignment(segments, slides_raw)
+        for idx, seg in enumerate(segments):
+            page_num = assigned_pages[idx] if idx < len(assigned_pages) else 1
+            item = dict(seg)
+            item["aligned_slide_number"] = page_num
+            item["aligned_slide_id"] = page_num
+            item["start_time_sec"] = seg.get("start_sec", 0.0)
+            item["end_time_sec"] = seg.get("end_sec", 0.0)
+            aligned_segments.append(item)
+
+    # BƯỚC 4: Gọi LLM thật sinh ghi chú 3 tầng (90%)
+    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "synthesizing_notes", 90)
+
+    # Gom các câu thoại theo từng trang slide
+    segments_by_slide: Dict[int, List[Dict[str, Any]]] = {}
+    for seg in aligned_segments:
+        s_num = int(seg.get("aligned_slide_number", seg.get("aligned_slide_id", 1)))
+        if s_num not in segments_by_slide:
+            segments_by_slide[s_num] = []
+        segments_by_slide[s_num].append(seg)
+
+    final_slides = []
+    for s in slides_raw:
+        s_num = int(s["slide_number"])
+        s_text = s.get("raw_text", "")
+        s_title = s.get("title", f"Slide {s_num}")
+        s_terms = s.get("extracted_terms", [])
+        slide_segs = segments_by_slide.get(s_num, [])
+
+        # Gọi Note Synthesizer (Real Gemini API / LLM)
+        synth_res = synthesize_slide_notes(
+            slide_number=s_num,
+            slide_text=s_text,
+            transcript_segments=slide_segs,
+            course_title=req.course_title
+        )
+
+        final_slides.append({
+            "slide_number": s_num,
+            "title": s_title,
+            "extracted_text": s_text,
+            "raw_text": s_text,
+            "terms": s_terms,
+            "extracted_terms": s_terms,
+            "cleaned_slide_bullets": synth_res.cleaned_slide_bullets,
+            "notes": [n.model_dump() for n in synth_res.notes],
+            "summary": s_title
+        })
+
+    # Hoàn thành 100%
+    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "completed", 100)
+
+    return {
+        "status": "success",
+        "lecture_id": req.lecture_id,
+        "slides": final_slides,
+        "transcript_segments": aligned_segments,
+        "metadata": metadata
+    }
+
+
