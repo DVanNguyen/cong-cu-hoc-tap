@@ -137,7 +137,7 @@ def compute_novelty_score(
 def monotonic_dtw_alignment(
     transcript_segments: List[Dict[str, Any]], 
     slides: List[Dict[str, Any]],
-    gamma_next: float = 0.08,
+    gamma_next: float = 0.015,
     gamma_skip: float = 0.25,
     gamma_back: float = 0.30
 ) -> List[int]:
@@ -149,20 +149,39 @@ def monotonic_dtw_alignment(
         D(t-1, k-2) + gamma_skip,   # Nhảy cóc 1 slide
         D(t-1, k+1) + gamma_back    # Lùi lại 1 slide
     )
+    Đã vá lỗi 'Hố đen Mục lục':
+    - Giảm gamma_next xuống 0.015 giúp bước chuyển slide mượt mà.
+    - Thêm overview_penalty = 0.12 cho các slide mục lục/tổng quan sau phút đầu tiên (start_sec > 60s).
     """
     T = len(transcript_segments)
     K = len(slides)
     if T == 0 or K == 0:
         return []
 
-    # 1. Ma trận chi phí C[t][k] = 1 - CosineSim(u_t, s_k)
+    # Nhận diện các slide mục lục / tổng quan
+    overview_keywords = [
+        "tổng quan", "mục lục", "nội dung bài học", "nội dung chính", 
+        "agenda", "overview", "table of contents", "outline"
+    ]
+    is_overview_slide = [False] * K
+    for k in range(K):
+        s_title = (slides[k].get("title") or "").lower()
+        s_text = (slides[k].get("raw_text") or slides[k].get("slide_text") or "").lower()
+        if any(kw in s_title for kw in overview_keywords) or any(kw in s_text[:120] for kw in overview_keywords):
+            is_overview_slide[k] = True
+
+    # 1. Ma trận chi phí C[t][k] = 1 - CosineSim(u_t, s_k) + overview_penalty
     C = [[1.0 for _ in range(K)] for _ in range(T)]
     for t in range(T):
         u_text = transcript_segments[t].get("text", "")
+        start_sec = float(transcript_segments[t].get("start_sec", transcript_segments[t].get("start_time_sec", 0.0)))
         for k in range(K):
             s_text = slides[k].get("raw_text") or slides[k].get("slide_text") or ""
             sim = compute_semantic_similarity(u_text, s_text)
-            C[t][k] = 1.0 - sim
+            cost = 1.0 - sim
+            if start_sec > 60.0 and is_overview_slide[k]:
+                cost += 0.12
+            C[t][k] = cost
 
     # 2. Khởi tạo bảng quy hoạch động D[t][k] và Backtrack pointer
     INF = 1e9

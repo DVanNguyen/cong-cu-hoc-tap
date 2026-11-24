@@ -37,7 +37,7 @@ class SlideAwareASREngine:
         - PhoWhisper CTranslate2 (chỉ dùng cho bài giảng tiếng Việt): 'qbsmlabs/PhoWhisper-small'
         Có thể cấu hình qua biến môi trường: WHISPER_MODEL, WHISPER_DEVICE, WHISPER_COMPUTE_TYPE.
         """
-        self.model_name = model_name_or_path or os.getenv("WHISPER_MODEL", "small")
+        self.model_name = model_name_or_path or os.getenv("WHISPER_MODEL", "medium")
         self.device = device or os.getenv("WHISPER_DEVICE", "cpu")
         self.compute_type = compute_type or os.getenv("WHISPER_COMPUTE_TYPE", "int8")
         self.model = WhisperModel(
@@ -182,11 +182,11 @@ class SlideAwareASREngine:
             hotwords=bias["hotwords"],
             vad_filter=use_vad,
             vad_parameters=dict(
-                threshold=0.5,
+                threshold=0.35,
                 min_speech_duration_ms=250,
                 max_speech_duration_s=28,
-                min_silence_duration_ms=500,
-                speech_pad_ms=250,
+                min_silence_duration_ms=700,
+                speech_pad_ms=400,
             ),
             condition_on_previous_text=False,
             word_timestamps=True,

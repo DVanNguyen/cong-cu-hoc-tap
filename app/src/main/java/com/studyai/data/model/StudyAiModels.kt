@@ -355,3 +355,24 @@ data class VoiceNotesTestResponse(
     @SerializedName("markdown_notes") val markdownNotes: String = ""
 )
 
+data class VoiceprintEnrollResponse(
+    @SerializedName("status") val status: String = "success",
+    @SerializedName("voiceprint_id") val voiceprintId: Long = 0L,
+    @SerializedName("course_id") val courseId: Long = 0L,
+    @SerializedName("lecturer_name") val lecturerName: String = "",
+    @SerializedName("duration_sec") val durationSec: Float? = null,
+    @SerializedName("embedding_dim") val embeddingDim: Int = 192,
+    @SerializedName("cosine_threshold") val cosineThreshold: Float = 0.38f,
+    @SerializedName("message") val message: String = ""
+)
+
+data class VoiceprintStatusResponse(
+    @SerializedName("has_voiceprint") val hasVoiceprint: Boolean = false,
+    @SerializedName("voiceprint_id") val voiceprintId: Long? = null,
+    @SerializedName("course_id") val courseId: Long = 0L,
+    @SerializedName("lecturer_name") val lecturerName: String? = null,
+    @SerializedName("embedding_dim") val embeddingDim: Int = 0,
+    @SerializedName("cosine_threshold") val cosineThreshold: Float = 0.38f,
+    @SerializedName("created_at") val createdAt: String? = null
+)
+

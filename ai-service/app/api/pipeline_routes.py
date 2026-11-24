@@ -703,9 +703,40 @@ def align_inline_blocks_endpoint(req: InlineBlockAlignRequest):
 
 
 # ============================================================================
-# 5. ENDPOINT TUẦN 1: HỢP NHẤT PIPELINE BÀI GIẢNG THẬT (END-TO-END)
-# Slide -> ASR + VAD -> DTW/Manual Alignment -> Note Synthesizer (Real LLM)
+# 5. ENDPOINT TUẦN 1 & TUẦN 2: HỢP NHẤT PIPELINE BÀI GIẢNG THẬT (END-TO-END)
+# Slide -> ASR + VAD -> Speaker Verification/Diarization -> DTW/Manual Alignment -> Note Synthesizer (Real LLM)
 # ============================================================================
+
+_ASR_ENGINE_SINGLETON = None
+
+def get_asr_engine():
+    global _ASR_ENGINE_SINGLETON
+    if _ASR_ENGINE_SINGLETON is None:
+        from app.services.asr_vad_service import SlideAwareASREngine
+        _ASR_ENGINE_SINGLETON = SlideAwareASREngine()
+    return _ASR_ENGINE_SINGLETON
+
+
+class VoiceprintEnrollRequest(BaseModel):
+    audio_path: str
+
+
+@router.post("/voiceprints/enroll")
+def enroll_teacher_voiceprint_endpoint(req: VoiceprintEnrollRequest):
+    """
+    Trích xuất vector 192 chiều chuẩn hóa L2 từ 15-30s giọng sạch giảng viên
+    bằng SpeechBrain ECAPA-TDNN (Speaker Verification).
+    """
+    if not os.path.exists(req.audio_path):
+        raise HTTPException(status_code=400, detail=f"Không tìm thấy file mẫu giọng tại: {req.audio_path}")
+    from app.services.speaker_verification import get_voice_filter_service
+    service = get_voice_filter_service()
+    try:
+        res = service.enroll_teacher(req.audio_path)
+        return res
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 
 class ProcessLecturePipelineRequest(BaseModel):
     lecture_id: int
@@ -714,6 +745,8 @@ class ProcessLecturePipelineRequest(BaseModel):
     audio_path: str
     language: Optional[str] = "auto"
     slide_clicks: Optional[List[Dict[str, Any]]] = None
+    teacher_embedding: Optional[List[float]] = None
+    voice_threshold: float = 0.38
     progress_webhook_url: Optional[str] = None
     webhook_secret: Optional[str] = None
 
@@ -736,15 +769,15 @@ def _send_progress_webhook(url: Optional[str], secret: Optional[str], status: st
 @router.post("/process-lecture")
 def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
     """
-    Xử lý bài giảng từ A-Z theo hợp đồng Tuần 1:
+    Xử lý bài giảng từ A-Z:
     1. Trích xuất slide & hotwords (15%)
     2. Chạy Faster-Whisper + Silero VAD (45%)
-    3. Căn gióng theo click hoặc DTW (75%)
-    4. Gọi LLM thật (Gemini) tổng hợp ghi chú 3 tầng + kiểm chứng trích dẫn (90% -> 100%)
+    3. Nhận diện & Lọc giọng giảng viên (55%)
+    4. Căn gióng theo click hoặc Monotonic DTW (75%)
+    5. Gọi LLM thật (Gemini) tổng hợp ghi chú 3 tầng + kiểm chứng trích dẫn (90% -> 95%)
     """
     import os
-    from app.services.slide_extractor import extract_slide_deck
-    from app.services.asr_vad_service import SlideAwareASREngine
+    from app.services.slide_extractor import extract_slide_deck, VI_STOPWORDS_ASCII
     from app.services.manual_alignment_service import align_transcript_with_manual_clicks
     from app.modules.lecture_notes.alignment import monotonic_dtw_alignment
     from app.modules.lecture_notes.note_synthesizer import synthesize_slide_notes
@@ -764,11 +797,24 @@ def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
     all_terms = []
     for s in slides_raw:
         all_terms.extend(s.get("extracted_terms", []))
-    unique_terms = list(dict.fromkeys(all_terms))[:25]
+
+    # Chuẩn hóa, làm sạch từ rác trước khi đưa vào hotwords
+    cleaned_terms = []
+    for t in all_terms:
+        t_clean = re.sub(r"\s+", " ", str(t)).strip()
+        if not t_clean or "\n" in t_clean or "\r" in t_clean:
+            continue
+        if t_clean.lower() in VI_STOPWORDS_ASCII:
+            continue
+        if len(t_clean) < 4 and not (t_clean.isupper() and len(t_clean) >= 2) and not t_clean.endswith("*"):
+            continue
+        if t_clean not in cleaned_terms:
+            cleaned_terms.append(t_clean)
+    unique_terms = cleaned_terms[:25]
 
     # BƯỚC 2: Chạy ASR + VAD (45%)
     _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "running_asr", 45)
-    asr_engine = SlideAwareASREngine()
+    asr_engine = get_asr_engine()
     segments, metadata = asr_engine.transcribe_with_metadata(
         audio_path=req.audio_path,
         slide_terms=unique_terms,
@@ -776,15 +822,47 @@ def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
         language=req.language
     )
 
+    # BƯỚC 2.5: Nhận diện & Lọc giọng giảng viên (55%)
+    voice_filter_stats = None
+    kept_segments = segments
+    rejected_segments = []
+    if req.teacher_embedding and len(req.teacher_embedding) >= 64:
+        _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "filtering_teacher_voice", 55)
+        try:
+            from app.services.speaker_verification import get_voice_filter_service
+            voice_svc = get_voice_filter_service()
+            detect_res = voice_svc.detect_teacher_intervals(
+                audio_path=req.audio_path,
+                teacher_embedding=req.teacher_embedding,
+                threshold=req.voice_threshold or 0.38
+            )
+            teacher_intervals = detect_res.get("teacher_intervals", [])
+            kept_segments, rejected_segments = voice_svc.filter_asr_segments(
+                asr_segments=segments,
+                teacher_intervals=teacher_intervals,
+                min_overlap_ratio=0.55
+            )
+            voice_filter_stats = {
+                "total_asr_segments": len(segments),
+                "kept_teacher_segments_count": len(kept_segments),
+                "rejected_noise_segments_count": len(rejected_segments),
+                "teacher_speakers": detect_res.get("teacher_speakers", []),
+                "speaker_scores": detect_res.get("speaker_scores", {}),
+                "method": detect_res.get("method", "diarization"),
+            }
+        except Exception as e:
+            print(f"[WARN] Teacher voice filtering failed, falling back to all segments: {e}")
+            kept_segments = segments
+
     # BƯỚC 3: Căn gióng Slide (75%)
     _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "aligning_slides", 75)
     aligned_segments = []
     if req.slide_clicks and len(req.slide_clicks) > 0:
-        aligned_segments = align_transcript_with_manual_clicks(segments, req.slide_clicks)
+        aligned_segments = align_transcript_with_manual_clicks(kept_segments, req.slide_clicks)
     else:
-        # Căn gióng tự động bằng Monotonic DTW
-        assigned_pages = monotonic_dtw_alignment(segments, slides_raw)
-        for idx, seg in enumerate(segments):
+        # Căn gióng tự động bằng Monotonic DTW (đã vá lỗi Hố đen mục lục)
+        assigned_pages = monotonic_dtw_alignment(kept_segments, slides_raw)
+        for idx, seg in enumerate(kept_segments):
             page_num = assigned_pages[idx] if idx < len(assigned_pages) else 1
             item = dict(seg)
             item["aligned_slide_number"] = page_num
@@ -832,15 +910,17 @@ def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
             "summary": s_title
         })
 
-    # Hoàn thành 100%
-    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "completed", 100)
+    # KHÔNG gửi ("completed", 100) từ FastAPI — để Laravel chốt 100% sau DB::transaction()
+    _send_progress_webhook(req.progress_webhook_url, req.webhook_secret, "saving_results", 95)
 
     return {
         "status": "success",
         "lecture_id": req.lecture_id,
         "slides": final_slides,
         "transcript_segments": aligned_segments,
-        "metadata": metadata
+        "metadata": metadata,
+        "voice_filter_stats": voice_filter_stats,
+        "rejected_segments": rejected_segments,
     }
 
 
@@ -884,8 +964,8 @@ def test_voice_notes(
         raise HTTPException(status_code=400, detail="Không tìm thấy tệp âm thanh hợp lệ.")
 
     try:
-        # 1. Chạy ASR nhận dạng giọng nói
-        asr_engine = SlideAwareASREngine()
+        # 1. Chạy ASR nhận dạng giọng nói (dùng Singleton Engine)
+        asr_engine = get_asr_engine()
         segments, metadata = asr_engine.transcribe_with_metadata(
             audio_path=target_audio_path,
             slide_terms=[],
@@ -968,8 +1048,7 @@ def test_voice_notes_path(req: VoiceNotesPathRequest):
     if not os.path.exists(req.audio_path):
         raise HTTPException(status_code=400, detail=f"Không tìm thấy tệp tại {req.audio_path}")
 
-    from app.services.asr_vad_service import SlideAwareASREngine
-    asr_engine = SlideAwareASREngine()
+    asr_engine = get_asr_engine()
     segments, metadata = asr_engine.transcribe_with_metadata(
         audio_path=req.audio_path,
         slide_terms=[],

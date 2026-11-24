@@ -27,6 +27,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import com.studyai.data.model.VoiceNotesTestResponse
+import com.studyai.data.model.VoiceprintStatusResponse
 import com.studyai.audio.AudioLectureRecorder
 import com.studyai.ui.notes.AnnotatedSlidePageUi
 import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
@@ -66,6 +67,9 @@ fun SlideVaultAndCaptureScreen(
     isVoiceTesting: Boolean = false,
     onTestVoiceNotes: ((Uri) -> Unit)? = null,
     onDismissVoiceTestResult: (() -> Unit)? = null,
+    voiceprintStatus: VoiceprintStatusResponse? = null,
+    isEnrollingVoice: Boolean = false,
+    onEnrollVoiceprint: ((Uri) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -122,6 +126,14 @@ fun SlideVaultAndCaptureScreen(
         if (uri != null) {
             batchAudioUri = uri
             directAudioFile = null
+        }
+    }
+
+    val voiceSamplePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            onEnrollVoiceprint?.invoke(uri)
         }
     }
 
@@ -252,6 +264,75 @@ fun SlideVaultAndCaptureScreen(
                         Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
                         Spacer(Modifier.width(4.dp))
                         Text("Thêm Slide")
+                    }
+                }
+
+                // THẺ TRẠNG THÁI & ĐĂNG KÝ MẪU GIỌNG GIẢNG VIÊN (TUẦN 2)
+                Card(
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (voiceprintStatus?.hasVoiceprint == true) {
+                            Color(0xFFE8F5E9)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        }
+                    ),
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (voiceprintStatus?.hasVoiceprint == true) {
+                            Color(0xFF81C784)
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                        }
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 14.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(
+                                imageVector = if (voiceprintStatus?.hasVoiceprint == true) Icons.Default.CheckCircle else Icons.Default.Mic,
+                                contentDescription = null,
+                                tint = if (voiceprintStatus?.hasVoiceprint == true) Color(0xFF2E7D32) else MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (voiceprintStatus?.hasVoiceprint == true) "Đã lưu giọng giảng viên (Sẵn sàng lọc tiếng ồn)" else "Chưa đăng ký giọng giảng viên",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = if (voiceprintStatus?.hasVoiceprint == true) Color(0xFF1B5E20) else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = if (voiceprintStatus?.hasVoiceprint == true) "Vector 192d • Ngưỡng lọc ồn ${voiceprintStatus.cosineThreshold}" else "Tải file mẫu giọng sạch (15-30s) để lọc tiếng sinh viên bàn tán",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                        FilledTonalButton(
+                            onClick = {
+                                voiceSamplePicker.launch(arrayOf("audio/*"))
+                            },
+                            enabled = !isEnrollingVoice,
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.padding(start = 8.dp)
+                        ) {
+                            if (isEnrollingVoice) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
+                            } else {
+                                Text(if (voiceprintStatus?.hasVoiceprint == true) "Cập nhật" else "Đăng ký (20s)")
+                            }
+                        }
                     }
                 }
 

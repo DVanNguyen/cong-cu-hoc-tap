@@ -10,7 +10,11 @@ VI_STOPWORDS_ASCII = {
     "va", "cua", "cac", "trong", "la", "co", "duoc", "cho", "voi", "tu", "theo",
     "mot", "nhung", "khi", "de", "khong", "tren", "nay", "den", "ve", "nhu",
     "bai", "chuong", "phan", "vi", "du", "he", "thong", "thuat", "toan", "slide",
-    "page", "trang", "nam", "hoc", "khoa", "dai", "cntt", "vku"
+    "page", "trang", "nam", "hoc", "khoa", "dai", "cntt", "vku",
+    # Các từ tiếng Việt đơn âm phổ biến hay gặp trong slide kỹ thuật
+    "khai", "dung", "nhau", "kieu", "bien", "bang", "tam", "gia", "tri", "lenh",
+    "thuc", "thi", "nhap", "xuat", "kiem", "tra", "dieu", "kien", "vong", "lap",
+    "chua", "biet", "chay", "xem", "doc", "viet", "xoa", "sua", "them", "moi"
 }
 
 def extract_slide_terms_and_bilingual_pairs(raw_text: str) -> Dict[str, Any]:
@@ -22,31 +26,51 @@ def extract_slide_terms_and_bilingual_pairs(raw_text: str) -> Dict[str, Any]:
     domain_terms = set()
     bilingual_pairs = []
 
+    def _clean_and_validate_term(term: str) -> Optional[str]:
+        if not term:
+            return None
+        # Chuẩn hóa khoảng trắng và loại bỏ ký tự xuống dòng
+        cleaned = re.sub(r"\s+", " ", term).strip(" -•:;,.'\"()[]{}")
+        if not cleaned or "\n" in cleaned or "\r" in cleaned:
+            return None
+        # Bỏ các từ nằm trong danh sách stopwords tiếng Việt không dấu
+        if cleaned.lower() in VI_STOPWORDS_ASCII:
+            return None
+        # Với từ đơn: bỏ các từ quá ngắn (< 4 ký tự) trừ khi là từ viết tắt in hoa (SQL, AI, A*)
+        words = cleaned.split()
+        if len(words) == 1:
+            if len(cleaned) < 4 and not (cleaned.isupper() and len(cleaned) >= 2) and not cleaned.endswith("*"):
+                return None
+        return cleaned
+
     # 1. Bắt các thuật toán có dấu * như A*, IDA*, AO*
     for star_term in re.findall(r"\b[A-Z]{1,4}\*(?:\s+[A-Za-z]+)?\b", raw_text):
-        domain_terms.add(star_term.strip())
+        c = _clean_and_validate_term(star_term)
+        if c:
+            domain_terms.add(c)
 
     # 2. Bắt cặp song ngữ dạng: Cụm tiếng Việt (Cụm tiếng Anh)
     paren_pattern = re.compile(r"([A-ZÀ-Ỹa-zà-ỹ\s]{3,45})\s*\(([A-Za-z0-9\-\*\s]{2,45})\)")
     for vi_part, en_part in paren_pattern.findall(raw_text):
         vi_clean = " ".join(vi_part.split()).strip(" -•:")
-        en_clean = " ".join(en_part.split()).strip()
-        if not en_clean.isdigit() and len(en_clean) >= 2:
+        en_clean = _clean_and_validate_term(en_part)
+        if en_clean and not en_clean.isdigit():
             domain_terms.add(en_clean)
             if len(vi_clean) >= 3:
                 bilingual_pairs.append({"vi": vi_clean, "en": en_clean})
 
     # 3. Bắt từ viết tắt chuyên ngành in hoa (PEAS, BFS, DFS, UCS, IDS, CSP, FIFO, LIFO...)
     for acronym in re.findall(r"\b[A-Z]{2,8}\b", raw_text):
-        if acronym.lower() not in VI_STOPWORDS_ASCII:
-            domain_terms.add(acronym)
+        c = _clean_and_validate_term(acronym)
+        if c:
+            domain_terms.add(c)
 
     # 4. Bắt các cụm từ tiếng Anh chuyên ngành (CamelCase, Hyphenated, hoặc cụm từ ASCII)
     for phrase in re.findall(r"\b[A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+){0,2}\b", raw_text):
-        cleaned = phrase.strip()
-        # Chỉ giữ từ thuần ASCII (không dấu tiếng Việt) và không nằm trong stopwords
-        if cleaned.isascii() and cleaned.lower() not in VI_STOPWORDS_ASCII and len(cleaned) >= 3:
-            domain_terms.add(cleaned)
+        if phrase.isascii():
+            c = _clean_and_validate_term(phrase)
+            if c:
+                domain_terms.add(c)
 
     return {
         "domain_terms": sorted(domain_terms),

@@ -114,6 +114,9 @@ fun MainStudyAiScreen(
     isVoiceTesting: Boolean = false,
     onTestVoiceNotes: ((android.net.Uri) -> Unit)? = null,
     onDismissVoiceTestResult: (() -> Unit)? = null,
+    voiceprintStatus: com.studyai.data.model.VoiceprintStatusResponse? = null,
+    isEnrollingVoice: Boolean = false,
+    onEnrollVoiceprint: ((android.net.Uri) -> Unit)? = null,
 ) {
     var selectedTab by remember { mutableStateOf(StudyAiTab.NOTES) }
     var showCourseManagerSheet by remember { mutableStateOf(false) }
@@ -380,7 +383,10 @@ fun MainStudyAiScreen(
                                 voiceTestResult = voiceTestResult,
                                 isVoiceTesting = isVoiceTesting,
                                 onTestVoiceNotes = onTestVoiceNotes,
-                                onDismissVoiceTestResult = onDismissVoiceTestResult
+                                onDismissVoiceTestResult = onDismissVoiceTestResult,
+                                voiceprintStatus = voiceprintStatus,
+                                isEnrollingVoice = isEnrollingVoice,
+                                onEnrollVoiceprint = onEnrollVoiceprint
                             )
                         }
 

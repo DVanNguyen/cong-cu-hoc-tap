@@ -136,6 +136,13 @@ class StudyAiViewModel(
     private val _isVoiceTesting = MutableStateFlow(false)
     val isVoiceTesting: StateFlow<Boolean> = _isVoiceTesting.asStateFlow()
 
+    // State cho tính năng Nhận diện & Lọc giọng giảng viên (Speaker Verification)
+    private val _voiceprintStatus = MutableStateFlow<VoiceprintStatusResponse?>(null)
+    val voiceprintStatus: StateFlow<VoiceprintStatusResponse?> = _voiceprintStatus.asStateFlow()
+
+    private val _isEnrollingVoice = MutableStateFlow(false)
+    val isEnrollingVoice: StateFlow<Boolean> = _isEnrollingVoice.asStateFlow()
+
     fun clearVoiceTestResult() {
         _voiceTestResult.value = null
     }
@@ -550,6 +557,57 @@ class StudyAiViewModel(
                 _errorMessage.value = "Lỗi kiểm thử giọng nói: ${e.message}"
             } finally {
                 _isVoiceTesting.value = false
+            }
+        }
+    }
+
+    fun checkVoiceprintStatus(courseId: Long = _selectedCourseId.value) {
+        viewModelScope.launch {
+            try {
+                val res = apiService.getVoiceprint(courseId)
+                if (res.isSuccessful && res.body() != null) {
+                    _voiceprintStatus.value = res.body()
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "checkVoiceprintStatus error: ${e.message}")
+            }
+        }
+    }
+
+    fun enrollTeacherVoice(
+        context: Context,
+        audioUri: Uri,
+        lecturerName: String = "",
+        courseId: Long = _selectedCourseId.value,
+        onSuccess: (VoiceprintEnrollResponse) -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            _isEnrollingVoice.value = true
+            _errorMessage.value = null
+            try {
+                val audioPart = uriToMultipartPart(context, audioUri, "sample_audio")
+                val nameBody = if (lecturerName.isNotBlank()) {
+                    lecturerName.toRequestBody("text/plain".toMediaTypeOrNull())
+                } else null
+                val res = apiService.enrollVoiceprint(courseId, audioPart, nameBody)
+                if (res.isSuccessful && res.body() != null) {
+                    val body = res.body()!!
+                    _voiceprintStatus.value = VoiceprintStatusResponse(
+                        hasVoiceprint = true,
+                        voiceprintId = body.voiceprintId,
+                        courseId = body.courseId,
+                        lecturerName = body.lecturerName,
+                        embeddingDim = body.embeddingDim,
+                        cosineThreshold = body.cosineThreshold
+                    )
+                    onSuccess(body)
+                } else {
+                    _errorMessage.value = "Lỗi đăng ký giọng: ${res.code()} - ${res.message()}"
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Lỗi gửi mẫu giọng: ${e.message}"
+            } finally {
+                _isEnrollingVoice.value = false
             }
         }
     }

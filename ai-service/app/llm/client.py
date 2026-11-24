@@ -152,7 +152,7 @@ class OllamaLLMClient(BaseLLMClient):
         }
 
         resp = requests.post(f"{self.base_url}/api/chat", json=payload, timeout=120)
-        resp.raise_for_response()
+        resp.raise_for_status()
         data = resp.json()
         content = data.get("message", {}).get("content", "{}")
         parsed = json.loads(content)

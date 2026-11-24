@@ -1,0 +1,63 @@
+{
+  "audio_file": "tsql_mixed_classroom.wav",
+  "enrollment_file": "tsql_teacher_enroll.wav",
+  "total_duration_sec": 160.0,
+  "intervals": [
+    {
+      "start_sec": 0.0,
+      "end_sec": 34.8,
+      "speaker": "TEACHER",
+      "label": "TEACHER",
+      "slide_page": 1,
+      "description": "Giảng viên giới thiệu tổng quan T-SQL"
+    },
+    {
+      "start_sec": 35.0,
+      "end_sec": 39.5,
+      "speaker": "STUDENT_NOISE",
+      "label": "STUDENT_NOISE",
+      "slide_page": 1,
+      "description": "Sinh viên 1 nói chuyện chen ngang hỏi bài"
+    },
+    {
+      "start_sec": 39.7,
+      "end_sec": 74.8,
+      "speaker": "TEACHER",
+      "label": "TEACHER",
+      "slide_page": 2,
+      "description": "Giảng viên giảng về khai báo biến và cú pháp DECLARE"
+    },
+    {
+      "start_sec": 75.0,
+      "end_sec": 79.5,
+      "speaker": "STUDENT_NOISE",
+      "label": "STUDENT_NOISE",
+      "slide_page": 2,
+      "description": "Sinh viên 2 mượn đồ bàn tán xôn xao"
+    },
+    {
+      "start_sec": 79.7,
+      "end_sec": 114.8,
+      "speaker": "TEACHER",
+      "label": "TEACHER",
+      "slide_page": 3,
+      "description": "Giảng viên giải thích sự khác biệt giữa biến bảng và bảng tạm"
+    },
+    {
+      "start_sec": 115.0,
+      "end_sec": 119.2,
+      "speaker": "STUDENT_NOISE",
+      "label": "STUDENT_NOISE",
+      "slide_page": 3,
+      "description": "Sinh viên 3 hỏi đề thi cuối kỳ"
+    },
+    {
+      "start_sec": 119.4,
+      "end_sec": 160.0,
+      "speaker": "TEACHER",
+      "label": "TEACHER",
+      "slide_page": 4,
+      "description": "Giảng viên mở demo SQL Server Management Studio"
+    }
+  ]
+}

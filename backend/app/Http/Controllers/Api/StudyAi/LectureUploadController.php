@@ -193,4 +193,129 @@ class LectureUploadController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * POST /api/v1/courses/{courseId}/voiceprint
+     * Đăng ký mẫu giọng giảng viên (15-30 giây) dùng cho Speaker Verification & Diarization
+     */
+    public function enrollVoiceprint(Request $request, int $courseId)
+    {
+        $course = DB::table('courses')->where('id', $courseId)->first();
+        if (!$course) {
+            return response()->json(['error' => 'Course not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'lecturer_name' => 'nullable|string|max:120',
+            'sample_audio' => 'required|file|mimes:m4a,mp3,wav,aac,ogg,mp4|max:51200',
+            'threshold' => 'nullable|numeric|min:0.1|max:0.9',
+        ]);
+
+        $lecturerName = $validated['lecturer_name'] ?? ('Giảng viên môn ' . $course->name);
+        $threshold = (float) ($validated['threshold'] ?? 0.38);
+        $audioFile = $request->file('sample_audio');
+
+        $storageDir = storage_path("app/private/voiceprints");
+        File::ensureDirectoryExists($storageDir);
+
+        $fileName = "course_{$courseId}_voice_" . time() . '.' . $audioFile->getClientOriginalExtension();
+        $audioFile->move($storageDir, $fileName);
+        $audioAbsPath = $storageDir . DIRECTORY_SEPARATOR . $fileName;
+
+        $aiBaseUrl = env('AI_SERVICE_URL', 'http://127.0.0.1:8001');
+        if (!str_contains($aiBaseUrl, '/api/v1')) {
+            $aiBaseUrl = rtrim($aiBaseUrl, '/') . '/api/v1';
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(180)
+                ->post("{$aiBaseUrl}/pipeline/voiceprints/enroll", [
+                    'audio_path' => $audioAbsPath,
+                ]);
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'error' => 'FastAPI voice enrollment failed',
+                    'detail' => $response->body()
+                ], $response->status());
+            }
+
+            $aiData = $response->json();
+            $embedding = $aiData['embedding_vector'] ?? [];
+            if (empty($embedding) || count($embedding) < 64) {
+                return response()->json([
+                    'error' => 'Invalid embedding returned from AI service',
+                    'detail' => $aiData
+                ], 500);
+            }
+
+            // Lưu hoặc cập nhật vào bảng lecturer_voiceprints
+            $existing = DB::table('lecturer_voiceprints')->where('course_id', $courseId)->first();
+            if ($existing) {
+                DB::table('lecturer_voiceprints')->where('id', $existing->id)->update([
+                    'lecturer_name' => $lecturerName,
+                    'sample_audio_path' => $audioAbsPath,
+                    'embedding_vector' => json_encode($embedding),
+                    'cosine_threshold' => $threshold,
+                    'updated_at' => now(),
+                ]);
+                $voiceprintId = $existing->id;
+            } else {
+                $voiceprintId = DB::table('lecturer_voiceprints')->insertGetId([
+                    'course_id' => $courseId,
+                    'lecturer_name' => $lecturerName,
+                    'sample_audio_path' => $audioAbsPath,
+                    'embedding_vector' => json_encode($embedding),
+                    'cosine_threshold' => $threshold,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+
+            return response()->json([
+                'status' => 'success',
+                'voiceprint_id' => $voiceprintId,
+                'course_id' => $courseId,
+                'lecturer_name' => $lecturerName,
+                'duration_sec' => $aiData['duration_sec'] ?? null,
+                'embedding_dim' => count($embedding),
+                'cosine_threshold' => $threshold,
+                'message' => 'Đã lưu mẫu giọng giảng viên thành công.',
+            ]);
+        } catch (\Throwable $e) {
+            Log::error("enrollVoiceprint error: " . $e->getMessage());
+            return response()->json([
+                'error' => 'Failed to enroll voiceprint',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * GET /api/v1/courses/{courseId}/voiceprint
+     */
+    public function getVoiceprint(int $courseId)
+    {
+        $voiceprint = DB::table('lecturer_voiceprints')->where('course_id', $courseId)->latest()->first();
+        if (!$voiceprint) {
+            return response()->json([
+                'has_voiceprint' => false,
+                'course_id' => $courseId,
+            ]);
+        }
+
+        $vector = is_string($voiceprint->embedding_vector)
+            ? json_decode($voiceprint->embedding_vector, true)
+            : $voiceprint->embedding_vector;
+
+        return response()->json([
+            'has_voiceprint' => true,
+            'voiceprint_id' => $voiceprint->id,
+            'course_id' => $courseId,
+            'lecturer_name' => $voiceprint->lecturer_name,
+            'embedding_dim' => is_array($vector) ? count($vector) : 0,
+            'cosine_threshold' => (float) $voiceprint->cosine_threshold,
+            'created_at' => $voiceprint->created_at,
+        ]);
+    }
 }

@@ -56,6 +56,21 @@ class ProcessLectureJob implements ShouldQueue
             'updated_at' => now(),
         ]);
 
+        // Truy vấn mẫu giọng giảng viên đã đăng ký của môn học (nếu có)
+        $teacherEmbedding = null;
+        $voiceThreshold = 0.38;
+        if ($lecture->course_id) {
+            $voiceprint = DB::table('lecturer_voiceprints')
+                ->where('course_id', $lecture->course_id)
+                ->latest()
+                ->first();
+            if ($voiceprint && !empty($voiceprint->embedding_vector)) {
+                $teacherEmbedding = is_string($voiceprint->embedding_vector)
+                    ? json_decode($voiceprint->embedding_vector, true)
+                    : $voiceprint->embedding_vector;
+            }
+        }
+
         try {
             $response = Http::timeout(1500)->post("{$aiBaseUrl}/pipeline/process-lecture", [
                 'lecture_id' => $this->lectureId,
@@ -64,6 +79,8 @@ class ProcessLectureJob implements ShouldQueue
                 'audio_path' => $lecture->audio_file_path,
                 'language' => $lecture->language_mode ?? 'auto',
                 'slide_clicks' => $this->slideClicks,
+                'teacher_embedding' => $teacherEmbedding,
+                'voice_threshold' => $voiceThreshold,
                 'progress_webhook_url' => $webhookUrl,
                 'webhook_secret' => $webhookSecret,
             ]);
@@ -77,23 +94,10 @@ class ProcessLectureJob implements ShouldQueue
             $transcriptSegments = $result['transcript_segments'] ?? [];
 
             DB::transaction(function () use ($lecture, $slides, $transcriptSegments) {
-                // 1. Lưu các transcript segments
-                $segmentIdMap = [];
-                foreach ($transcriptSegments as $seg) {
-                    $segId = DB::table('transcript_segments')->insertGetId([
-                        'lecture_id' => $this->lectureId,
-                        'aligned_slide_id' => null, // Sẽ cập nhật sau khi có slide_id
-                        'start_time_sec' => (float) ($seg['start_time_sec'] ?? $seg['start_sec'] ?? 0.0),
-                        'end_time_sec' => (float) ($seg['end_time_sec'] ?? $seg['end_sec'] ?? 0.0),
-                        'text' => (string) ($seg['text'] ?? ''),
-                        'novelty_score' => (float) ($seg['novelty_score'] ?? 0.5),
-                        'created_at' => now(),
-                        'updated_at' => now(),
-                    ]);
-                    $segmentIdMap[] = $segId;
-                }
+                // 1. Lưu từng slide và ghi chú tương ứng trước để lấy slide_id thật
+                $slideNumberToId = [];
+                $slideBlocksMap = []; // slideNumber => [blockId1, blockId2, ...]
 
-                // 2. Lưu từng slide và ghi chú tương ứng
                 foreach ($slides as $idx => $s) {
                     $slideNumber = (int) ($s['slide_number'] ?? ($idx + 1));
                     $slideTitle = (string) ($s['title'] ?? "Slide {$slideNumber}");
@@ -113,6 +117,7 @@ class ProcessLectureJob implements ShouldQueue
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+                    $slideNumberToId[$slideNumber] = $slideId;
 
                     // Lưu Slide Blocks để phục vụ Inline Viewer
                     $cleanedBullets = $s['cleaned_slide_bullets'] ?? [];
@@ -121,6 +126,7 @@ class ProcessLectureJob implements ShouldQueue
                     }
 
                     $blockIndex = 1;
+                    $slideBlocksMap[$slideNumber] = [];
                     foreach ($cleanedBullets as $bText) {
                         $blockId = "slide_{$slideNumber}_b{$blockIndex}";
                         DB::table('lecture_slide_blocks')->insert([
@@ -135,12 +141,14 @@ class ProcessLectureJob implements ShouldQueue
                             'created_at' => now(),
                             'updated_at' => now(),
                         ]);
+                        $slideBlocksMap[$slideNumber][] = $blockId;
                         $blockIndex++;
                     }
 
                     // Lưu Notes & Evidences
                     $notes = $s['notes'] ?? [];
-                    foreach ($notes as $n) {
+                    $totalBlocks = count($slideBlocksMap[$slideNumber]);
+                    foreach ($notes as $nIdx => $n) {
                         $headline = (string) ($n['headline'] ?? '');
                         $content = (string) ($n['content'] ?? '');
                         $evidenceQuote = (string) ($n['evidence_quote'] ?? '');
@@ -174,11 +182,15 @@ class ProcessLectureJob implements ShouldQueue
                             'updated_at' => now(),
                         ]);
 
-                        // Lưu vào inline_block_notes cho Slide đầu tiên của block
-                        $firstBlockId = "slide_{$slideNumber}_b1";
+                        // Phân bổ inline_block_notes vào các block thực tế của slide thay vì cứng nhắc b1
+                        $targetBlockId = "slide_{$slideNumber}_b1";
+                        if ($totalBlocks > 0) {
+                            $targetBlockId = $slideBlocksMap[$slideNumber][$nIdx % $totalBlocks];
+                        }
+
                         DB::table('inline_block_notes')->insert([
                             'lecture_id' => $this->lectureId,
-                            'block_id' => $firstBlockId,
+                            'block_id' => $targetBlockId,
                             'explanation_text' => $bulletContent,
                             'raw_transcript' => $evidenceQuote,
                             'timestamp_start_sec' => $startSec,
@@ -189,6 +201,23 @@ class ProcessLectureJob implements ShouldQueue
                             'updated_at' => now(),
                         ]);
                     }
+                }
+
+                // 2. Lưu transcript segments với aligned_slide_id thật
+                foreach ($transcriptSegments as $seg) {
+                    $alignedNum = (int) ($seg['aligned_slide_number'] ?? $seg['aligned_slide_id'] ?? 1);
+                    $alignedSlideId = $slideNumberToId[$alignedNum] ?? null;
+
+                    DB::table('transcript_segments')->insert([
+                        'lecture_id' => $this->lectureId,
+                        'aligned_slide_id' => $alignedSlideId,
+                        'start_time_sec' => (float) ($seg['start_time_sec'] ?? $seg['start_sec'] ?? 0.0),
+                        'end_time_sec' => (float) ($seg['end_time_sec'] ?? $seg['end_sec'] ?? 0.0),
+                        'text' => (string) ($seg['text'] ?? ''),
+                        'novelty_score' => (float) ($seg['novelty_score'] ?? 0.5),
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
                 }
 
                 // Cập nhật trạng thái hoàn thành

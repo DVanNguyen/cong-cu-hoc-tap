@@ -93,6 +93,20 @@ interface StudyAiApiService {
     ): Response<VoiceNotesTestResponse>
 
     @Multipart
+    @POST("api/v1/courses/{courseId}/voiceprint")
+    suspend fun enrollVoiceprint(
+        @Path("courseId") courseId: Long,
+        @Part sample_audio: MultipartBody.Part,
+        @Part("lecturer_name") lecturerName: RequestBody? = null,
+        @Part("threshold") threshold: RequestBody? = null
+    ): Response<VoiceprintEnrollResponse>
+
+    @GET("api/v1/courses/{courseId}/voiceprint")
+    suspend fun getVoiceprint(
+        @Path("courseId") courseId: Long
+    ): Response<VoiceprintStatusResponse>
+
+    @Multipart
     @POST("api/v1/lectures/upload-pair")
     suspend fun uploadLecturePair(
         @Part("course_id") courseId: RequestBody,

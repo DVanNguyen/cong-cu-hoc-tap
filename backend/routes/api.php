@@ -29,6 +29,8 @@ Route::prefix('v1')->group(function () {
     Route::get('lectures/{lectureId}/status', [LectureUploadController::class, 'status']);
     Route::post('internal/lectures/{lectureId}/progress', [LectureUploadController::class, 'updateProgress']);
     Route::post('test/voice-notes', [LectureUploadController::class, 'quickVoiceNotes']);
+    Route::post('courses/{courseId}/voiceprint', [LectureUploadController::class, 'enrollVoiceprint']);
+    Route::get('courses/{courseId}/voiceprint', [LectureUploadController::class, 'getVoiceprint']);
 
     // =========================================================================
     // 3. Kho lưu trữ Slide theo Môn (Course Slide Vault)

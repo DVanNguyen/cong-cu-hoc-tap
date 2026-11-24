@@ -25,6 +25,8 @@ env/
 .pytest_cache/
 ai-service/.env
 ai-service/cache/
+ai-service/pretrained_models/
+pretrained_models/
 *.png
 backend/check_db.php
 
