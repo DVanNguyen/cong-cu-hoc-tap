@@ -1,4 +1,4 @@
-﻿import logging
+import logging
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 from app.llm.client import get_llm_client
@@ -46,9 +46,14 @@ Quy tắc bắt buộc:
 """
 
 
-def assign_target_blocks(slide_number: int, bullets: List[str], notes: List[StructuredNoteBlock]) -> None:
+def assign_target_blocks(
+    slide_number: int,
+    bullets: List[str],
+    notes: List[StructuredNoteBlock],
+    trust_llm_ids: bool = True,
+) -> None:
     """
-    Gán target_block_id cho từng ghi chú: giữ ID do LLM trả về nếu hợp lệ,
+    Gán target_block_id cho từng ghi chú: giữ ID do LLM trả về nếu hợp lệ và không bị lệch chỉ số,
     ngược lại chọn block có cosine similarity cao nhất (BGE-M3) trong trang.
     Quy ước block_id khớp Laravel: slide_{N}_b{i}, i từ 1; b1 ngắn (<80 ký tự) là tiêu đề.
     """
@@ -62,6 +67,9 @@ def assign_target_blocks(slide_number: int, bullets: List[str], notes: List[Stru
     candidate_idx = [
         i for i, b in enumerate(bullets) if not (i == 0 and len(b) < 80)
     ] or list(range(len(bullets)))
+    if not trust_llm_ids:
+        for n in notes:
+            n.target_block_id = None
     todo = [n for n in notes if n.target_block_id not in ids]
     if not todo:
         return
@@ -155,7 +163,14 @@ Hãy trích xuất và tổng hợp vở ghi chép thông minh theo đúng quy t
             result.cleaned_slide_bullets = [b.text for b in raw_blocks]
 
         result.notes = verified_notes
-        assign_target_blocks(slide_number, result.cleaned_slide_bullets, result.notes)
+        # Chỉ giữ target_block_id từ LLM khi số block khớp raw_blocks; ngược lại remap bằng BGE-M3 để tránh lệch chỉ số
+        same_block_count = len(result.cleaned_slide_bullets) == len(raw_blocks)
+        assign_target_blocks(
+            slide_number,
+            result.cleaned_slide_bullets,
+            result.notes,
+            trust_llm_ids=same_block_count,
+        )
         return result
 
     except Exception as e:
