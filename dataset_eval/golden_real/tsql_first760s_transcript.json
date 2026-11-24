@@ -1,0 +1,1617 @@
+{
+ "device": "cuda",
+ "model": "medium",
+ "seconds": 1002.7,
+ "segments": [
+  {
+   "start_sec": 9.26,
+   "end_sec": 17.65,
+   "text": "Dạ, tính đến đây là lập trình json SQL hay json SQL, tính tới đây là json SQL."
+  },
+  {
+   "start_sec": 17.65,
+   "end_sec": 21.65,
+   "text": "Vậy thì, trong SQL Server, tính đến đây là lập trình json SQL hay json SQL, tính tới đây là json SQL."
+  },
+  {
+   "start_sec": 21.65,
+   "end_sec": 29.65,
+   "text": "Vậy thì, trong SQL Server, tính đến đây là lập trình json SQL hay json SQL."
+  },
+  {
+   "start_sec": 29.65,
+   "end_sec": 37.65,
+   "text": "Hôm nay tôi sẽ giới thiệu cho các bạn một số các nội dung lập trình cơ bản trong SQL Server của mình."
+  },
+  {
+   "start_sec": 37.65,
+   "end_sec": 41.75,
+   "text": "rồi như thế nào là t-s-v-l"
+  },
+  {
+   "start_sec": 41.75,
+   "end_sec": 44.75,
+   "text": "t-j-s-c-o-t"
+  },
+  {
+   "start_sec": 44.75,
+   "end_sec": 48.45,
+   "text": "đây chính là cách thức tổ chức từng khối lệnh"
+  },
+  {
+   "start_sec": 48.45,
+   "end_sec": 51.65,
+   "text": "mỗi khối lệnh có thể có lòng một khối lệnh khác"
+  },
+  {
+   "start_sec": 51.65,
+   "end_sec": 57.48,
+   "text": "vậy thì ta phải dùng một cái từ khóa để ta bao vọng nó lại"
+  },
+  {
+   "start_sec": 57.48,
+   "end_sec": 59.68,
+   "text": "đó là begin và end"
+  },
+  {
+   "start_sec": 59.68,
+   "end_sec": 61.68,
+   "text": "nhớ giúp tôi một tí xíu"
+  },
+  {
+   "start_sec": 61.68,
+   "end_sec": 63.68,
+   "text": "nó khác với các ngôn ngữ lập trình"
+  },
+  {
+   "start_sec": 63.68,
+   "end_sec": 66.48,
+   "text": "các ngôn ngữ lập trình của mình thì các bạn hay dùng cái dấu"
+  },
+  {
+   "start_sec": 66.48,
+   "end_sec": 69.28,
+   "text": "mở hoặc đa số là như vậy"
+  },
+  {
+   "start_sec": 69.28,
+   "end_sec": 72.48,
+   "text": "thì trong server của mình không có sử dụng cái món này"
+  },
+  {
+   "start_sec": 72.48,
+   "end_sec": 76.48,
+   "text": "thì các bạn dùng tôi một cái là begin và end"
+  },
+  {
+   "start_sec": 76.48,
+   "end_sec": 77.78,
+   "text": "ok, rồi"
+  },
+  {
+   "start_sec": 77.78,
+   "end_sec": 82.48,
+   "text": "thì bên trong begin và end thì mình có một lệnh hoặc nhiều lệnh"
+  },
+  {
+   "start_sec": 82.48,
+   "end_sec": 88.22,
+   "text": "hoặc các khối lệnh bao vọng, khối lệnh con ở bên trong cũng có được"
+  },
+  {
+   "start_sec": 88.22,
+   "end_sec": 93.22,
+   "text": "thì cố gắng mình sẽ bỏ thêm vào dấu chấm phải vô để mình ngăn cắt nha"
+  },
+  {
+   "start_sec": 93.22,
+   "end_sec": 97.66,
+   "text": "thì cái việc đầu tiên khi mình lập trình t-sql bao gồm"
+  },
+  {
+   "start_sec": 97.66,
+   "end_sec": 100.66,
+   "text": "thứ nhất là khai báo biến, tại sao ta phải khai báo biến các bạn"
+  },
+  {
+   "start_sec": 100.66,
+   "end_sec": 102.66,
+   "text": "thì chắc là trong quá trình các bạn là"
+  },
+  {
+   "start_sec": 102.66,
+   "end_sec": 105.66,
+   "text": "xử lý các cái ràng buồn"
+  },
+  {
+   "start_sec": 105.66,
+   "end_sec": 107.66,
+   "text": "làm một số công việc"
+  },
+  {
+   "start_sec": 107.66,
+   "end_sec": 109.66,
+   "text": "thì sau bài này thì các bạn sẽ"
+  },
+  {
+   "start_sec": 109.66,
+   "end_sec": 111.66,
+   "text": "chúng ta được biết được review rồi đúng không ạ"
+  },
+  {
+   "start_sec": 111.66,
+   "end_sec": 113.66,
+   "text": "thì các bạn sẽ làm thêm với"
+  },
+  {
+   "start_sec": 113.66,
+   "end_sec": 116.66,
+   "text": "storeprojector, tức là cách biết thủ tục"
+  },
+  {
+   "start_sec": 116.66,
+   "end_sec": 119.66,
+   "text": "function, cách biết hàm, tức là hàm cho người dùng định"
+  },
+  {
+   "start_sec": 119.66,
+   "end_sec": 121.66,
+   "text": "rồi có trigger, rồi có"
+  },
+  {
+   "start_sec": 122.66,
+   "end_sec": 124.66,
+   "text": "cursor, rồi có transition v.v."
+  },
+  {
+   "start_sec": 124.66,
+   "end_sec": 126.66,
+   "text": "thì tất cả thì nó có thể"
+  },
+  {
+   "start_sec": 126.66,
+   "end_sec": 129.66,
+   "text": "người ta sử dụng các cái biến tạm ở bên trong"
+  },
+  {
+   "start_sec": 129.66,
+   "end_sec": 131.66,
+   "text": "vậy thì ta khai báo biến như thế nào"
+  },
+  {
+   "start_sec": 131.66,
+   "end_sec": 134.66,
+   "text": "declare a cộng tên biến và kiểu dữ liệu"
+  },
+  {
+   "start_sec": 134.66,
+   "end_sec": 135.66,
+   "text": "kiểu dữ liệu của biến"
+  },
+  {
+   "start_sec": 135.66,
+   "end_sec": 137.66,
+   "text": "thì chú ý dùm tôi một cái"
+  },
+  {
+   "start_sec": 137.66,
+   "end_sec": 140.66,
+   "text": "cái tên biến của mình phải có dấu a cộng"
+  },
+  {
+   "start_sec": 140.66,
+   "end_sec": 141.66,
+   "text": "phải có đi a cộng mới chịu à"
+  },
+  {
+   "start_sec": 141.66,
+   "end_sec": 142.66,
+   "text": "rồi"
+  },
+  {
+   "start_sec": 142.66,
+   "end_sec": 144.66,
+   "text": "thứ hai nữa thì các kiểu dữ liệu thông thường"
+  },
+  {
+   "start_sec": 144.66,
+   "end_sec": 146.66,
+   "text": "trừ một số kiểu dữ liệu đặc biệt"
+  },
+  {
+   "start_sec": 146.66,
+   "end_sec": 149.66,
+   "text": "như là kiểu text, kiểu end, text, kiểu image"
+  },
+  {
+   "start_sec": 149.66,
+   "end_sec": 152.66,
+   "text": "rồi thì các bạn cứ khai báo tùy mục đích mà"
+  },
+  {
+   "start_sec": 152.66,
+   "end_sec": 154.66,
+   "text": "tươi các bạn sẽ xử lý"
+  },
+  {
+   "start_sec": 154.66,
+   "end_sec": 156.66,
+   "text": "ô khai báo rồi để làm gì?"
+  },
+  {
+   "start_sec": 156.66,
+   "end_sec": 158.66,
+   "text": "để gắn giá trị cho nó chứ nha"
+  },
+  {
+   "start_sec": 158.66,
+   "end_sec": 160.66,
+   "text": "chứ khai báo biến mà không sai thì cũng như không"
+  },
+  {
+   "start_sec": 160.66,
+   "end_sec": 163.66,
+   "text": "thì tươi các bạn sẽ tìm hiểu các cách"
+  },
+  {
+   "start_sec": 163.66,
+   "end_sec": 166.66,
+   "text": "ta có 3 cách để mà gắn giá trị cho biến"
+  },
+  {
+   "start_sec": 166.66,
+   "end_sec": 169.66,
+   "text": "nếu mà các bạn gắn một cái giá trị cụ thể"
+  },
+  {
+   "start_sec": 169.66,
+   "end_sec": 171.66,
+   "text": "cho biến thì các bạn dùng cái hàm set"
+  },
+  {
+   "start_sec": 171.66,
+   "end_sec": 173.66,
+   "text": "a cộng tên biến bằng giá trị"
+  },
+  {
+   "start_sec": 173.66,
+   "end_sec": 175.66,
+   "text": "ví dụ cái biến họ tên của tôi"
+  },
+  {
+   "start_sec": 175.66,
+   "end_sec": 177.66,
+   "text": "là kiểu dữ liệu n3020"
+  },
+  {
+   "start_sec": 177.66,
+   "end_sec": 179.66,
+   "text": "thì tôi muốn gắn cái giá trị này vô"
+  },
+  {
+   "start_sec": 179.66,
+   "end_sec": 182.66,
+   "text": "thì các bạn chỉ xét a cộng họ tên bằng n"
+  },
+  {
+   "start_sec": 182.66,
+   "end_sec": 184.79,
+   "text": "nhớ có chữ n ha"
+  },
+  {
+   "start_sec": 184.79,
+   "end_sec": 186.79,
+   "text": "chỗ đây là n viết thường là unicode nè"
+  },
+  {
+   "start_sec": 186.79,
+   "end_sec": 188.79,
+   "text": "còn chỗ này là n viết khoai nè"
+  },
+  {
+   "start_sec": 188.79,
+   "end_sec": 190.79,
+   "text": "của suy co server đặc biệt như vậy"
+  },
+  {
+   "start_sec": 190.79,
+   "end_sec": 192.79,
+   "text": "để các bạn chú ý"
+  },
+  {
+   "start_sec": 192.79,
+   "end_sec": 193.79,
+   "text": "ok, rồi"
+  },
+  {
+   "start_sec": 193.79,
+   "end_sec": 195.79,
+   "text": "hoặc là các bạn dùng từ khóa SELECT"
+  },
+  {
+   "start_sec": 195.79,
+   "end_sec": 196.79,
+   "text": "ổ thích dùng gì?"
+  },
+  {
+   "start_sec": 196.79,
+   "end_sec": 197.79,
+   "text": "ổ thích gì thì tuyển của bạn"
+  },
+  {
+   "start_sec": 197.79,
+   "end_sec": 198.79,
+   "text": "không ai cấm hết"
+  },
+  {
+   "start_sec": 198.79,
+   "end_sec": 200.79,
+   "text": "cách một cách hai đều như nhau hết"
+  },
+  {
+   "start_sec": 200.79,
+   "end_sec": 202.79,
+   "text": "tức là dành cho gắn một cái giá trị cụ thể"
+  },
+  {
+   "start_sec": 202.79,
+   "end_sec": 205.79,
+   "text": "thì học SELECT thì SELECT cũng được nha"
+  },
+  {
+   "start_sec": 205.79,
+   "end_sec": 207.79,
+   "text": "rồi, cách thứ ba"
+  },
+  {
+   "start_sec": 207.79,
+   "end_sec": 210.79,
+   "text": "là tui các bạn sẽ lấy từ một cái biến này"
+  },
+  {
+   "start_sec": 210.79,
+   "end_sec": 212.79,
+   "text": "lấy từ một con query khác để buộc lông"
+  },
+  {
+   "start_sec": 212.79,
+   "end_sec": 215.79,
+   "text": "và các bạn phải dùng cái câu lệnh SELECT của mình ha"
+  },
+  {
+   "start_sec": 215.79,
+   "end_sec": 218.79,
+   "text": "thì cái tên cọng hoặc là một cái biểu thức"
+  },
+  {
+   "start_sec": 218.79,
+   "end_sec": 220.79,
+   "text": "tên cọng hoặc là cái biểu thức mà"
+  },
+  {
+   "start_sec": 220.79,
+   "end_sec": 223.79,
+   "text": "từ cái câu lệnh query mà các bạn lấy ra"
+  },
+  {
+   "start_sec": 223.79,
+   "end_sec": 225.79,
+   "text": "mà bạn phải xử lý tinh toán ha"
+  },
+  {
+   "start_sec": 225.79,
+   "end_sec": 228.79,
+   "text": "chứ không phải chỉ ra có tên cọng không ha"
+  },
+  {
+   "start_sec": 228.79,
+   "end_sec": 230.79,
+   "text": "mà ta gắn cho cái biến đó nha"
+  },
+  {
+   "start_sec": 230.79,
+   "end_sec": 232.79,
+   "text": "rồi, ví dụ như tui muốn tìm lương lớn nhất"
+  },
+  {
+   "start_sec": 232.79,
+   "end_sec": 233.79,
+   "text": "của nhân viên đến chi vậy"
+  },
+  {
+   "start_sec": 233.79,
+   "end_sec": 235.79,
+   "text": "nhưng chi vậy, tui sẽ có cái cân đo đông đếm"
+  },
+  {
+   "start_sec": 235.79,
+   "end_sec": 237.79,
+   "text": "ta làm một cái là forecast"
+  },
+  {
+   "start_sec": 237.79,
+   "end_sec": 240.79,
+   "text": "làm cái dự đoán là một cái dự tính cho"
+  },
+  {
+   "start_sec": 240.79,
+   "end_sec": 243.79,
+   "text": "quý cái tiếp theo, tháng tiếp theo, năm tiếp theo"
+  },
+  {
+   "start_sec": 243.79,
+   "end_sec": 244.79,
+   "text": "nó là tùy ha"
+  },
+  {
+   "start_sec": 244.79,
+   "end_sec": 246.79,
+   "text": "nhưng giờ tui không quan tâm, tui chỉ quan tâm là lương lớn nhất"
+  },
+  {
+   "start_sec": 246.79,
+   "end_sec": 247.79,
+   "text": "của nhân viên là bao nhiêu"
+  },
+  {
+   "start_sec": 247.79,
+   "end_sec": 250.79,
+   "text": "đấy, thì tui có thể lấy ra từ câu lệnh ha"
+  },
+  {
+   "start_sec": 250.79,
+   "end_sec": 253.79,
+   "text": "thì nói nhiều quá để tui các bạn sẽ làm"
+  },
+  {
+   "start_sec": 253.79,
+   "end_sec": 255.79,
+   "text": "luôn cái ví dụ ha"
+  },
+  {
+   "start_sec": 255.79,
+   "end_sec": 258.79,
+   "text": "ok, thì mình sẽ mở ra cái new mới"
+  },
+  {
+   "start_sec": 258.79,
+   "end_sec": 260.79,
+   "text": "một cái query ha"
+  },
+  {
+   "start_sec": 260.79,
+   "end_sec": 265.79,
+   "text": "rồi, ví dụ ha về t-sql ha"
+  },
+  {
+   "start_sec": 265.79,
+   "end_sec": 266.79,
+   "text": "thì nhớ nha"
+  },
+  {
+   "start_sec": 266.79,
+   "end_sec": 269.79,
+   "text": "thì các bạn nhớ cái này là dành cho"
+  },
+  {
+   "start_sec": 269.79,
+   "end_sec": 271.79,
+   "text": "cái này là sql server nha"
+  },
+  {
+   "start_sec": 271.79,
+   "end_sec": 275.79,
+   "text": "thì tự vì có một cái ngôn ngữ khác mà các bạn sẽ được học"
+  },
+  {
+   "start_sec": 275.79,
+   "end_sec": 277.79,
+   "text": "database khác mà các bạn được học"
+  },
+  {
+   "start_sec": 277.79,
+   "end_sec": 282.79,
+   "text": "thì ví dụ oracle thì gọi là bl-sql ha"
+  },
+  {
+   "start_sec": 282.79,
+   "end_sec": 284.86,
+   "text": "ok, rồi"
+  },
+  {
+   "start_sec": 284.86,
+   "end_sec": 287.86,
+   "text": "ví dụ, như tui muốn là khai báo"
+  },
+  {
+   "start_sec": 287.86,
+   "end_sec": 291.86,
+   "text": "cái biến, giữ, cái này là giữ tên đúng không à"
+  },
+  {
+   "start_sec": 291.86,
+   "end_sec": 292.86,
+   "text": "declare ha"
+  },
+  {
+   "start_sec": 292.86,
+   "end_sec": 295.86,
+   "text": "rồi, đây tui ví dụ cho nó vui để cho mình biết thôi"
+  },
+  {
+   "start_sec": 295.86,
+   "end_sec": 297.86,
+   "text": "chứ còn đáng lý là nó phải nằm trực tiếp trong"
+  },
+  {
+   "start_sec": 297.86,
+   "end_sec": 299.86,
+   "text": "cái store, cái function, cái trigger ha"
+  },
+  {
+   "start_sec": 299.86,
+   "end_sec": 301.86,
+   "text": "tụi các bạn sẽ làm sau ha"
+  },
+  {
+   "start_sec": 301.86,
+   "end_sec": 303.86,
+   "text": "tên, tên tui dài lắm ha"
+  },
+  {
+   "start_sec": 303.86,
+   "end_sec": 305.86,
+   "text": "rồi, tui cho 50 ký tự ha"
+  },
+  {
+   "start_sec": 305.86,
+   "end_sec": 308.86,
+   "text": "rồi, select cũng được ha"
+  },
+  {
+   "start_sec": 308.86,
+   "end_sec": 312.86,
+   "text": "à, ha, cộng, tên, sẽ bằng"
+  },
+  {
+   "start_sec": 312.86,
+   "end_sec": 316.4,
+   "text": "le, li, la, tui ví dụ vậy ha"
+  },
+  {
+   "start_sec": 316.4,
+   "end_sec": 318.4,
+   "text": "thì thôi, bây giờ mình đang code rồi"
+  },
+  {
+   "start_sec": 318.4,
+   "end_sec": 321.4,
+   "text": "thì tui các bạn in ra đại thử đi ha"
+  },
+  {
+   "start_sec": 321.4,
+   "end_sec": 323.4,
+   "text": "đây, in ra đại cái biến là"
+  },
+  {
+   "start_sec": 323.4,
+   "end_sec": 325.4,
+   "text": "họ tên của tui là cái gì ha"
+  },
+  {
+   "start_sec": 325.4,
+   "end_sec": 326.4,
+   "text": "tui các bạn chạy thử nha"
+  },
+  {
+   "start_sec": 326.4,
+   "end_sec": 328.4,
+   "text": "tui quét khối, tui chạy thử"
+  },
+  {
+   "start_sec": 328.4,
+   "end_sec": 330.4,
+   "text": "đây, đây li nà này ha"
+  },
+  {
+   "start_sec": 330.4,
+   "end_sec": 332.4,
+   "text": "ok, rồi, được chưa nè"
+  },
+  {
+   "start_sec": 332.4,
+   "end_sec": 335.4,
+   "text": "rồi, tương tự các bạn dùng cái set cũng còn được nha"
+  },
+  {
+   "start_sec": 335.4,
+   "end_sec": 338.4,
+   "text": "cách thứ 3 thì giống như hồi nãy tui có nói đó ha"
+  },
+  {
+   "start_sec": 338.4,
+   "end_sec": 342.4,
+   "text": "tui sẽ lấy cái giá trị"
+  },
+  {
+   "start_sec": 342.4,
+   "end_sec": 346.4,
+   "text": "à, tui quan tâm lươn lớn nhất ha"
+  },
+  {
+   "start_sec": 346.4,
+   "end_sec": 348.4,
+   "text": "lươn trung bình"
+  },
+  {
+   "start_sec": 348.4,
+   "end_sec": 350.4,
+   "text": "ơ, xin lỗi"
+  },
+  {
+   "start_sec": 350.4,
+   "end_sec": 352.4,
+   "text": "thôi, tui lấy giá đi ha"
+  },
+  {
+   "start_sec": 352.4,
+   "end_sec": 354.4,
+   "text": "lấy giá lớn nhất"
+  },
+  {
+   "start_sec": 354.4,
+   "end_sec": 356.4,
+   "text": "giá trung bình ha"
+  },
+  {
+   "start_sec": 356.4,
+   "end_sec": 358.4,
+   "text": "của hàng hóa đi ha"
+  },
+  {
+   "start_sec": 358.4,
+   "end_sec": 360.4,
+   "text": "ok, rồi"
+  },
+  {
+   "start_sec": 360.4,
+   "end_sec": 362.4,
+   "text": "thì tui sẽ khai báo 2 cái biến"
+  },
+  {
+   "start_sec": 362.4,
+   "end_sec": 364.4,
+   "text": "mà mấy cái ổng này lớn nhất trung bình"
+  },
+  {
+   "start_sec": 364.4,
+   "end_sec": 366.4,
+   "text": "thì có thể là kiểu của nó kiểu gì"
+  },
+  {
+   "start_sec": 366.4,
+   "end_sec": 369.3,
+   "text": "so tư, thì request"
+  },
+  {
+   "start_sec": 369.3,
+   "end_sec": 371.3,
+   "text": "a cóng giá lớn nhất"
+  },
+  {
+   "start_sec": 371.3,
+   "end_sec": 375.3,
+   "text": "hai, a cóng giá trung bình ha"
+  },
+  {
+   "start_sec": 375.3,
+   "end_sec": 377.3,
+   "text": "rồi, giá trung bình"
+  },
+  {
+   "start_sec": 377.3,
+   "end_sec": 379.3,
+   "text": "rồi kiểu dữ liệu của nó kiểu gì"
+  },
+  {
+   "start_sec": 379.3,
+   "end_sec": 381.3,
+   "text": "float nha, ok"
+  },
+  {
+   "start_sec": 381.3,
+   "end_sec": 382.3,
+   "text": "rồi, được chưa"
+  },
+  {
+   "start_sec": 382.3,
+   "end_sec": 384.3,
+   "text": "thì ở đây nó cũng hơi khó chịu một tí xíu ha"
+  },
+  {
+   "start_sec": 384.3,
+   "end_sec": 386.3,
+   "text": "thì các bạn chịu góp dùm tôi có hay"
+  },
+  {
+   "start_sec": 386.3,
+   "end_sec": 388.3,
+   "text": "hay"
+  },
+  {
+   "start_sec": 388.3,
+   "end_sec": 390.39,
+   "text": "create"
+  },
+  {
+   "start_sec": 390.39,
+   "end_sec": 392.39,
+   "text": "float dùm tôi 1 tí xíu nha"
+  },
+  {
+   "start_sec": 392.39,
+   "end_sec": 394.39,
+   "text": "giờ làm sao để lấy ra"
+  },
+  {
+   "start_sec": 394.39,
+   "end_sec": 396.39,
+   "text": "thì các bạn, mấy cái này lấy ra đâu ra"
+  },
+  {
+   "start_sec": 396.39,
+   "end_sec": 400.39,
+   "text": "Mấy cái này lấy ở đâu ra các bạn, lấy từ cái bảng hàng hóa đúng không ạ"
+  },
+  {
+   "start_sec": 400.39,
+   "end_sec": 402.39,
+   "text": "Đấy thì tôi sẽ lấy ở đây ha"
+  },
+  {
+   "start_sec": 402.39,
+   "end_sec": 407.39,
+   "text": "Cled, Pro từ cái bảng là hàng hóa đúng không ạ"
+  },
+  {
+   "start_sec": 407.39,
+   "end_sec": 409.39,
+   "text": "Đấy, giá lớn nhất là bằng cái gì"
+  },
+  {
+   "start_sec": 409.39,
+   "end_sec": 413.39,
+   "text": "Bằng cái hạm Max ha, của cái cọt đơn giá ha"
+  },
+  {
+   "start_sec": 413.39,
+   "end_sec": 419.39,
+   "text": "Rồi, tương tự cái giá trị là giá trung bình ha"
+  },
+  {
+   "start_sec": 419.39,
+   "end_sec": 424.96,
+   "text": "Sẽ bằng AVG của cái cọt là đơn giá ha"
+  },
+  {
+   "start_sec": 424.96,
+   "end_sec": 427.96,
+   "text": "Rồi, không phải lấy đen chi, lấy sẽ phục vụ những cái việc tiếp theo"
+  },
+  {
+   "start_sec": 427.96,
+   "end_sec": 430.96,
+   "text": "Thì hôm nay mình mới làm, gọi là nó vui là làm mồi thôi ha"
+  },
+  {
+   "start_sec": 430.96,
+   "end_sec": 432.96,
+   "text": "Làm cho các bạn thử thôi ha"
+  },
+  {
+   "start_sec": 432.96,
+   "end_sec": 437.96,
+   "text": "Rồi, ví dụ tôi print ra giá lớn nhất, coi thử nó ra bao nhiêu ha"
+  },
+  {
+   "start_sec": 437.96,
+   "end_sec": 442.96,
+   "text": "Giá lớn nhất, cầm giá trung bình ha"
+  },
+  {
+   "start_sec": 442.96,
+   "end_sec": 444.02,
+   "text": "OK"
+  },
+  {
+   "start_sec": 444.02,
+   "end_sec": 447.02,
+   "text": "Rồi, các bài tiếp theo thì tôi các bạn sẽ thấy rất rõ ha"
+  },
+  {
+   "start_sec": 447.02,
+   "end_sec": 449.02,
+   "text": "Nhớ quét nguyên khối mới chạy được ha"
+  },
+  {
+   "start_sec": 449.02,
+   "end_sec": 453.02,
+   "text": "Skill rồi, nó bị bao lỗi chỗ này hổng sao hết, hổng có bình tĩnh gì hết ha"
+  },
+  {
+   "start_sec": 453.02,
+   "end_sec": 458.02,
+   "text": "Thì thôi thì mình có thể dùng hạng nổi tiếng nhất là Concave lại ha"
+  },
+  {
+   "start_sec": 458.02,
+   "end_sec": 460.02,
+   "text": "Print ra từng cái mặt quá ha"
+  },
+  {
+   "start_sec": 460.02,
+   "end_sec": 461.02,
+   "text": "OK"
+  },
+  {
+   "start_sec": 461.02,
+   "end_sec": 464.72,
+   "text": "Tôi thu lại đi ha"
+  },
+  {
+   "start_sec": 464.72,
+   "end_sec": 468.3,
+   "text": "Giá lớn nhất ha, rồi"
+  },
+  {
+   "start_sec": 468.3,
+   "end_sec": 470.3,
+   "text": "Cái chuỗi rồi"
+  },
+  {
+   "start_sec": 470.3,
+   "end_sec": 474.3,
+   "text": "Sau đó, nối thêm cái chuỗi ha"
+  },
+  {
+   "start_sec": 474.3,
+   "end_sec": 477.3,
+   "text": "Giá trung bình đi ha"
+  },
+  {
+   "start_sec": 477.3,
+   "end_sec": 478.3,
+   "text": "OK"
+  },
+  {
+   "start_sec": 478.3,
+   "end_sec": 479.46,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 479.46,
+   "end_sec": 482.55,
+   "text": "Tôi sẽ nối lại nguyên cái chuỗi này cho nó dễ nha"
+  },
+  {
+   "start_sec": 482.55,
+   "end_sec": 483.81,
+   "text": "OK"
+  },
+  {
+   "start_sec": 483.81,
+   "end_sec": 484.81,
+   "text": "OK"
+  },
+  {
+   "start_sec": 484.81,
+   "end_sec": 485.81,
+   "text": "Skill đây"
+  },
+  {
+   "start_sec": 485.81,
+   "end_sec": 486.81,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 486.81,
+   "end_sec": 488.81,
+   "text": "Nó ra trung bình ha"
+  },
+  {
+   "start_sec": 488.81,
+   "end_sec": 489.81,
+   "text": "Nó ra trung bình"
+  },
+  {
+   "start_sec": 489.81,
+   "end_sec": 490.81,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 490.81,
+   "end_sec": 492.81,
+   "text": "Giá lớn nhất, giá trung bình ha"
+  },
+  {
+   "start_sec": 492.81,
+   "end_sec": 493.81,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 493.81,
+   "end_sec": 495.81,
+   "text": "Giá lớn nhất và giá trung bình của tôi ha"
+  },
+  {
+   "start_sec": 495.81,
+   "end_sec": 497.84,
+   "text": "Skill lại coi"
+  },
+  {
+   "start_sec": 497.84,
+   "end_sec": 499.84,
+   "text": "Giá lớn nhất ra trung bình, ngon rồi ha"
+  },
+  {
+   "start_sec": 499.84,
+   "end_sec": 500.84,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 500.84,
+   "end_sec": 501.84,
+   "text": "Được chưa nè"
+  },
+  {
+   "start_sec": 501.84,
+   "end_sec": 503.84,
+   "text": "Chắc là ổn, hổng đến nổi nào ha"
+  },
+  {
+   "start_sec": 503.84,
+   "end_sec": 506.84,
+   "text": "Thì mình có cái giá rồi, mình cứ về đó là chuyện của mình nha"
+  },
+  {
+   "start_sec": 506.84,
+   "end_sec": 507.84,
+   "text": "Tiếp theo"
+  },
+  {
+   "start_sec": 507.84,
+   "end_sec": 509.26,
+   "text": "OK"
+  },
+  {
+   "start_sec": 509.26,
+   "end_sec": 512.26,
+   "text": "Thì tôi sẽ phát thử mở ra cái màn hình này luôn ha"
+  },
+  {
+   "start_sec": 512.26,
+   "end_sec": 515.26,
+   "text": "Rồi tương tự các bạn có thể mình ghé cái kiểu ngày tháng không được ha"
+  },
+  {
+   "start_sec": 515.26,
+   "end_sec": 516.26,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 516.26,
+   "end_sec": 519.26,
+   "text": "Ví dụ như biến kiểu ngày tháng"
+  },
+  {
+   "start_sec": 519.26,
+   "end_sec": 521.26,
+   "text": "Ví dụ như tôi xét cái ngày hôm nay ha"
+  },
+  {
+   "start_sec": 521.26,
+   "end_sec": 522.26,
+   "text": "À"
+  },
+  {
+   "start_sec": 522.26,
+   "end_sec": 523.26,
+   "text": "Ngày 19 tháng 9 chắc hẳn"
+  },
+  {
+   "start_sec": 523.26,
+   "end_sec": 525.26,
+   "text": "Vâng vâng, cái này con số thôi ha"
+  },
+  {
+   "start_sec": 525.26,
+   "end_sec": 527.26,
+   "text": "Ghét đét là lấy ngày hiện tại ha"
+  },
+  {
+   "start_sec": 527.26,
+   "end_sec": 529.26,
+   "text": "Sau đó 2 ngày chẳng hạn ha"
+  },
+  {
+   "start_sec": 529.26,
+   "end_sec": 530.26,
+   "text": "Thì tôi các bạn lấy thử ha"
+  },
+  {
+   "start_sec": 530.26,
+   "end_sec": 532.26,
+   "text": "Ví dụ về kiểu ngày tháng nha"
+  },
+  {
+   "start_sec": 532.26,
+   "end_sec": 536.95,
+   "text": "OK"
+  },
+  {
+   "start_sec": 536.95,
+   "end_sec": 542.21,
+   "text": "Khai báo biến kiểu ngày tháng ha"
+  },
+  {
+   "start_sec": 542.21,
+   "end_sec": 543.21,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 543.21,
+   "end_sec": 547.38,
+   "text": "Sau đây khi tôi up video lên"
+  },
+  {
+   "start_sec": 547.38,
+   "end_sec": 550.38,
+   "text": "Thì tôi sẽ kèm theo cái file này ha"
+  },
+  {
+   "start_sec": 550.38,
+   "end_sec": 553.38,
+   "text": "Để các bạn có thể mình đánh được ha"
+  },
+  {
+   "start_sec": 553.38,
+   "end_sec": 554.38,
+   "text": "Để mình xài ha"
+  },
+  {
+   "start_sec": 554.38,
+   "end_sec": 556.38,
+   "text": "Rồi, mình xem giúp tôi một tí xíu"
+  },
+  {
+   "start_sec": 556.38,
+   "end_sec": 557.38,
+   "text": "Thứ nhất"
+  },
+  {
+   "start_sec": 557.38,
+   "end_sec": 561.38,
+   "text": "Đây, tôi khai báo cái biến đầu tiên biến đét là ngày ha"
+  },
+  {
+   "start_sec": 561.38,
+   "end_sec": 564.38,
+   "text": "Đây, tôi thích cái ngày kỷ niệm của tôi chẳng hạn ha"
+  },
+  {
+   "start_sec": 564.38,
+   "end_sec": 565.38,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 565.38,
+   "end_sec": 568.38,
+   "text": "16 tháng 4, năm 2, năm 2019 đi ha"
+  },
+  {
+   "start_sec": 568.38,
+   "end_sec": 569.38,
+   "text": "OK"
+  },
+  {
+   "start_sec": 569.38,
+   "end_sec": 570.38,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 570.38,
+   "end_sec": 571.38,
+   "text": "Được chưa nè"
+  },
+  {
+   "start_sec": 571.38,
+   "end_sec": 573.38,
+   "text": "Rồi, giờ các bạn thẳng ngắn vô ha"
+  },
+  {
+   "start_sec": 573.38,
+   "end_sec": 576.38,
+   "text": "Tự nhiên copy và pull ra nó hư thôi chứ không gì hết nha"
+  },
+  {
+   "start_sec": 576.38,
+   "end_sec": 577.38,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 577.38,
+   "end_sec": 578.38,
+   "text": "OK nha"
+  },
+  {
+   "start_sec": 578.38,
+   "end_sec": 580.38,
+   "text": "Select cọt ha"
+  },
+  {
+   "start_sec": 580.38,
+   "end_sec": 581.38,
+   "text": "Giờ in ra cũng được ha"
+  },
+  {
+   "start_sec": 581.38,
+   "end_sec": 583.38,
+   "text": "Rồi, nó ra được mấy cọt"
+  },
+  {
+   "start_sec": 583.38,
+   "end_sec": 584.38,
+   "text": "1 cọt, 2 cọt, 3 cọt ha"
+  },
+  {
+   "start_sec": 584.38,
+   "end_sec": 585.38,
+   "text": "1 dòng"
+  },
+  {
+   "start_sec": 585.38,
+   "end_sec": 587.38,
+   "text": "Skill"
+  },
+  {
+   "start_sec": 587.38,
+   "end_sec": 588.38,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 588.38,
+   "end_sec": 589.38,
+   "text": "Thì bây giờ nó nói rằng"
+  },
+  {
+   "start_sec": 589.38,
+   "end_sec": 593.38,
+   "text": "Ê, tôi thấy cái kiểu dữ liệu này hơi mệt nè ha"
+  },
+  {
+   "start_sec": 593.38,
+   "end_sec": 595.38,
+   "text": "Viết không có đúng chính tả nè nha"
+  },
+  {
+   "start_sec": 595.38,
+   "end_sec": 597.38,
+   "text": "Không sao hết cái chuyện đó cố tình"
+  },
+  {
+   "start_sec": 597.38,
+   "end_sec": 599.38,
+   "text": "Nếu mình viết thì phải là 5 chừng tháng chừng ngày"
+  },
+  {
+   "start_sec": 600.38,
+   "end_sec": 603.38,
+   "text": "Còn không là tháng, xẹt ngày, xẹt năm ha"
+  },
+  {
+   "start_sec": 603.38,
+   "end_sec": 605.38,
+   "text": "À, chứ không là báo lỗi ha"
+  },
+  {
+   "start_sec": 605.38,
+   "end_sec": 606.38,
+   "text": "À"
+  },
+  {
+   "start_sec": 606.38,
+   "end_sec": 609.38,
+   "text": "Rồi, chứ không báo lỗi ha"
+  },
+  {
+   "start_sec": 609.38,
+   "end_sec": 610.38,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 610.38,
+   "end_sec": 611.38,
+   "text": "Skill"
+  },
+  {
+   "start_sec": 611.38,
+   "end_sec": 613.38,
+   "text": "Ô, nó vẫn không chịu à"
+  },
+  {
+   "start_sec": 613.38,
+   "end_sec": 614.38,
+   "text": "Thôi"
+  },
+  {
+   "start_sec": 614.38,
+   "end_sec": 615.38,
+   "text": "OK"
+  },
+  {
+   "start_sec": 615.38,
+   "end_sec": 616.38,
+   "text": "Kiểu đẹp này"
+  },
+  {
+   "start_sec": 616.38,
+   "end_sec": 617.38,
+   "text": "Kiểu đét"
+  },
+  {
+   "start_sec": 617.38,
+   "end_sec": 620.38,
+   "text": "Kiểm tra lại con vật từ kiểu đét"
+  },
+  {
+   "start_sec": 620.38,
+   "end_sec": 622.38,
+   "text": "Đét, support"
+  },
+  {
+   "start_sec": 622.38,
+   "end_sec": 624.38,
+   "text": "Không support"
+  },
+  {
+   "start_sec": 624.38,
+   "end_sec": 625.38,
+   "text": "Ôi mẹ"
+  },
+  {
+   "start_sec": 625.38,
+   "end_sec": 627.38,
+   "text": "Tự nhiên mình hay dùng kiểu đét thay thì nó khỏe mái ha"
+  },
+  {
+   "start_sec": 627.38,
+   "end_sec": 629.38,
+   "text": "Ông này kiểu đét thì cũng được ha"
+  },
+  {
+   "start_sec": 629.38,
+   "end_sec": 631.38,
+   "text": "Rồi, cái này con số thôi"
+  },
+  {
+   "start_sec": 631.38,
+   "end_sec": 633.38,
+   "text": "Tất cả chỉ là con số ha"
+  },
+  {
+   "start_sec": 633.38,
+   "end_sec": 636.38,
+   "text": "Rồi, tháng 4 ngày 16 nha"
+  },
+  {
+   "start_sec": 636.38,
+   "end_sec": 639.83,
+   "text": "Rồi, thì sẵn ra một số cái để mình thấy ha"
+  },
+  {
+   "start_sec": 639.83,
+   "end_sec": 641.9,
+   "text": "OK"
+  },
+  {
+   "start_sec": 641.9,
+   "end_sec": 643.9,
+   "text": "Kiểu đét"
+  },
+  {
+   "start_sec": 643.9,
+   "end_sec": 644.9,
+   "text": "14"
+  },
+  {
+   "start_sec": 644.9,
+   "end_sec": 647.02,
+   "text": "Thôi, tôi đổi suy đét 2 đi ha"
+  },
+  {
+   "start_sec": 647.02,
+   "end_sec": 649.02,
+   "text": "Cho anh khỏi lại lại, lo xóm đi"
+  },
+  {
+   "start_sec": 649.02,
+   "end_sec": 650.02,
+   "text": "Mệt quá"
+  },
+  {
+   "start_sec": 650.02,
+   "end_sec": 652.02,
+   "text": "Ừ, nó vẫn bị"
+  },
+  {
+   "start_sec": 652.02,
+   "end_sec": 654.63,
+   "text": "Kiểu đét"
+  },
+  {
+   "start_sec": 654.63,
+   "end_sec": 657.46,
+   "text": "Kiểu đét"
+  },
+  {
+   "start_sec": 657.46,
+   "end_sec": 659.46,
+   "text": "Không thể con vật từ kiểu đét"
+  },
+  {
+   "start_sec": 659.46,
+   "end_sec": 660.46,
+   "text": "System"
+  },
+  {
+   "start_sec": 660.46,
+   "end_sec": 669.98,
+   "text": "Declare"
+  },
+  {
+   "start_sec": 669.98,
+   "end_sec": 670.98,
+   "text": "Ha"
+  },
+  {
+   "start_sec": 670.98,
+   "end_sec": 672.01,
+   "text": "Declare"
+  },
+  {
+   "start_sec": 672.01,
+   "end_sec": 674.01,
+   "text": "Không, để tôi thử làm cái con set lại"
+  },
+  {
+   "start_sec": 674.01,
+   "end_sec": 675.39,
+   "text": "Ha"
+  },
+  {
+   "start_sec": 675.39,
+   "end_sec": 676.39,
+   "text": "Cộng đét"
+  },
+  {
+   "start_sec": 676.39,
+   "end_sec": 677.39,
+   "text": "Bằng thử ha"
+  },
+  {
+   "start_sec": 677.39,
+   "end_sec": 678.39,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 678.39,
+   "end_sec": 681.03,
+   "text": "Coi thấy có lỗi gì không"
+  },
+  {
+   "start_sec": 681.03,
+   "end_sec": 682.03,
+   "text": "Đấy"
+  },
+  {
+   "start_sec": 682.03,
+   "end_sec": 684.03,
+   "text": "Ồ, không có gán cái giá trị trực tiếp vô thôi ha"
+  },
+  {
+   "start_sec": 684.03,
+   "end_sec": 685.03,
+   "text": "Thì còn"
+  },
+  {
+   "start_sec": 685.03,
+   "end_sec": 688.03,
+   "text": "Đấy, đâu có ảnh hưởng gì cái kiểu đét thay thôi ha"
+  },
+  {
+   "start_sec": 688.03,
+   "end_sec": 689.9,
+   "text": "Rồi"
+  },
+  {
+   "start_sec": 689.9,
+   "end_sec": 691.76,
+   "text": "Rồi, go ha"
+  },
+  {
+   "start_sec": 691.76,
+   "end_sec": 692.76,
+   "text": "Rồi, thôi"
+  },
+  {
+   "start_sec": 692.76,
+   "end_sec": 693.76,
+   "text": "Đây là cái kiểu ngày tháng ha"
+  },
+  {
+   "start_sec": 693.76,
+   "end_sec": 696.76,
+   "text": "Một bí dụ nữa về kiểu ngày tháng cho các bạn, cho bạn xem"
+  },
+  {
+   "start_sec": 696.76,
+   "end_sec": 699.76,
+   "text": "Rồi, tương tự các bạn có thể một cái kiểu"
+  },
+  {
+   "start_sec": 699.76,
+   "end_sec": 700.76,
+   "text": "Ha"
+  },
+  {
+   "start_sec": 700.76,
+   "end_sec": 702.76,
+   "text": "Kiểu dữ liệu mình có thể mình khai báo một cái bảng ha"
+  },
+  {
+   "start_sec": 702.76,
+   "end_sec": 704.76,
+   "text": "Thì cái này mai mốt mình làm các cái function"
+  },
+  {
+   "start_sec": 704.76,
+   "end_sec": 705.76,
+   "text": "Mình cũng có rất nhiều ha"
+  },
+  {
+   "start_sec": 705.76,
+   "end_sec": 707.76,
+   "text": "Tôi tạo đại một cái bảng"
+  },
+  {
+   "start_sec": 707.76,
+   "end_sec": 708.76,
+   "text": "Cái bảng này đặc biệt lắm"
+  },
+  {
+   "start_sec": 708.76,
+   "end_sec": 709.76,
+   "text": "Bảng này là dùng để bảng tạm"
+  },
+  {
+   "start_sec": 709.76,
+   "end_sec": 710.76,
+   "text": "Để mình"
+  },
+  {
+   "start_sec": 710.76,
+   "end_sec": 711.76,
+   "text": "Sử lý tính toán sau này"
+  },
+  {
+   "start_sec": 711.76,
+   "end_sec": 712.76,
+   "text": "Chẳng hạn ha"
+  },
+  {
+   "start_sec": 712.76,
+   "end_sec": 713.76,
+   "text": "Trong cái câu lệ"
+  },
+  {
+   "start_sec": 713.76,
+   "end_sec": 714.76,
+   "text": "Trong các cái"
+  },
+  {
+   "start_sec": 714.76,
+   "end_sec": 716.76,
+   "text": "Function, storage, trigger gì đó vấn vấn"
+  },
+  {
+   "start_sec": 716.76,
+   "end_sec": 717.76,
+   "text": "Để mình tính toán"
+  },
+  {
+   "start_sec": 717.76,
+   "end_sec": 718.76,
+   "text": "Mình lưu bảng tạm thôi"
+  },
+  {
+   "start_sec": 718.76,
+   "end_sec": 720.76,
+   "text": "Cái tôi không có lưu vô bảng thiệt ha"
+  },
+  {
+   "start_sec": 720.76,
+   "end_sec": 722.76,
+   "text": "Đấy, thì tôi khai báo cái cấu trúc bảng tạm này"
+  },
+  {
+   "start_sec": 723.76,
+   "end_sec": 725.76,
+   "text": "Tôi lấy đại cái cấu trúc bảng tạm này"
+  },
+  {
+   "start_sec": 725.76,
+   "end_sec": 726.76,
+   "text": "Tôi bỏ ra ha"
+  },
+  {
+   "start_sec": 726.76,
+   "end_sec": 728.76,
+   "text": "Tôi trèn đại cái cấu trúc bảng tạm"
+  },
+  {
+   "start_sec": 728.76,
+   "end_sec": 730.76,
+   "text": "Rồi, sau đó để mình làm cái gì"
+  },
+  {
+   "start_sec": 733.05,
+   "end_sec": 734.05,
+   "text": "Sau đó để tôi làm cái gì"
+  },
+  {
+   "start_sec": 734.05,
+   "end_sec": 736.05,
+   "text": "Tôi thử lý trên cái bảng tạm đó ha"
+  },
+  {
+   "start_sec": 736.05,
+   "end_sec": 738.05,
+   "text": "Tôi lấy một cái ví dụ nha"
+  },
+  {
+   "start_sec": 738.05,
+   "end_sec": 740.05,
+   "text": "Tôi lấy một cái ví dụ đối với kiểu dữ liệu ha"
+  },
+  {
+   "start_sec": 740.05,
+   "end_sec": 745.78,
+   "text": "Tôi khai báo biến bảng ha"
+  },
+  {
+   "start_sec": 745.78,
+   "end_sec": 748.78,
+   "text": "Bảng này ghi rõ là tạm luôn ha"
+  },
+  {
+   "start_sec": 748.78,
+   "end_sec": 749.78,
+   "text": "Cho nó dễ ha"
+  },
+  {
+   "start_sec": 749.78,
+   "end_sec": 751.78,
+   "text": "Declare"
+  },
+  {
+   "start_sec": 755.67,
+   "end_sec": 758.79,
+   "text": "Rồi, thì declare của mình làm cái gì"
+  },
+  {
+   "start_sec": 758.79,
+   "end_sec": 760.79,
+   "text": "Cái này ha"
+  }
+ ]
+}

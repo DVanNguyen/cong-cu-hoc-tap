@@ -24,6 +24,10 @@ class Settings(BaseModel):
     LLM_MODEL_NAME: str = os.getenv("LLM_MODEL_NAME", "gemini-1.5-flash")
     LLM_CACHE_ENABLED: bool = os.getenv("LLM_CACHE_ENABLED", "true").lower() == "true"
     
+    # Semantic Embedding (Week 3)
+    EMBEDDING_MODEL_NAME: str = os.getenv("EMBEDDING_MODEL_NAME", "BAAI/bge-m3")
+    EMBEDDING_DEVICE: str = os.getenv("EMBEDDING_DEVICE", "auto")  # "auto" | "cuda" | "cpu"
+
     # Qdrant Settings
     QDRANT_MODE: str = os.getenv("QDRANT_MODE", "memory")  # "memory" or "http://localhost:6333"
     

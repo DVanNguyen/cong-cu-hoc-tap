@@ -302,3 +302,133 @@ def align_transcript_to_slides(
             ))
 
     return aligned_notes
+
+
+# ==============================================================================
+# TUẦN 3: Windowed Non-Monotonic Viterbi trên vector đa ngôn ngữ (BGE-M3 / e5)
+# ==============================================================================
+_OVERVIEW_KEYWORDS = [
+    "tổng quan", "mục lục", "nội dung bài học", "nội dung chính",
+    "agenda", "overview", "table of contents", "outline",
+]
+
+
+def _viterbi_transition_matrix(K: int):
+    import numpy as np
+    TR = np.zeros((K, K), dtype=np.float64)
+    for j in range(K):
+        for k in range(K):
+            d = k - j
+            if d == 0:
+                c = 0.0
+            elif d == 1:
+                c = 0.05
+            elif d == 2:
+                c = 0.14
+            elif d in (-1, -2):
+                c = 0.13
+            else:
+                c = 0.32 + 0.025 * abs(d)
+            TR[j, k] = c
+    return TR
+
+
+def viterbi_from_scores(
+    score_mat,
+    start_secs: List[float],
+    is_overview: List[bool],
+    overview_penalty: float = 0.15,
+    weights=None,
+) -> List[int]:
+    """Chạy Viterbi trên ma trận điểm khớp (T, K). Trả về chỉ số trang 0-indexed."""
+    import numpy as np
+    T, K = score_mat.shape
+    C = 1.0 - score_mat.astype(np.float64)
+    if weights is not None:
+        # Câu ít thông tin (ờ, rồi, ok...) có bằng chứng yếu: giữ nguyên trang đang giảng
+        C = C * np.asarray(weights, dtype=np.float64)[:, None]
+    ov = np.array(is_overview, dtype=bool)
+    for t in range(T):
+        if start_secs[t] > 60.0:
+            C[t, ov] += overview_penalty
+
+    TR = _viterbi_transition_matrix(K)
+    D = np.zeros((T, K), dtype=np.float64)
+    bt = np.zeros((T, K), dtype=np.int32)
+    D[0] = C[0] + 0.04 * np.arange(K)
+    for t in range(1, T):
+        cand = D[t - 1][:, None] + TR          # (j, k)
+        bt[t] = np.argmin(cand, axis=0)
+        D[t] = C[t] + cand[bt[t], np.arange(K)]
+
+    path = [0] * T
+    k = int(np.argmin(D[T - 1]))
+    for t in range(T - 1, -1, -1):
+        path[t] = k
+        if t > 0:
+            k = int(bt[t, k])
+    return path
+
+
+def compute_hybrid_score_matrix(
+    transcript_segments: List[Dict[str, Any]],
+    slides: List[Dict[str, Any]],
+    semantic_weight: float = 0.75,
+):
+    import numpy as np
+    from app.services.semantic_embedder import get_semantic_embedder
+
+    u_texts = [seg.get("text", "") for seg in transcript_segments]
+    s_texts = [(sl.get("raw_text") or sl.get("slide_text") or "") for sl in slides]
+    sim = get_semantic_embedder().similarity_matrix(u_texts, s_texts)
+    score = np.zeros(sim.shape, dtype=np.float64)
+    for t, u in enumerate(u_texts):
+        for k, s in enumerate(s_texts):
+            score[t, k] = semantic_weight * float(sim[t, k]) + (1.0 - semantic_weight) * compute_token_overlap(u, s)
+    return score
+
+
+def slide_is_overview(slide: Dict[str, Any]) -> bool:
+    title = (slide.get("title") or "").lower()
+    body = (slide.get("raw_text") or slide.get("slide_text") or "").lower()[:120]
+    return any(kw in title or kw in body for kw in _OVERVIEW_KEYWORDS)
+
+
+def viterbi_semantic_alignment(
+    transcript_segments: List[Dict[str, Any]],
+    slides: List[Dict[str, Any]],
+    semantic_weight: float = 0.75,
+) -> List[Dict[str, Any]]:
+    """
+    Căn gióng cấp trang bằng Windowed Non-Monotonic Viterbi.
+    Trả về list dict: slide_page (1-indexed), semantic_score, jumped_non_linear.
+    """
+    T, K = len(transcript_segments), len(slides)
+    if T == 0 or K == 0:
+        return []
+    raw_score = compute_hybrid_score_matrix(transcript_segments, slides, semantic_weight)
+    score = raw_score.copy()
+    if T >= 30:
+        # Khử hubness theo phân vị 25 (nền background của từng slide): giảm ưu thế ảo của slide dài
+        # mà không phạt các slide thực sự đang được giảng (nằm ở phân vị cao).
+        import numpy as np
+        bg = np.percentile(score, 25, axis=0, keepdims=True)
+        score = score - bg + bg.mean()
+    weights = [
+        min(1.0, len(_extract_content_tokens(seg.get("text", ""))) / 4.0)
+        for seg in transcript_segments
+    ]
+    starts = [
+        float(s.get("start_sec", s.get("start_time_sec", 0.0))) for s in transcript_segments
+    ]
+    path = viterbi_from_scores(score, starts, [slide_is_overview(sl) for sl in slides], weights=weights)
+    results = []
+    for t in range(T):
+        k = path[t]
+        jumped = t > 0 and (path[t] < path[t - 1] or path[t] > path[t - 1] + 1)
+        results.append({
+            "slide_page": k + 1,
+            "semantic_score": round(float(raw_score[t, k]), 4),
+            "jumped_non_linear": bool(jumped),
+        })
+    return results

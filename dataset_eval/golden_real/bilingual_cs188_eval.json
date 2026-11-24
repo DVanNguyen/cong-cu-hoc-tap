@@ -1,0 +1,161 @@
+{
+  "note": "Tập tự dựng: 30 câu giảng tiếng Việt viết tay cho slide tiếng Anh cs188_sp24_lec01.pdf; không phải thu âm thật.",
+  "slide_pdf": "dataset_eval/slides/cs188_sp24_lec01.pdf",
+  "items": [
+    {
+      "id": 1,
+      "text": "Đầu tiên em xin giới thiệu thầy Cameron Allen, postdoc năm nhất, nghiên cứu về an toàn AI ở trung tâm Human-Compatible AI.",
+      "gold_slide": 3
+    },
+    {
+      "id": 2,
+      "text": "Người thứ hai là Michael Cohen, đang làm postdoc cùng giáo sư Stuart Russell và từng học PhD ở Oxford.",
+      "gold_slide": 4
+    },
+    {
+      "id": 3,
+      "text": "Về chuyện đăng ký học phần, đội giảng dạy không quyết định được, chỉ sinh viên ngành CS mới được enroll học kỳ này.",
+      "gold_slide": 8
+    },
+    {
+      "id": 4,
+      "text": "Lớp học diễn ra ở phòng Wheeler 150, thứ Ba và thứ Năm, và các bạn bắt buộc phải đến lớp trực tiếp.",
+      "gold_slide": 9
+    },
+    {
+      "id": 5,
+      "text": "Mỗi buổi sẽ có một mã điểm danh, các bạn nhập mã đó để chứng minh là có mặt trong lớp.",
+      "gold_slide": 10
+    },
+    {
+      "id": 6,
+      "text": "Sau mỗi buổi có đường link khảo sát để các bạn góp ý về bài giảng, cũng đăng trên website môn học.",
+      "gold_slide": 11
+    },
+    {
+      "id": 7,
+      "text": "Có ba loại buổi thảo luận: thảo luận thường, thảo luận ôn thi, và thảo luận dành cho sinh viên cần thêm thời gian.",
+      "gold_slide": 12
+    },
+    {
+      "id": 8,
+      "text": "Giờ office hours bạn có thể đến trực tiếp hoặc tham gia online để hỏi bài tập hay nêu vấn đề với trợ giảng.",
+      "gold_slide": 13
+    },
+    {
+      "id": 9,
+      "text": "Hãy ghi lại ngày thi: giữa kỳ vào tối thứ Ba mùng 5 tháng 3, còn thi cuối kỳ vào sáng thứ Năm ngày 9 tháng 5.",
+      "gold_slide": 14
+    },
+    {
+      "id": 10,
+      "text": "Mọi tài liệu như slide, ghi chú, video ghi hình và bài tập đều được đăng trên trang web của khóa học.",
+      "gold_slide": 15
+    },
+    {
+      "id": 11,
+      "text": "Điểm số gồm sáu project chiếm 25 phần trăm, là bài lập trình Python được chấm tự động, có thể làm theo cặp.",
+      "gold_slide": 16
+    },
+    {
+      "id": 12,
+      "text": "Chúng tôi sẽ bỏ điểm bài tập về nhà thấp nhất, và mỗi bạn có năm slip days để nộp trễ các project.",
+      "gold_slide": 17
+    },
+    {
+      "id": 13,
+      "text": "Sinh viên khuyết tật có thể đăng ký chương trình DSP của Berkeley để được hỗ trợ điều chỉnh việc học.",
+      "gold_slide": 18
+    },
+    {
+      "id": 14,
+      "text": "Về liêm chính học thuật, các bạn được thảo luận ý tưởng nhưng tuyệt đối không được sao chép bài của người khác.",
+      "gold_slide": 19
+    },
+    {
+      "id": 15,
+      "text": "Sức khỏe tinh thần quan trọng hơn môn học này, nếu cảm thấy quá tải thì hãy tìm đến các nguồn hỗ trợ.",
+      "gold_slide": 20
+    },
+    {
+      "id": 16,
+      "text": "Nửa sau buổi học hôm nay ta sẽ trả lời câu hỏi trí tuệ nhân tạo là gì và nó làm được những gì.",
+      "gold_slide": 21
+    },
+    {
+      "id": 17,
+      "text": "Vậy ta nên xây dựng loại máy nào: máy suy nghĩ như con người, suy nghĩ hợp lý, hành động như người hay hành động hợp lý?",
+      "gold_slide": 36
+    },
+    {
+      "id": 18,
+      "text": "Trong môn này từ rational mang nghĩa kỹ thuật rất cụ thể: đạt được tối đa các mục tiêu đã định sẵn.",
+      "gold_slide": 37
+    },
+    {
+      "id": 19,
+      "text": "Theo quan điểm dựa trên kỹ năng, một hệ thống chỉ thông minh nếu nó chơi được cờ vua hay học được từ kinh nghiệm.",
+      "gold_slide": 39
+    },
+    {
+      "id": 20,
+      "text": "Rodney Brooks đưa ra góc nhìn embodiment, nhấn mạnh trí thông minh gắn với cơ thể vật lý trong môi trường thật.",
+      "gold_slide": 40
+    },
+    {
+      "id": 21,
+      "text": "François Chollet thì cho rằng phải đo năng lực chứ không phải kỹ năng, trên nhiều loại nhiệm vụ khác nhau.",
+      "gold_slide": 41
+    },
+    {
+      "id": 22,
+      "text": "Stuart Russell đề xuất mục tiêu của máy là tối đa hóa độ thỏa dụng của con người, ban đầu máy không chắc về sở thích đó.",
+      "gold_slide": 42
+    },
+    {
+      "id": 23,
+      "text": "Còn bộ não thì sao? Não người ra quyết định hợp lý khá tốt nhưng không hoàn hảo, và không chia module như phần mềm.",
+      "gold_slide": 44
+    },
+    {
+      "id": 24,
+      "text": "Giai đoạn 2010 đến 2017 là thời kỳ big data, GPU và deep learning, AlexNet thắng cuộc thi ImageNet năm 2012.",
+      "gold_slide": 47
+    },
+    {
+      "id": 25,
+      "text": "Năm 2016 chương trình AlphaGo của Google đã đánh bại kỳ thủ Lee Sedol ở môn cờ vây.",
+      "gold_slide": 49
+    },
+    {
+      "id": 26,
+      "text": "Mục tiêu của khóa học là thiết kế rational agent, một thực thể cảm nhận môi trường và hành động để tối đa hóa utility kỳ vọng.",
+      "gold_slide": 55
+    },
+    {
+      "id": 27,
+      "text": "Lấy ví dụ Pac-Man là một agent: sensors nhận percepts từ environment, còn actuators thực hiện các actions.",
+      "gold_slide": 56
+    },
+    {
+      "id": 28,
+      "text": "Các thành phần cốt lõi gồm search và planning, probability và inference, reinforcement learning và supervised learning.",
+      "gold_slide": 58
+    },
+    {
+      "id": 29,
+      "text": "Bạn có nên học CS 188 không? Có, nếu muốn biết cách thiết kế rational agent, và môn này rèn thêm tư duy toán.",
+      "gold_slide": 65
+    },
+    {
+      "id": 30,
+      "text": "Cuối khóa các bạn sẽ xây dựng và hiểu toán của các agent biết học, và chọn đúng phương pháp AI cho nhiều bài toán.",
+      "gold_slide": 66
+    },
+    {
+      "id": 31,
+      "text": "Buổi sau chúng ta sẽ bắt đầu với chủ đề đầu tiên là search, tức tìm kiếm trong không gian trạng thái.",
+      "gold_slide": 67
+    }
+  ]
+}

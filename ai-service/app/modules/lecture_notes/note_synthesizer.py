@@ -1,4 +1,4 @@
-import logging
+﻿import logging
 from typing import List, Literal, Optional
 from pydantic import BaseModel, Field
 from app.llm.client import get_llm_client
@@ -10,6 +10,10 @@ logger = logging.getLogger(__name__)
 # 1. SCHEMA CHO TỔNG HỢP GHI CHÚ BÁM SLIDE (SLIDE-AWARE)
 # ==============================================================================
 class StructuredNoteBlock(BaseModel):
+    target_block_id: Optional[str] = Field(
+        default=None,
+        description="ID block trên slide (VD: slide_4_b2) mà ý này giải thích trực tiếp; null nếu giải thích chung cho cả slide"
+    )
     category: Literal["core_explanation", "worked_example", "exam_tip"] = Field(
         description="core_explanation: thầy giải thích bản chất/trực quan; worked_example: ví dụ thực tế/code; exam_tip: lưu ý dễ sai hoặc hay ra thi"
     )
@@ -40,6 +44,37 @@ Quy tắc bắt buộc:
 4. Giữ nguyên thuật ngữ chuyên ngành tiếng Anh (VD: Transaction, ACID, Heuristic, Deadlock) kèm giải thích tiếng Việt tự nhiên.
 5. Nếu trang slide này giảng viên chỉ đọc lướt hoặc không nói thêm ý mới, trả về `notes: []`.
 """
+
+
+def assign_target_blocks(slide_number: int, bullets: List[str], notes: List[StructuredNoteBlock]) -> None:
+    """
+    Gán target_block_id cho từng ghi chú: giữ ID do LLM trả về nếu hợp lệ,
+    ngược lại chọn block có cosine similarity cao nhất (BGE-M3) trong trang.
+    Quy ước block_id khớp Laravel: slide_{N}_b{i}, i từ 1; b1 ngắn (<80 ký tự) là tiêu đề.
+    """
+    if not notes or not bullets:
+        return
+    ids = [f"slide_{slide_number}_b{i}" for i in range(1, len(bullets) + 1)]
+    if len(ids) == 1:
+        for n in notes:
+            n.target_block_id = ids[0]
+        return
+    candidate_idx = [
+        i for i, b in enumerate(bullets) if not (i == 0 and len(b) < 80)
+    ] or list(range(len(bullets)))
+    todo = [n for n in notes if n.target_block_id not in ids]
+    if not todo:
+        return
+    try:
+        from app.services.semantic_embedder import get_semantic_embedder
+        sim = get_semantic_embedder().similarity_matrix(
+            [f"{n.headline} {n.content}" for n in todo],
+            [bullets[i] for i in candidate_idx],
+        )
+        for row, n in enumerate(todo):
+            n.target_block_id = ids[candidate_idx[int(sim[row].argmax())]]
+    except Exception as e:
+        logger.warning(f"Semantic block assignment failed for slide {slide_number}: {e}")
 
 
 def synthesize_slide_notes(
@@ -76,16 +111,25 @@ def synthesize_slide_notes(
             notes=[]
         )
 
+    # Tách slide thành các block có ID chuẩn slide_{N}_b{i} để đưa vào prompt cho LLM
+    from app.modules.lecture_notes.inline_block_aligner import split_slide_into_blocks
+    raw_blocks = split_slide_into_blocks(slide_number, slide_text)
+    block_lines = [f"- slide_{slide_number}_b{b.block_index} ({b.kind}): {b.text}" for b in raw_blocks]
+    blocks_str = "\n".join(block_lines) if block_lines else f"- slide_{slide_number}_b1 (heading): {slide_text[:120]}"
+
     prompt = f"""Môn học: {course_title}
 Trang Slide số: {slide_number}
 
 [NỘI DUNG SLIDE GỐC]:
 {slide_text}
 
+[DANH SÁCH CÁC BLOCK TRÊN SLIDE (dùng ID này cho target_block_id)]:
+{blocks_str}
+
 [LỜI GIẢNG CỦA GIẢNG VIÊN ĐƯỢC CĂN VÀO TRANG NÀY]:
 {full_transcript_str if full_transcript_str else "(Giảng viên không nói gì trong trang này)"}
 
-Hãy trích xuất và tổng hợp vở ghi chép thông minh theo đúng quy tắc và schema JSON yêu cầu.
+Hãy trích xuất và tổng hợp vở ghi chép thông minh theo đúng quy tắc và schema JSON yêu cầu. Với mỗi note, hãy chọn `target_block_id` khớp nhất với ý mà giảng viên đang giải thích.
 """
 
     try:
@@ -107,7 +151,11 @@ Hãy trích xuất và tổng hợp vở ghi chép thông minh theo đúng quy t
                     f"- Quote: '{note.evidence_quote}'"
                 )
 
+        if not result.cleaned_slide_bullets and raw_blocks:
+            result.cleaned_slide_bullets = [b.text for b in raw_blocks]
+
         result.notes = verified_notes
+        assign_target_blocks(slide_number, result.cleaned_slide_bullets, result.notes)
         return result
 
     except Exception as e:
@@ -239,3 +287,4 @@ Hãy nghe và biên tập lại thành vở ghi chép thông minh theo đúng sc
             technical_terms=[],
             action_items_or_tips=[]
         )
+

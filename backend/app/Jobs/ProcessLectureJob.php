@@ -182,10 +182,16 @@ class ProcessLectureJob implements ShouldQueue
                             'updated_at' => now(),
                         ]);
 
-                        // Phân bổ inline_block_notes vào các block thực tế của slide thay vì cứng nhắc b1
+                        // Gắn đúng block theo target_block_id hợp lệ; fallback b1 chỉ khi slide có 1 block
+                        $validBlocks = $slideBlocksMap[$slideNumber] ?? [];
                         $targetBlockId = "slide_{$slideNumber}_b1";
-                        if ($totalBlocks > 0) {
-                            $targetBlockId = $slideBlocksMap[$slideNumber][$nIdx % $totalBlocks];
+                        $llmTarget = $n['target_block_id'] ?? null;
+                        if ($llmTarget && in_array($llmTarget, $validBlocks, true)) {
+                            $targetBlockId = $llmTarget;
+                        } elseif ($totalBlocks > 1) {
+                            $targetBlockId = $validBlocks[min(1, $totalBlocks - 1)]; // b2: block nội dung đầu tiên
+                        } elseif ($totalBlocks === 1) {
+                            $targetBlockId = $validBlocks[0];
                         }
 
                         DB::table('inline_block_notes')->insert([

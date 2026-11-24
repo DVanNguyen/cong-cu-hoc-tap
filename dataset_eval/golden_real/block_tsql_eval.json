@@ -1,0 +1,111 @@
+{
+  "note": "Gold = chuỗi con xuất hiện trong đúng một block; block_id theo quy ước Laravel slide_{N}_b{i}.",
+  "slide_pdf": "dataset_eval/my_test/TSQL_Lecture09.pdf",
+  "items": [
+    {
+      "id": 1,
+      "slide": 3,
+      "headline": "Khối lệnh bắt đầu và kết thúc",
+      "content": "Một khối lệnh trong T-SQL bắt đầu bởi BEGIN và kết thúc bởi END, các lệnh cách nhau bằng dấu chấm phẩy.",
+      "gold_block_substring": "T-SQL tổ chức theo từng khối lệnh"
+    },
+    {
+      "id": 2,
+      "slide": 3,
+      "headline": "Cấu trúc BEGIN END mẫu",
+      "content": "Cấu trúc mẫu gồm BEGIN, phần khai báo biến, các câu lệnh T-SQL rồi END.",
+      "gold_block_substring": "Cấu trúc:"
+    },
+    {
+      "id": 3,
+      "slide": 4,
+      "headline": "Tên biến bắt đầu bằng @",
+      "content": "Mọi tên biến trong T-SQL đều phải bắt đầu bằng ký tự @, chẳng hạn @Tuoi.",
+      "gold_block_substring": "Tên biến:"
+    },
+    {
+      "id": 4,
+      "slide": 4,
+      "headline": "Kiểu dữ liệu của biến",
+      "content": "Biến dùng kiểu dữ liệu hệ thống, nhưng không được dùng kiểu text, ntext và image.",
+      "gold_block_substring": "Kiểu dữ liệu của biến"
+    },
+    {
+      "id": 5,
+      "slide": 4,
+      "headline": "Ví dụ khai báo biến",
+      "content": "Ví dụ khai báo biến Tuoi kiểu int, MSSV kiểu varchar năm ký tự và numCount kiểu int.",
+      "gold_block_substring": "DECLARE @Tuoi int"
+    },
+    {
+      "id": 6,
+      "slide": 5,
+      "headline": "Gán bằng SET",
+      "content": "Cách một là dùng lệnh SET, SET tên biến bằng giá trị.",
+      "gold_block_substring": "Cách 1"
+    },
+    {
+      "id": 7,
+      "slide": 6,
+      "headline": "Gán bằng SELECT",
+      "content": "Cách hai là dùng SELECT, SELECT tên biến bằng giá trị.",
+      "gold_block_substring": "Cách 2"
+    },
+    {
+      "id": 8,
+      "slide": 7,
+      "headline": "Gán từ dữ liệu bảng",
+      "content": "Cách ba là SELECT tên biến bằng tên cột FROM tên bảng để lấy dữ liệu từ bảng.",
+      "gold_block_substring": "Cách 3"
+    },
+    {
+      "id": 9,
+      "slide": 7,
+      "headline": "Tìm lương lớn nhất",
+      "content": "Ví dụ dùng hàm MAX trên cột Luong để tìm lương lớn nhất của nhân viên.",
+      "gold_block_substring": "Ví dụ: Tìm lương"
+    },
+    {
+      "id": 10,
+      "slide": 8,
+      "headline": "Gán ngày cố định",
+      "content": "SET biến date bằng ngày mười sáu tháng tư năm 2019.",
+      "gold_block_substring": "SET @date"
+    },
+    {
+      "id": 11,
+      "slide": 8,
+      "headline": "Ngày hiện tại bằng getdate",
+      "content": "Biến curent_date lấy ngày hiện tại bằng hàm getdate.",
+      "gold_block_substring": "@curent_date date"
+    },
+    {
+      "id": 12,
+      "slide": 8,
+      "headline": "Hạn nộp cộng hai ngày",
+      "content": "Biến duedate bằng getdate cộng hai, tức là sau hai ngày.",
+      "gold_block_substring": "@duedate date"
+    },
+    {
+      "id": 13,
+      "slide": 9,
+      "headline": "Khai báo biến table",
+      "content": "Khai báo biến kiểu table gồm hai cột course_name và course_price.",
+      "gold_block_substring": "DECLARE @TableVariable table"
+    },
+    {
+      "id": 14,
+      "slide": 9,
+      "headline": "Chèn dữ liệu vào biến table",
+      "content": "Dùng INSERT INTO biến bảng rồi SELECT name, price từ Training_Course.",
+      "gold_block_substring": "INSERT INTO"
+    },
+    {
+      "id": 15,
+      "slide": 9,
+      "headline": "Truy vấn biến table",
+      "content": "Cuối cùng SELECT course_name, course_price FROM biến bảng để xem kết quả.",
+      "gold_block_substring": "SELECT course_name, course_price FROM"
+    }
+  ]
+}

@@ -1,0 +1,166 @@
+{
+  "note": "Chuỗi tự dựng: slide 6->7->8, chèn 5 câu quay ngược Slide 3 (BEGIN...END), rồi quay lại 8->9.",
+  "slide_pdf": "dataset_eval/my_test/TSQL_Lecture09.pdf",
+  "items": [
+    {
+      "id": 1,
+      "start_sec": 0.0,
+      "end_sec": 10.0,
+      "text": "Cách thứ hai để gán giá trị cho biến là dùng lệnh SELECT, SELECT @HoTen bằng chuỗi Nguyễn Hằng Nga.",
+      "gold_slide": 6,
+      "inserted_backjump": false
+    },
+    {
+      "id": 2,
+      "start_sec": 12.0,
+      "end_sec": 22.0,
+      "text": "Kết quả giống hệt dùng SET, chỉ khác là lần này ta gán bằng câu lệnh SELECT.",
+      "gold_slide": 6,
+      "inserted_backjump": false
+    },
+    {
+      "id": 3,
+      "start_sec": 24.0,
+      "end_sec": 34.0,
+      "text": "Các em nhớ khai báo biến HoTen kiểu nvarchar hai mươi trước khi gán.",
+      "gold_slide": 6,
+      "inserted_backjump": false
+    },
+    {
+      "id": 4,
+      "start_sec": 36.0,
+      "end_sec": 46.0,
+      "text": "Cách thứ ba là gán từ dữ liệu trong bảng, SELECT biến bằng tên cột FROM tên bảng.",
+      "gold_slide": 7,
+      "inserted_backjump": false
+    },
+    {
+      "id": 5,
+      "start_sec": 48.0,
+      "end_sec": 58.0,
+      "text": "Ví dụ tìm mức lương lớn nhất của tất cả nhân viên, ta dùng hàm MAX trên cột Luong của bảng NhanVien.",
+      "gold_slide": 7,
+      "inserted_backjump": false
+    },
+    {
+      "id": 6,
+      "start_sec": 60.0,
+      "end_sec": 70.0,
+      "text": "Biến MaxSalary kiểu decimal sẽ nhận giá trị lương cao nhất đó.",
+      "gold_slide": 7,
+      "inserted_backjump": false
+    },
+    {
+      "id": 7,
+      "start_sec": 72.0,
+      "end_sec": 82.0,
+      "text": "Bây giờ sang ví dụ về biến kiểu ngày tháng, khai báo biến date rồi SET bằng ngày mười sáu tháng tư năm 2019.",
+      "gold_slide": 8,
+      "inserted_backjump": false
+    },
+    {
+      "id": 8,
+      "start_sec": 84.0,
+      "end_sec": 94.0,
+      "text": "Ta cũng có thể gán luôn lúc khai báo, curent_date bằng hàm getdate lấy ngày hiện tại.",
+      "gold_slide": 8,
+      "inserted_backjump": false
+    },
+    {
+      "id": 9,
+      "start_sec": 96.0,
+      "end_sec": 106.0,
+      "text": "Biến duedate bằng getdate cộng hai, nghĩa là hạn nộp sau ngày hiện tại hai ngày.",
+      "gold_slide": 8,
+      "inserted_backjump": false
+    },
+    {
+      "id": 10,
+      "start_sec": 108.0,
+      "end_sec": 118.0,
+      "text": "Cuối cùng SELECT ba biến này với các bí danh Date, Curent date và Due date để xem kết quả.",
+      "gold_slide": 8,
+      "inserted_backjump": false
+    },
+    {
+      "id": 11,
+      "start_sec": 120.0,
+      "end_sec": 130.0,
+      "text": "À nhắc lại một chút, quay lại khái niệm khối lệnh, T-SQL tổ chức theo từng khối lệnh.",
+      "gold_slide": 3,
+      "inserted_backjump": true
+    },
+    {
+      "id": 12,
+      "start_sec": 132.0,
+      "end_sec": 142.0,
+      "text": "Một khối lệnh bắt đầu bởi BEGIN và kết thúc bởi END, các em nhớ đóng khối bằng END.",
+      "gold_slide": 3,
+      "inserted_backjump": true
+    },
+    {
+      "id": 13,
+      "start_sec": 144.0,
+      "end_sec": 154.0,
+      "text": "Khối lệnh có thể lồng bên trong một khối lệnh khác, và các lệnh ngăn cách nhau bởi dấu chấm phẩy.",
+      "gold_slide": 3,
+      "inserted_backjump": true
+    },
+    {
+      "id": 14,
+      "start_sec": 156.0,
+      "end_sec": 166.0,
+      "text": "Bên trong BEGIN END thường có phần khai báo biến rồi mới đến các câu lệnh T-SQL.",
+      "gold_slide": 3,
+      "inserted_backjump": true
+    },
+    {
+      "id": 15,
+      "start_sec": 168.0,
+      "end_sec": 178.0,
+      "text": "Đó là cấu trúc chung của một khối lệnh, nhớ chấm phẩy cuối mỗi lệnh nhé.",
+      "gold_slide": 3,
+      "inserted_backjump": true
+    },
+    {
+      "id": 16,
+      "start_sec": 180.0,
+      "end_sec": 190.0,
+      "text": "Rồi, quay lại ví dụ ngày tháng ban nãy, các em chạy thử đoạn SELECT ba biến ngày.",
+      "gold_slide": 8,
+      "inserted_backjump": false
+    },
+    {
+      "id": 17,
+      "start_sec": 192.0,
+      "end_sec": 202.0,
+      "text": "Các em thấy cột Due date lớn hơn Curent date đúng hai ngày.",
+      "gold_slide": 8,
+      "inserted_backjump": false
+    },
+    {
+      "id": 18,
+      "start_sec": 204.0,
+      "end_sec": 214.0,
+      "text": "Tiếp theo là biến kiểu table, khai báo TableVariable gồm course_name và course_price.",
+      "gold_slide": 9,
+      "inserted_backjump": false
+    },
+    {
+      "id": 19,
+      "start_sec": 216.0,
+      "end_sec": 226.0,
+      "text": "Ta INSERT INTO biến bảng này dữ liệu SELECT name, price từ bảng Training_Course với id là một và hai.",
+      "gold_slide": 9,
+      "inserted_backjump": false
+    },
+    {
+      "id": 20,
+      "start_sec": 228.0,
+      "end_sec": 238.0,
+      "text": "Sau đó SELECT course_name, course_price từ biến bảng để xem kết quả.",
+      "gold_slide": 9,
+      "inserted_backjump": false
+    }
+  ]
+}

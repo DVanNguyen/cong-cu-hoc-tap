@@ -1,6 +1,8 @@
 import os
 import re
 import math
+import logging
+logger = logging.getLogger("pipeline_routes")
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 from typing import List, Dict, Any, Optional
@@ -860,11 +862,25 @@ def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
     if req.slide_clicks and len(req.slide_clicks) > 0:
         aligned_segments = align_transcript_with_manual_clicks(kept_segments, req.slide_clicks)
     else:
-        # Căn gióng tự động bằng Monotonic DTW (đã vá lỗi Hố đen mục lục)
-        assigned_pages = monotonic_dtw_alignment(kept_segments, slides_raw)
+        # Căn gióng tự động bằng Windowed Non-Monotonic Viterbi + embedding đa ngôn ngữ
+        alignment_method = "viterbi_bge_m3"
+        try:
+            from app.modules.lecture_notes.alignment import viterbi_semantic_alignment
+            vit = viterbi_semantic_alignment(kept_segments, slides_raw)
+            assigned_pages = [
+                int(slides_raw[v["slide_page"] - 1]["slide_number"]) for v in vit
+            ]
+            jumps = [v["jumped_non_linear"] for v in vit]
+        except Exception as e:
+            logger.warning(f"Viterbi alignment failed ({e}); fallback to monotonic DTW")
+            alignment_method = "monotonic_dtw_rapidfuzz"
+            assigned_pages = monotonic_dtw_alignment(kept_segments, slides_raw)
+            jumps = [False] * len(assigned_pages)
         for idx, seg in enumerate(kept_segments):
             page_num = assigned_pages[idx] if idx < len(assigned_pages) else 1
             item = dict(seg)
+            item["alignment_method"] = alignment_method
+            item["jumped_non_linear"] = bool(jumps[idx]) if idx < len(jumps) else False
             item["aligned_slide_number"] = page_num
             item["aligned_slide_id"] = page_num
             item["start_time_sec"] = seg.get("start_sec", 0.0)
