@@ -43,6 +43,7 @@ Route::prefix('v1')->group(function () {
     // =========================================================================
     Route::post('lectures/start-live', [StudyAiUnifiedController::class, 'startLiveLecture']);
     Route::post('lectures/{lectureId}/live-chunk', [StudyAiUnifiedController::class, 'processLiveChunk']);
+    Route::post('lectures/{lectureId}/finish-live', [StudyAiUnifiedController::class, 'finishLiveLecture']);
     Route::post('lectures/{lectureId}/blocks/{blockId}/toggle-confused', [StudyAiUnifiedController::class, 'toggleConfusedBlock']);
     Route::post('lectures/upload-pair', [StudyAiUnifiedController::class, 'uploadLecturePair']);
     Route::get('lectures/{lectureId}/inline-notes', [StudyAiUnifiedController::class, 'getLectureInlineNotes']);

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.ClickableText
 import androidx.compose.material.icons.Icons
@@ -46,6 +47,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -108,6 +110,7 @@ data class AnnotatedSlidePageUi(
 @Composable
 fun InlineSlideNoteDocumentScreen(
     pages: List<AnnotatedSlidePageUi>,
+    activeSpokenBlockId: String? = null,
     isOfflineCache: Boolean = false,
     onToggleConfusedBlock: (blockId: String) -> Unit = {},
     onPlayTimestamp: (Float) -> Unit = {},
@@ -118,8 +121,23 @@ fun InlineSlideNoteDocumentScreen(
     var activePopupConcept by remember { mutableStateOf<InlineConceptHighlight?>(null) }
     var editingNote by remember { mutableStateOf<InlineLecturerNote?>(null) }
     var editDraftText by remember { mutableStateOf("") }
+    val listState = rememberLazyListState()
+
+    // Tự động cuộn mượt tới trang slide chứa block giảng viên đang giảng (Tuần 5)
+    LaunchedEffect(activeSpokenBlockId, pages.size) {
+        if (!activeSpokenBlockId.isNullOrBlank()) {
+            val targetPageIdx = pages.indexOfFirst { page ->
+                page.blocks.any { it.blockId == activeSpokenBlockId || it.isCurrentlySpoken }
+            }
+            if (targetPageIdx >= 0) {
+                val headerOffset = if (isOfflineCache) 2 else 1
+                listState.animateScrollToItem(index = targetPageIdx + headerOffset)
+            }
+        }
+    }
 
     LazyColumn(
+        state = listState,
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background),

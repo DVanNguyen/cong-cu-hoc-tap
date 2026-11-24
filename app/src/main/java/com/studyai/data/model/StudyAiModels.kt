@@ -108,12 +108,27 @@ data class LiveChunkResponse(
 )
 
 data class InlineNoteDto(
+    val id: String? = null,
     @SerializedName("explanation_text") val explanationText: String,
     @SerializedName("raw_transcript") val rawTranscript: String? = null,
     @SerializedName("timestamp_start_sec") val timestampStartSec: Float = 0f,
     @SerializedName("timestamp_end_sec") val timestampEndSec: Float = 0f,
     @SerializedName("novelty_score") val noveltyScore: Float = 0.8f,
     @SerializedName("jumped_non_linear") val jumpedNonLinear: Boolean = false
+)
+
+data class FinishLiveLectureRequest(
+    @SerializedName("refine_full_lecture") val refineFullLecture: Boolean = false
+)
+
+data class FinishLiveLectureResponse(
+    @SerializedName("lecture_id") val lectureId: Long = 0L,
+    val status: String = "completed",
+    @SerializedName("audio_ready") val audioReady: Boolean = false,
+    @SerializedName("audio_url") val audioUrl: String? = null,
+    @SerializedName("chunks_merged") val chunksMerged: Int = 0,
+    @SerializedName("duration_sec") val durationSec: Int = 0,
+    @SerializedName("refined_queued") val refinedQueued: Boolean = false
 )
 
 data class ToggleConfusedResponse(

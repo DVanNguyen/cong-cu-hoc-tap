@@ -104,6 +104,7 @@ fun MainStudyAiScreen(
     slideVault: List<VaultSlideFileUi> = emptyList(),
     onUploadSlideToVault: (android.net.Uri) -> Unit = {},
     inlinePages: List<AnnotatedSlidePageUi> = emptyList(),
+    activeSpokenBlockId: String? = null,
     onToggleConfusedBlock: (String) -> Unit = {},
     isRecording: Boolean = false,
     recordingElapsedSec: Int = 0,
@@ -351,6 +352,7 @@ fun MainStudyAiScreen(
                                 }
                                 InlineSlideNoteDocumentScreen(
                                     pages = annotatedSlidePages,
+                                    activeSpokenBlockId = activeSpokenBlockId,
                                     isOfflineCache = isOfflineCache,
                                     onToggleConfusedBlock = { bId ->
                                         onToggleConfusedBlock(bId)
@@ -375,6 +377,7 @@ fun MainStudyAiScreen(
                                 courseName = currentCourse.name,
                                 slideVault = activeSlideVault,
                                 liveAnnotatedPages = annotatedSlidePages,
+                                activeSpokenBlockId = activeSpokenBlockId,
                                 isRecording = isRecording,
                                 recordingElapsedLabel = "%02d:%02d".format(recordingElapsedSec / 60, recordingElapsedSec % 60),
                                 isProcessingQueue = isProcessingQueue,

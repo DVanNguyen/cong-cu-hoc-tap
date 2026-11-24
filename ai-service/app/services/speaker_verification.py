@@ -164,6 +164,58 @@ class TeacherVoiceFilterService:
                 except Exception:
                     pass
 
+    def verify_short_chunk(
+        self,
+        audio_path: str,
+        teacher_embedding: List[float],
+        threshold: float = 0.35,
+    ) -> Dict[str, Any]:
+        """
+        Xác thực nhanh 1 chunk ngắn (5-10s) cho Live Slide-Follow bằng ECAPA-TDNN (~25ms).
+        Dùng ngưỡng 0.35 (nhẹ hơn 0.38 một chút để tránh cắt nhầm câu chuyển ý ngắn).
+        """
+        wav_path = None
+        should_remove = False
+        try:
+            # Nếu file đầu vào đã là WAV 16kHz mono thì đọc trực tiếp không cần gọi ffmpeg
+            if audio_path.lower().endswith(".wav"):
+                try:
+                    import soundfile as sf
+                    info = sf.info(audio_path)
+                    if info.samplerate == 16000 and info.channels == 1:
+                        wav_path = audio_path
+                except Exception:
+                    wav_path = None
+
+            if wav_path is None:
+                wav_path = convert_to_16k_mono_wav(audio_path)
+                should_remove = True
+
+            waveform, sr = load_audio_tensor(wav_path)
+            duration_sec = waveform.shape[1] / float(sr)
+            if duration_sec < 1.0:
+                return {"is_teacher": False, "similarity": 0.0, "duration_sec": round(duration_sec, 2), "reason": "too_short"}
+
+            rms = float(torch.sqrt(torch.mean(waveform ** 2)).item())
+            if rms < 1e-4:
+                return {"is_teacher": False, "similarity": 0.0, "duration_sec": round(duration_sec, 2), "reason": "silence"}
+
+            vec = self.extract_embedding_from_tensor(waveform)
+            ref = self._l2_normalize(np.array(teacher_embedding, dtype=np.float32))
+            sim = self.cosine_similarity(vec, ref)
+            return {
+                "is_teacher": bool(sim >= threshold),
+                "similarity": round(sim, 4),
+                "duration_sec": round(duration_sec, 2),
+                "reason": "verified_teacher" if sim >= threshold else "non_teacher_chatter",
+            }
+        finally:
+            if should_remove and wav_path and os.path.exists(wav_path):
+                try:
+                    os.remove(wav_path)
+                except Exception:
+                    pass
+
     def detect_teacher_intervals(
         self,
         audio_path: str,

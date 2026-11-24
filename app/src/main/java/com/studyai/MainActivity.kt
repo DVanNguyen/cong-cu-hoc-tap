@@ -88,6 +88,7 @@ class MainActivity : ComponentActivity() {
                     val selectedCourseId by viewModel.selectedCourseId.collectAsState()
                     val slideVault by viewModel.slideVault.collectAsState()
                     val inlinePages by viewModel.inlinePages.collectAsState()
+                    val activeSpokenBlockId by viewModel.activeSpokenBlockId.collectAsState()
                     val isRecording by viewModel.isRecording.collectAsState()
                     val recordingElapsedSec by viewModel.recordingElapsedSec.collectAsState()
                     val isProcessingQueue by viewModel.isProcessingQueue.collectAsState()
@@ -156,6 +157,7 @@ class MainActivity : ComponentActivity() {
                             slideVault = slideVault,
                             onUploadSlideToVault = { uri -> viewModel.uploadSlideToVault(this@MainActivity, uri) },
                             inlinePages = inlinePages,
+                            activeSpokenBlockId = activeSpokenBlockId,
                             onToggleConfusedBlock = { blockId -> viewModel.toggleConfusedBlock(blockId) },
                             isRecording = isRecording,
                             recordingElapsedSec = recordingElapsedSec,

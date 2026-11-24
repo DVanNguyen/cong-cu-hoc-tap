@@ -89,6 +89,7 @@ class StudyAiViewModel(
     // Trạng thái Thu âm Microphone
     private var audioRecorder: ChunkedAudioRecorder? = null
     private var timerJob: Job? = null
+    private val inFlightLiveChunkJobs = mutableListOf<Job>()
 
     private val _isRecording = MutableStateFlow(false)
     val isRecording: StateFlow<Boolean> = _isRecording.asStateFlow()
@@ -377,11 +378,60 @@ class StudyAiViewModel(
         }
     }
 
+    private fun persistCurrentInlinePagesToCache() {
+        val lectureId = _currentLectureId.value
+        val dtoPages = _inlinePages.value.map { page ->
+            AnnotatedSlidePageDto(
+                pageNumber = page.pageNumber,
+                slideTitle = page.slideTitle,
+                blocks = page.blocks.map { b ->
+                    SlideDocumentBlockDto(
+                        blockId = b.blockId,
+                        kind = b.kind,
+                        originalSlideText = b.originalSlideText,
+                        isCurrentlySpoken = b.isCurrentlySpoken,
+                        isMarkedConfused = b.isMarkedConfused,
+                        inlineNotes = b.inlineNotes.map { n ->
+                            InlineLecturerNoteDto(
+                                id = n.id,
+                                explanationText = n.explanationText,
+                                timestampSec = n.timestampSec,
+                                timestampLabel = n.timestampLabel,
+                            )
+                        },
+                        highlights = b.highlights.map { h ->
+                            InlineConceptHighlightDto(
+                                term = h.term,
+                                sourceType = if (h.sourceType == HighlightSourceType.PREVIOUS_LECTURE) {
+                                    "PREVIOUS_LECTURE"
+                                } else {
+                                    "ACADEMIC_INTERNET"
+                                },
+                                sourceLabel = h.sourceLabel,
+                                explanation = h.explanation,
+                            )
+                        },
+                    )
+                },
+            )
+        }
+        saveLectureOfflineCache(
+            lectureId = lectureId,
+            title = _currentLectureTitle.value,
+            inlineNotes = LectureInlineNotesResponse(
+                lectureId = lectureId,
+                title = _currentLectureTitle.value,
+                pages = dtoPages,
+                generalNotes = _generalNotes.value,
+            ),
+        )
+    }
+
     fun updateInlineNote(noteId: String, newText: String) {
         val cleaned = newText.trim()
         if (cleaned.isEmpty()) return
 
-        // Cập nhật UI ngay lập tức
+        // Cập nhật UI ngay lập tức và đồng bộ xuống cache ngoại tuyến
         _inlinePages.value = _inlinePages.value.map { page ->
             page.copy(
                 blocks = page.blocks.map { block ->
@@ -393,6 +443,7 @@ class StudyAiViewModel(
                 }
             )
         }
+        persistCurrentInlinePagesToCache()
 
         val numericId = noteId.removePrefix("note_").toLongOrNull() ?: return
         viewModelScope.launch {
@@ -404,13 +455,15 @@ class StudyAiViewModel(
                     _errorMessage.value = "Không thể lưu ghi chú lên máy chủ (${res.code()})."
                 }
             } catch (e: Exception) {
-                _errorMessage.value = "Lỗi kết nối khi cập nhật ghi chú: ${e.message}"
+                if (!_isOfflineMode.value) {
+                    _errorMessage.value = "Lỗi kết nối khi cập nhật ghi chú: ${e.message}"
+                }
             }
         }
     }
 
     fun deleteInlineNote(noteId: String) {
-        // Xóa khỏi UI ngay lập tức
+        // Xóa khỏi UI ngay lập tức và đồng bộ xuống cache ngoại tuyến
         _inlinePages.value = _inlinePages.value.map { page ->
             page.copy(
                 blocks = page.blocks.map { block ->
@@ -420,6 +473,7 @@ class StudyAiViewModel(
                 }
             )
         }
+        persistCurrentInlinePagesToCache()
 
         val numericId = noteId.removePrefix("note_").toLongOrNull() ?: return
         viewModelScope.launch {
@@ -431,7 +485,9 @@ class StudyAiViewModel(
                     _errorMessage.value = "Không thể xóa ghi chú trên máy chủ (${res.code()})."
                 }
             } catch (e: Exception) {
-                _errorMessage.value = "Lỗi kết nối khi xóa ghi chú: ${e.message}"
+                if (!_isOfflineMode.value) {
+                    _errorMessage.value = "Lỗi kết nối khi xóa ghi chú: ${e.message}"
+                }
             }
         }
     }
@@ -576,78 +632,128 @@ class StudyAiViewModel(
     }
 
     private fun uploadLiveChunk(chunkFile: File, startSec: Float) {
-        viewModelScope.launch {
-            try {
-                val reqFile = chunkFile.asRequestBody("audio/mp4".toMediaTypeOrNull())
-                val chunkPart = MultipartBody.Part.createFormData("audio_chunk", chunkFile.name, reqFile)
-                val startSecBody = startSec.toString().toRequestBody("text/plain".toMediaTypeOrNull())
-                val langBody = _languageMode.value.apiCode.toRequestBody("text/plain".toMediaTypeOrNull())
+        val job = viewModelScope.launch {
+            uploadLiveChunkSuspend(chunkFile, startSec)
+        }
+        inFlightLiveChunkJobs.add(job)
+        job.invokeOnCompletion { inFlightLiveChunkJobs.remove(job) }
+    }
 
-                val res = apiService.uploadLiveAudioChunk(
-                    lectureId = _currentLectureId.value,
-                    audioChunk = chunkPart,
-                    chunkStartSec = startSecBody,
-                    language = langBody
-                )
+    private suspend fun uploadLiveChunkSuspend(chunkFile: File, startSec: Float) {
+        try {
+            val reqFile = chunkFile.asRequestBody("audio/mp4".toMediaTypeOrNull())
+            val chunkPart = MultipartBody.Part.createFormData("audio_chunk", chunkFile.name, reqFile)
+            val startSecBody = startSec.toString().toRequestBody("text/plain".toMediaTypeOrNull())
+            val langBody = _languageMode.value.apiCode.toRequestBody("text/plain".toMediaTypeOrNull())
 
-                if (res.isSuccessful && res.body() != null) {
-                    val ev = res.body()!!
-                    _activeSpokenBlockId.value = ev.matchedBlockId
+            val res = apiService.uploadLiveAudioChunk(
+                lectureId = _currentLectureId.value,
+                audioChunk = chunkPart,
+                chunkStartSec = startSecBody,
+                language = langBody
+            )
 
-                    // Cập nhật trạng thái đang giảng và thêm note vào đúng block
-                    _inlinePages.value = _inlinePages.value.map { page ->
-                        page.copy(
-                            blocks = page.blocks.map { b ->
-                                val isNowSpoken = (b.blockId == ev.matchedBlockId)
-                                var updatedNotes = b.inlineNotes
-                                if (isNowSpoken && ev.inlineNote != null && ev.action == "attach_inline_note") {
-                                    val newNote = InlineLecturerNote(
-                                        id = "live_note_${System.currentTimeMillis()}",
-                                        explanationText = ev.inlineNote.explanationText,
-                                        timestampSec = ev.inlineNote.timestampStartSec,
-                                        timestampLabel = formatSeconds(ev.inlineNote.timestampStartSec)
-                                    )
-                                    updatedNotes = updatedNotes + newNote
-                                }
-                                var updatedHighlights = b.highlights
-                                if (isNowSpoken && !ev.newHighlights.isNullOrEmpty()) {
-                                    val newHl = ev.newHighlights.map {
-                                        InlineConceptHighlight(
-                                            term = it.term,
-                                            sourceType = if (it.sourceType.equals("previous_lecture", true))
-                                                HighlightSourceType.PREVIOUS_LECTURE else HighlightSourceType.ACADEMIC_INTERNET,
-                                            sourceLabel = it.sourceLabel,
-                                            explanation = it.explanation
-                                        )
-                                    }
-                                    updatedHighlights = updatedHighlights + newHl
-                                }
-                                b.copy(
-                                    isCurrentlySpoken = isNowSpoken,
-                                    inlineNotes = updatedNotes,
-                                    highlights = updatedHighlights
-                                )
-                            }
-                        )
-                    }
+            if (res.isSuccessful && res.body() != null) {
+                val ev = res.body()!!
+
+                // Nếu AI xác định đây là giọng sinh viên / tạp âm ngoài lề -> bỏ qua, giữ nguyên block đang sáng
+                if (ev.action == "ignored_non_teacher") {
+                    Log.d(TAG, "Chunk tại ${startSec}s bị lọc bỏ (không phải giọng giảng viên).")
+                    return
                 }
-            } catch (e: Exception) {
-                Log.e(TAG, "Lỗi uploadLiveChunk: ${e.message}")
-            } finally {
-                // Xóa file chunk sau khi upload
-                try {
-                    if (chunkFile.exists()) chunkFile.delete()
-                } catch (_: Exception) {}
+
+                if (!ev.matchedBlockId.isNullOrBlank()) {
+                    _activeSpokenBlockId.value = ev.matchedBlockId
+                }
+
+                // Cập nhật trạng thái đang giảng và thêm note vào đúng block
+                _inlinePages.value = _inlinePages.value.map { page ->
+                    page.copy(
+                        blocks = page.blocks.map { b ->
+                            val isNowSpoken = if (!ev.matchedBlockId.isNullOrBlank()) {
+                                b.blockId == ev.matchedBlockId
+                            } else {
+                                b.isCurrentlySpoken
+                            }
+                            var updatedNotes = b.inlineNotes
+                            if (b.blockId == ev.matchedBlockId && ev.inlineNote != null && ev.action == "attach_inline_note") {
+                                val newNote = InlineLecturerNote(
+                                    id = ev.inlineNote.id ?: "live_note_${System.currentTimeMillis()}",
+                                    explanationText = ev.inlineNote.explanationText,
+                                    timestampSec = ev.inlineNote.timestampStartSec,
+                                    timestampLabel = formatSeconds(ev.inlineNote.timestampStartSec)
+                                )
+                                updatedNotes = updatedNotes + newNote
+                            }
+                            var updatedHighlights = b.highlights
+                            if (b.blockId == ev.matchedBlockId && !ev.newHighlights.isNullOrEmpty()) {
+                                val newHl = ev.newHighlights.map {
+                                    InlineConceptHighlight(
+                                        term = it.term,
+                                        sourceType = if (it.sourceType.equals("previous_lecture", true))
+                                            HighlightSourceType.PREVIOUS_LECTURE else HighlightSourceType.ACADEMIC_INTERNET,
+                                        sourceLabel = it.sourceLabel,
+                                        explanation = it.explanation
+                                    )
+                                }
+                                updatedHighlights = updatedHighlights + newHl
+                            }
+                            b.copy(
+                                isCurrentlySpoken = isNowSpoken,
+                                inlineNotes = updatedNotes,
+                                highlights = updatedHighlights
+                            )
+                        }
+                    )
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Lỗi uploadLiveChunk: ${e.message}")
+        } finally {
+            try {
+                if (chunkFile.exists()) chunkFile.delete()
+            } catch (_: Exception) {}
         }
     }
 
-    fun stopLiveFollowRecording() {
+    fun stopLiveFollowRecording(refineFullLecture: Boolean = false) {
         _isRecording.value = false
         timerJob?.cancel()
         timerJob = null
+
+        var finalChunk: Pair<File, Float>? = null
         audioRecorder?.stopRecording { finalFile, startSec ->
-            uploadLiveChunk(finalFile, startSec)
+            finalChunk = finalFile to startSec
+        }
+
+        val lectureId = _currentLectureId.value
+        val pendingJobs = inFlightLiveChunkJobs.toList()
+
+        viewModelScope.launch {
+            // 1. Chờ toàn bộ chunk đang gửi hoàn tất + gửi nốt chunk cuối để không rớt câu nào
+            pendingJobs.forEach { it.join() }
+            finalChunk?.let { (file, sec) ->
+                uploadLiveChunkSuspend(file, sec)
+            }
+
+            // 2. Gọi finish-live ghép live_recording.m4a để ExoPlayer phát lại được ngay lập tức
+            try {
+                val res = apiService.finishLiveLecture(
+                    lectureId = lectureId,
+                    request = FinishLiveLectureRequest(refineFullLecture = refineFullLecture)
+                )
+                if (res.isSuccessful) {
+                    Log.i(TAG, "Đã chốt buổi Live #$lectureId: ${res.body()}")
+                } else {
+                    _errorMessage.value = "Không thể ghép file audio sau buổi Live (${res.code()})."
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Lỗi finishLiveLecture: ${e.message}")
+                _errorMessage.value = "Lỗi kết nối khi chốt buổi Live: ${e.message}"
+            } finally {
+                // 3. Tải lại danh sách note & cập nhật cache offline
+                loadLectureInlineNotes(lectureId)
+            }
         }
     }
 

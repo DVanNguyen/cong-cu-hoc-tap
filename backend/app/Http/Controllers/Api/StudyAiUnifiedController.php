@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
+use App\Jobs\ProcessLectureJob;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
@@ -292,6 +293,36 @@ class StudyAiUnifiedController extends Controller
         $startSec = (float) $request->input('chunk_start_sec', 0.0);
         $language = $request->input('language', 'auto');
 
+        // 1. Lưu chunk tạm vào storage/app/private/lectures/{id}/chunks để ghép thành audio hoàn chỉnh khi kết thúc Live
+        $chunksDir = storage_path("app/private/lectures/{$lectureId}/chunks");
+        if (!is_dir($chunksDir)) {
+            @mkdir($chunksDir, 0775, true);
+        }
+        $ext = strtolower($file->getClientOriginalExtension() ?: 'm4a');
+        $existingChunks = glob($chunksDir . DIRECTORY_SEPARATOR . 'chunk_*') ?: [];
+        $seqIdx = count($existingChunks) + 1;
+        $timeTag = str_pad((string) max(0, (int) round($startSec * 10)), 7, '0', STR_PAD_LEFT);
+        $seqTag = str_pad((string) $seqIdx, 4, '0', STR_PAD_LEFT);
+        $savedChunkPath = $chunksDir . DIRECTORY_SEPARATOR . "chunk_{$timeTag}_{$seqTag}.{$ext}";
+        $chunkBytes = file_get_contents($file->getRealPath());
+        @file_put_contents($savedChunkPath, $chunkBytes);
+
+        // 2. Lấy trang slide đang giảng gần nhất (bỏ số 1 cứng)
+        $lastSpokenBlock = DB::table('lecture_slide_blocks')
+            ->where('lecture_id', $lectureId)
+            ->whereNotNull('last_spoken_sec')
+            ->orderByDesc('last_spoken_sec')
+            ->orderByDesc('updated_at')
+            ->first();
+        $currentSlidePage = $lastSpokenBlock ? (int) $lastSpokenBlock->slide_page : 1;
+
+        // 3. Lấy mẫu giọng giảng viên của môn học (nếu đã đăng ký ở Tuần 2)
+        $vp = DB::table('lecturer_voiceprints')
+            ->where('course_id', $lecture->course_id)
+            ->latest()
+            ->first();
+        $teacherEmbJson = $vp ? (string) $vp->embedding_vector : '';
+
         $blocks = DB::table('lecture_slide_blocks')
             ->where('lecture_id', $lectureId)
             ->orderBy('slide_page')
@@ -320,23 +351,30 @@ class StudyAiUnifiedController extends Controller
         $aiUrl = env('AI_SERVICE_URL', 'http://127.0.0.1:8001');
 
         try {
-            $response = Http::timeout(30)
-                ->attach('audio_chunk', file_get_contents($file->getRealPath()), $file->getClientOriginalName() ?: 'chunk.m4a')
+            $response = Http::timeout(45)
+                ->attach('audio_chunk', $chunkBytes, $file->getClientOriginalName() ?: "chunk.{$ext}")
                 ->post("{$aiUrl}/ai/live-align-chunk", [
                     'blocks_json' => json_encode($blocksPayload),
-                    'current_slide_page' => 1,
+                    'current_slide_page' => $currentSlidePage,
                     'language' => $language,
                     'course_id' => $lecture->course_id,
                     'chunk_start_sec' => $startSec,
                     'previous_concepts_json' => json_encode($prevConcepts),
+                    'teacher_embedding_json' => $teacherEmbJson,
                 ]);
 
             if ($response->successful()) {
                 $data = $response->json();
 
+                // Nếu là tiếng sinh viên / nhiễu không phải giảng viên -> bỏ qua không lưu note & không đổi trang
+                if (($data['action'] ?? '') === 'ignored_non_teacher') {
+                    Log::info("Live chunk ignored (non-teacher) for lecture #{$lectureId} at {$startSec}s");
+                    return response()->json($data);
+                }
+
                 if (!empty($data['inline_note']) && in_array($data['action'], ['attach_inline_note', 'general_note'])) {
                     $n = $data['inline_note'];
-                    DB::table('inline_block_notes')->insert([
+                    $insertedNoteId = DB::table('inline_block_notes')->insertGetId([
                         'lecture_id' => $lectureId,
                         'block_id' => $data['matched_block_id'],
                         'explanation_text' => $n['explanation_text'] ?? '',
@@ -348,6 +386,7 @@ class StudyAiUnifiedController extends Controller
                         'created_at' => now(),
                         'updated_at' => now(),
                     ]);
+                    $data['inline_note']['id'] = (string) $insertedNoteId;
                 }
 
                 if (!empty($data['new_highlights']) && !empty($data['matched_block_id'])) {
@@ -371,7 +410,10 @@ class StudyAiUnifiedController extends Controller
                     DB::table('lecture_slide_blocks')
                         ->where('lecture_id', $lectureId)
                         ->where('block_id', $data['matched_block_id'])
-                        ->update(['last_spoken_sec' => $startSec]);
+                        ->update([
+                            'last_spoken_sec' => max($startSec, 0.01),
+                            'updated_at' => now(),
+                        ]);
                 }
 
                 return response()->json($data);
@@ -381,12 +423,138 @@ class StudyAiUnifiedController extends Controller
         }
 
         return response()->json([
-            'matched_slide_page' => 1,
+            'matched_slide_page' => $currentSlidePage,
             'matched_block_id' => null,
             'action' => 'highlight_only',
             'inline_note' => null,
             'new_highlights' => [],
             'jumped_non_linear' => false,
+        ]);
+    }
+
+    private function resolveFfmpegBinary(): string
+    {
+        $fromEnv = env('FFMPEG_BINARY', '');
+        if ($fromEnv && file_exists($fromEnv)) {
+            return $fromEnv;
+        }
+        $probe = PHP_OS_FAMILY === 'Windows' ? 'where ffmpeg 2>NUL' : 'which ffmpeg 2>/dev/null';
+        $found = trim((string) @shell_exec($probe));
+        if ($found !== '') {
+            $firstLine = trim(explode("\n", $found)[0]);
+            if (file_exists($firstLine)) {
+                return $firstLine;
+            }
+        }
+        // Fallback sang binary của imageio_ffmpeg trong Python environment
+        $pyOut = trim((string) @shell_exec('python -c "import imageio_ffmpeg; print(imageio_ffmpeg.get_ffmpeg_exe())" 2>NUL'));
+        if ($pyOut !== '' && file_exists($pyOut)) {
+            return $pyOut;
+        }
+        return 'ffmpeg';
+    }
+
+    public function finishLiveLecture(Request $request, int $lectureId)
+    {
+        $lecture = DB::table('lectures')->where('id', $lectureId)->first();
+        if (!$lecture) {
+            return response()->json(['message' => 'Không tìm thấy bài giảng.'], 404);
+        }
+
+        $refineFull = $request->boolean('refine_full_lecture', false);
+        $lectureDir = storage_path("app/private/lectures/{$lectureId}");
+        $chunksDir = $lectureDir . DIRECTORY_SEPARATOR . 'chunks';
+        $finalAudioPath = $lectureDir . DIRECTORY_SEPARATOR . 'live_recording.m4a';
+
+        $chunks = is_dir($chunksDir)
+            ? (glob($chunksDir . DIRECTORY_SEPARATOR . 'chunk_*') ?: [])
+            : [];
+        sort($chunks, SORT_STRING);
+
+        $merged = false;
+        if (count($chunks) === 1 && strtolower(pathinfo($chunks[0], PATHINFO_EXTENSION)) === 'm4a') {
+            $merged = @copy($chunks[0], $finalAudioPath);
+        } elseif (count($chunks) >= 1) {
+            if (!is_dir($lectureDir)) {
+                @mkdir($lectureDir, 0775, true);
+            }
+            $listFile = $lectureDir . DIRECTORY_SEPARATOR . 'concat_list.txt';
+            $listLines = [];
+            foreach ($chunks as $cPath) {
+                $escaped = str_replace("'", "'\\''", str_replace('\\', '/', $cPath));
+                $listLines[] = "file '{$escaped}'";
+            }
+            file_put_contents($listFile, implode("\n", $listLines));
+
+            $ffmpeg = $this->resolveFfmpegBinary();
+            $cmdCopy = sprintf(
+                '"%s" -y -f concat -safe 0 -i "%s" -c copy "%s" 2>&1',
+                $ffmpeg,
+                $listFile,
+                $finalAudioPath
+            );
+            $out = [];
+            $ret = 1;
+            @exec($cmdCopy, $out, $ret);
+
+            // Fallback re-encode AAC nếu các chunk khác container/codec (VD: .wav) hoặc -c copy lỗi
+            if ($ret !== 0 || !file_exists($finalAudioPath) || filesize($finalAudioPath) < 256) {
+                $cmdReencode = sprintf(
+                    '"%s" -y -f concat -safe 0 -i "%s" -c:a aac -b:a 96k -ar 16000 -ac 1 "%s" 2>&1',
+                    $ffmpeg,
+                    $listFile,
+                    $finalAudioPath
+                );
+                $out2 = [];
+                $ret2 = 1;
+                @exec($cmdReencode, $out2, $ret2);
+                $merged = ($ret2 === 0 && file_exists($finalAudioPath) && filesize($finalAudioPath) >= 256);
+                if (!$merged) {
+                    Log::error("ffmpeg finish-live failed for lecture #{$lectureId}: " . implode("\n", $out2));
+                }
+            } else {
+                $merged = true;
+            }
+            @unlink($listFile);
+        }
+
+        $maxSec = DB::table('inline_block_notes')
+            ->where('lecture_id', $lectureId)
+            ->max('timestamp_end_sec');
+        $estimatedDuration = max((float) ($maxSec ?? 0.0), count($chunks) * 8.0);
+
+        $updateData = [
+            'duration_sec' => (int) round($estimatedDuration),
+            'updated_at' => now(),
+        ];
+        if ($merged && file_exists($finalAudioPath)) {
+            $updateData['audio_file_path'] = $finalAudioPath;
+        }
+
+        $refinedQueued = false;
+        if ($refineFull && $merged && !empty($lecture->slide_file_path)) {
+            $updateData['status'] = 'processing';
+            $updateData['processing_status'] = 'queued';
+            $updateData['progress_percent'] = 5;
+            DB::table('lectures')->where('id', $lectureId)->update($updateData);
+            ProcessLectureJob::dispatch($lectureId, []);
+            $refinedQueued = true;
+        } else {
+            $updateData['status'] = 'completed';
+            $updateData['processing_status'] = 'completed';
+            $updateData['progress_percent'] = 100;
+            DB::table('lectures')->where('id', $lectureId)->update($updateData);
+        }
+
+        return response()->json([
+            'lecture_id' => $lectureId,
+            'status' => $refinedQueued ? 'queued_for_refinement' : 'completed',
+            'audio_ready' => $merged,
+            'audio_file_path' => $merged ? $finalAudioPath : null,
+            'audio_url' => $merged ? "/api/v1/lectures/{$lectureId}/audio" : null,
+            'chunks_merged' => count($chunks),
+            'duration_sec' => (int) round($estimatedDuration),
+            'refined_queued' => $refinedQueued,
         ]);
     }
 

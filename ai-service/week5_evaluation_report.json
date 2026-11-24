@@ -1,0 +1,267 @@
+{
+  "status": "PASSED",
+  "evaluation_name": "StudyAI Week 5 Live Slide-Follow & Real-Time Voice Filter Benchmark",
+  "metrics": {
+    "live_voice_filter": {
+      "student_chatter_rejection_pct": 100.0,
+      "student_rejected_count": "3/3",
+      "active_teacher_chunk_keep_pct": 100.0,
+      "active_teacher_kept_count": "15/15",
+      "all_non_noise_chunks_keep_pct_incl_intro": 88.24,
+      "intro_note": "0:00-0:16 là nhạc/im lặng mở đầu bài giảng trước khi giảng viên bắt đầu nói ở 0:16.",
+      "avg_verify_short_chunk_ms": 220.6,
+      "avg_student_reject_total_ms": 166.2,
+      "student_details": [
+        {
+          "interval": "35.0-39.5s",
+          "action": "ignored_non_teacher",
+          "similarity": -0.0753,
+          "latency_ms": 188.6
+        },
+        {
+          "interval": "75.0-79.5s",
+          "action": "ignored_non_teacher",
+          "similarity": -0.1765,
+          "latency_ms": 155.6
+        },
+        {
+          "interval": "115.0-119.2s",
+          "action": "ignored_non_teacher",
+          "similarity": -0.0984,
+          "latency_ms": 154.5
+        }
+      ],
+      "stream_20_chunks": [
+        {
+          "chunk": "000-008s",
+          "has_student_noise": false,
+          "is_teacher": false,
+          "similarity": 0.0756,
+          "verify_ms": 243.0
+        },
+        {
+          "chunk": "008-016s",
+          "has_student_noise": false,
+          "is_teacher": false,
+          "similarity": 0.2298,
+          "verify_ms": 218.1
+        },
+        {
+          "chunk": "016-024s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7484,
+          "verify_ms": 224.3
+        },
+        {
+          "chunk": "024-032s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7594,
+          "verify_ms": 219.0
+        },
+        {
+          "chunk": "032-040s",
+          "has_student_noise": true,
+          "is_teacher": true,
+          "similarity": 0.6594,
+          "verify_ms": 203.8
+        },
+        {
+          "chunk": "040-048s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7508,
+          "verify_ms": 216.6
+        },
+        {
+          "chunk": "048-056s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.8286,
+          "verify_ms": 209.3
+        },
+        {
+          "chunk": "056-064s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7894,
+          "verify_ms": 201.0
+        },
+        {
+          "chunk": "064-072s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.8517,
+          "verify_ms": 216.9
+        },
+        {
+          "chunk": "072-080s",
+          "has_student_noise": true,
+          "is_teacher": true,
+          "similarity": 0.5562,
+          "verify_ms": 226.7
+        },
+        {
+          "chunk": "080-088s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7994,
+          "verify_ms": 202.6
+        },
+        {
+          "chunk": "088-096s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.8083,
+          "verify_ms": 196.0
+        },
+        {
+          "chunk": "096-104s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7777,
+          "verify_ms": 195.2
+        },
+        {
+          "chunk": "104-112s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.8158,
+          "verify_ms": 218.4
+        },
+        {
+          "chunk": "112-120s",
+          "has_student_noise": true,
+          "is_teacher": true,
+          "similarity": 0.5295,
+          "verify_ms": 238.3
+        },
+        {
+          "chunk": "120-128s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7757,
+          "verify_ms": 228.8
+        },
+        {
+          "chunk": "128-136s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.8201,
+          "verify_ms": 293.6
+        },
+        {
+          "chunk": "136-144s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7937,
+          "verify_ms": 194.0
+        },
+        {
+          "chunk": "144-152s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7458,
+          "verify_ms": 225.7
+        },
+        {
+          "chunk": "152-160s",
+          "has_student_noise": false,
+          "is_teacher": true,
+          "similarity": 0.7738,
+          "verify_ms": 240.6
+        }
+      ]
+    },
+    "live_slide_tracking_tsql_8s_chunks": {
+      "total_8s_chunks": 94,
+      "windowed_bge_m3_live": {
+        "in_slide_1_9_pct": 95.74,
+        "slide_2_pct": 0.0,
+        "drift_to_slide_15_21": 0,
+        "avg_semantic_match_ms_per_chunk": 233.1,
+        "distribution": {
+          "1": 3,
+          "3": 14,
+          "4": 9,
+          "5": 5,
+          "6": 4,
+          "7": 25,
+          "8": 27,
+          "9": 3,
+          "10": 4
+        }
+      },
+      "legacy_rapidfuzz_tracker": {
+        "in_slide_1_9_pct": 74.47,
+        "drift_to_slide_15_21": 17,
+        "distribution": {
+          "1": 2,
+          "2": 15,
+          "3": 12,
+          "4": 11,
+          "5": 13,
+          "7": 4,
+          "8": 13,
+          "11": 1,
+          "12": 5,
+          "13": 1,
+          "15": 2,
+          "18": 4,
+          "19": 4,
+          "20": 3,
+          "21": 4
+        }
+      }
+    },
+    "bilingual_live_cs188_5_chunks": {
+      "accuracy_pct": 100.0,
+      "hits": "5/5",
+      "details": [
+        {
+          "gold_slide": 8,
+          "predicted_slide": 8,
+          "matched_block_id": "s8_b4",
+          "hit": true,
+          "text": "Về chuyện đăng ký học phần, đội giảng dạy không quyết định được, chỉ s"
+        },
+        {
+          "gold_slide": 9,
+          "predicted_slide": 9,
+          "matched_block_id": "s9_b2",
+          "hit": true,
+          "text": "Lớp học diễn ra ở phòng Wheeler 150, thứ Ba và thứ Năm, và các bạn bắt"
+        },
+        {
+          "gold_slide": 12,
+          "predicted_slide": 12,
+          "matched_block_id": "s12_b2",
+          "hit": true,
+          "text": "Có ba loại buổi thảo luận: thảo luận thường, thảo luận ôn thi, và thảo"
+        },
+        {
+          "gold_slide": 14,
+          "predicted_slide": 14,
+          "matched_block_id": "s14_b4",
+          "hit": true,
+          "text": "Hãy ghi lại ngày thi: giữa kỳ vào tối thứ Ba mùng 5 tháng 3, còn thi c"
+        },
+        {
+          "gold_slide": 16,
+          "predicted_slide": 16,
+          "matched_block_id": "s16_b2",
+          "hit": true,
+          "text": "Điểm số gồm sáu project chiếm 25 phần trăm, là bài lập trình Python đư"
+        }
+      ]
+    }
+  },
+  "exit_criteria_checklist": {
+    "1_dynamic_current_slide_progression": true,
+    "2_student_chatter_rejected_100pct_before_whisper": true,
+    "3_bilingual_live_5_chunks_ge_80pct": true,
+    "4_live_slide_tracking_ge_85pct_and_zero_drift_15_21": true,
+    "5_active_teacher_chunks_preserved_ge_90pct": true
+  }
+}

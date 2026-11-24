@@ -52,6 +52,7 @@ fun SlideVaultAndCaptureScreen(
     courseName: String,
     slideVault: List<VaultSlideFileUi>,
     liveAnnotatedPages: List<AnnotatedSlidePageUi>,
+    activeSpokenBlockId: String? = null,
     isRecording: Boolean,
     recordingElapsedLabel: String = "00:00",
     isProcessingQueue: Boolean = false,
@@ -152,6 +153,7 @@ fun SlideVaultAndCaptureScreen(
             Box(modifier = Modifier.weight(1f)) {
                 InlineSlideNoteDocumentScreen(
                     pages = liveAnnotatedPages,
+                    activeSpokenBlockId = activeSpokenBlockId,
                     onToggleConfusedBlock = onToggleConfusedBlock,
                 )
             }

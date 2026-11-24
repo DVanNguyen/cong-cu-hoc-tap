@@ -63,6 +63,12 @@ interface StudyAiApiService {
         @Part("language") language: RequestBody?
     ): Response<LiveChunkResponse>
 
+    @POST("api/v1/lectures/{lectureId}/finish-live")
+    suspend fun finishLiveLecture(
+        @Path("lectureId") lectureId: Long,
+        @Body request: FinishLiveLectureRequest = FinishLiveLectureRequest()
+    ): Response<FinishLiveLectureResponse>
+
     @POST("api/v1/lectures/{lectureId}/blocks/{blockId}/toggle-confused")
     suspend fun toggleConfusedBlock(
         @Path("lectureId") lectureId: Long,
