@@ -45,6 +45,7 @@ import com.studyai.ui.notes.InlineLecturerNote
 import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
 import com.studyai.ui.notes.SlideDocumentBlockUi
 import com.studyai.ui.notes.SlideUi
+import kotlinx.coroutines.launch
 
 enum class StudyAiTab(val title: String, val shortTitle: String, val icon: ImageVector) {
     NOTES("Ghi chú", "Ghi chú", Icons.Default.MenuBook),
@@ -150,6 +151,7 @@ fun MainStudyAiScreen(
 
     var selectedTab by remember { mutableStateOf(StudyAiTab.NOTES) }
     var showCourseManagerSheet by remember { mutableStateOf(false) }
+    var showServerConfigDialog by remember { mutableStateOf(false) }
 
     val activeCourseList = courseList
     val activeSlideVault = slideVault
@@ -258,6 +260,7 @@ fun MainStudyAiScreen(
                 onLanguageModeChange = onLanguageModeChange,
                 isDarkTheme = isDarkTheme,
                 onToggleDarkTheme = onToggleDarkTheme,
+                onOpenServerSettings = { showServerConfigDialog = true },
             )
         },
         bottomBar = {
@@ -470,9 +473,149 @@ fun MainStudyAiScreen(
                         onDismiss = { showCourseManagerSheet = false }
                     )
                 }
+
+                if (showServerConfigDialog) {
+                    ServerUrlConfigDialog(
+                        initialUrl = ApiClient.baseUrl,
+                        onDismiss = { showServerConfigDialog = false },
+                        onSaveUrl = { newUrl ->
+                            ApiClient.updateBaseUrl(context, newUrl)
+                            showServerConfigDialog = false
+                            onRetryLoad()
+                        }
+                    )
+                }
             }
         }
     }
+}
+
+@Composable
+private fun ServerUrlConfigDialog(
+    initialUrl: String,
+    onDismiss: () -> Unit,
+    onSaveUrl: (String) -> Unit,
+) {
+    val scope = rememberCoroutineScope()
+    var draftUrl by remember { mutableStateOf(initialUrl) }
+    var isTesting by remember { mutableStateOf(false) }
+    var testStatus by remember { mutableStateOf<String?>(null) }
+    var testPassed by remember { mutableStateOf<Boolean?>(null) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        icon = {
+            Icon(
+                imageVector = Icons.Default.Settings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary,
+            )
+        },
+        title = {
+            Text(
+                text = "Cấu hình Máy chủ StudyAI",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = "Nhập URL Ngrok mới hoặc địa chỉ IP LAN (VD: http://192.168.1.10:8000/) để đổi máy chủ ngay không cần build lại APK.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                OutlinedTextField(
+                    value = draftUrl,
+                    onValueChange = {
+                        draftUrl = it
+                        testStatus = null
+                        testPassed = null
+                    },
+                    label = { Text("Server Base URL") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(
+                        onClick = {
+                            draftUrl = ApiClient.DEFAULT_BASE_URL
+                            testStatus = null
+                            testPassed = null
+                        },
+                    ) {
+                        Text("Mặc định Ngrok", style = MaterialTheme.typography.labelSmall)
+                    }
+                    OutlinedButton(
+                        enabled = !isTesting && draftUrl.isNotBlank(),
+                        onClick = {
+                            isTesting = true
+                            testStatus = "Đang kiểm tra kết nối..."
+                            testPassed = null
+                            scope.launch {
+                                val result = ApiClient.testConnection(draftUrl)
+                                isTesting = false
+                                result.onSuccess { msg ->
+                                    testPassed = true
+                                    testStatus = msg
+                                }.onFailure { err ->
+                                    testPassed = false
+                                    testStatus = "Lỗi kết nối: ${err.localizedMessage ?: err.javaClass.simpleName}"
+                                }
+                            }
+                        },
+                    ) {
+                        Text(
+                            text = if (isTesting) "Đang thử..." else "Kiểm tra kết nối",
+                            style = MaterialTheme.typography.labelSmall,
+                        )
+                    }
+                }
+                if (!testStatus.isNullOrBlank()) {
+                    val bg = when (testPassed) {
+                        true -> MaterialTheme.colorScheme.secondaryContainer
+                        false -> MaterialTheme.colorScheme.errorContainer
+                        null -> MaterialTheme.colorScheme.surfaceVariant
+                    }
+                    val fg = when (testPassed) {
+                        true -> MaterialTheme.colorScheme.onSecondaryContainer
+                        false -> MaterialTheme.colorScheme.onErrorContainer
+                        null -> MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = bg,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text(
+                            text = testStatus!!,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = fg,
+                            fontWeight = FontWeight.SemiBold,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            Button(
+                enabled = draftUrl.isNotBlank(),
+                onClick = { onSaveUrl(draftUrl) },
+            ) {
+                Text("Lưu & Tải lại")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Hủy")
+            }
+        },
+    )
 }
 
 @Composable
@@ -485,6 +628,7 @@ private fun StudyAiTopHeader(
     onLanguageModeChange: (LectureLanguageMode) -> Unit,
     isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
+    onOpenServerSettings: () -> Unit = {},
 ) {
     var courseMenuExpanded by remember { mutableStateOf(false) }
     var langMenuExpanded by remember { mutableStateOf(false) }
@@ -673,12 +817,29 @@ private fun StudyAiTopHeader(
                     }
                 }
 
+                // Nút cấu hình Server URL động (Ngrok / LAN IP) - chống rớt demo không cần rebuild APK
+                IconButton(
+                    onClick = onOpenServerSettings,
+                    modifier = Modifier.size(34.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Cấu hình Server URL",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(19.dp),
+                    )
+                }
+
                 // Nút chuyển Light / Dark mode
-                IconButton(onClick = onToggleDarkTheme) {
+                IconButton(
+                    onClick = onToggleDarkTheme,
+                    modifier = Modifier.size(34.dp),
+                ) {
                     Icon(
                         imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = if (isDarkTheme) "Chế độ sáng" else "Chế độ tối",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.size(19.dp),
                     )
                 }
             }

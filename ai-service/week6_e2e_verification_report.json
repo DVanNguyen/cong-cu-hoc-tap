@@ -1,0 +1,80 @@
+{
+  "evaluation_name": "StudyAI Week 6 Full-Stack 5-Scenario End-to-End Verification",
+  "timestamp": "2026-11-25 01:01:05",
+  "health": {
+    "fastapi_status": 200,
+    "laravel_status": 200
+  },
+  "scenarios": {
+    "1_batch_upload_and_grounding": {
+      "passed": true,
+      "http_upload_status": 202,
+      "upload_ack_sec": 0.366,
+      "observed_statuses": [
+        "queued",
+        "running_asr",
+        "filtering_teacher_voice",
+        "aligning_slides",
+        "synthesizing_notes",
+        "completed"
+      ],
+      "observed_percents": [
+        5,
+        45,
+        55,
+        75,
+        90,
+        100
+      ],
+      "queue_total_sec": 194.54,
+      "slides_persisted": 23,
+      "notes_generated": 1,
+      "slides_with_notes": [
+        3
+      ],
+      "all_notes_have_evidence_quote": true,
+      "error": null
+    },
+    "2_classroom_noise_filtering": {
+      "passed": true,
+      "voiceprint_enrolled": true,
+      "embedding_dim": 192,
+      "batch_with_injected_chatter_completed": true
+    },
+    "3_bilingual_en_slide_vi_speech": {
+      "passed": true,
+      "cross_lingual_top1_pct": 96.77,
+      "synthesized_notes_count": 1,
+      "sample_note": {
+        "target_block_id": "slide_16_b3",
+        "category": "exam_tip",
+        "headline": "Lưu ý về Autograder và làm Project theo cặp",
+        "content": "Hệ thống Autograder kiểm tra các test case Python rất chặt chẽ nên cần hoàn thành bài đúng hạn. Nên cân nhắc làm bài cùng partner để trao đổi và học nhanh hơn.",
+        "evidence_quote": "Các bạn chú ý nộp đúng hạn vì autograder kiểm tra test case Python rất chặt, nhưng làm theo partner sẽ học nhanh hơn.",
+        "start_time_sec": 120.0,
+        "end_time_sec": 132.0
+      }
+    },
+    "4_live_follow_and_refine_idempotent": {
+      "passed": true,
+      "student_chunk_action": "ignored_non_teacher",
+      "teacher_chunk_1_page": 1,
+      "teacher_chunk_2_page": 3,
+      "finish_live_audio_ready": true,
+      "refine_completed": true,
+      "refine_sec": 116.5,
+      "slides_count_after_refine": 23,
+      "no_duplicate_slides": true,
+      "audio_http_range_status": 206,
+      "error": null
+    },
+    "5_note_crud_and_markdown_export": {
+      "passed": true,
+      "put_note_ok": true,
+      "export_markdown_ok": true,
+      "markdown_length_chars": 3457,
+      "delete_note_ok": true
+    }
+  },
+  "status": "PASSED"
+}

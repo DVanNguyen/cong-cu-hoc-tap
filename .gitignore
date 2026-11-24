@@ -25,6 +25,7 @@ env/
 .pytest_cache/
 ai-service/.env
 ai-service/cache/
+cache/
 ai-service/pretrained_models/
 pretrained_models/
 *.png
@@ -50,5 +51,8 @@ backend/storage/framework/sessions/*
 backend/storage/framework/testing/*
 backend/storage/framework/views/*
 backend/storage/logs/*
+backend/storage/app/private/lectures/*
+backend/storage/app/public/slides/*
+backend/storage/app/public/audios/*
 
 

@@ -30,13 +30,19 @@ class CourseController extends Controller
             ->groupBy('course_id')
             ->pluck('count', 'course_id');
 
-        $data = $courses->map(function ($c) use ($lectureCounts) {
+        $slideCounts = DB::table('course_slide_vaults')
+            ->select('course_id', DB::raw('count(*) as count'))
+            ->groupBy('course_id')
+            ->pluck('count', 'course_id');
+
+        $data = $courses->map(function ($c) use ($lectureCounts, $slideCounts) {
             return [
                 'id' => (int) $c->id,
                 'code' => (string) ($c->code ?? ''),
                 'name' => (string) $c->name,
                 'lecturer' => (string) ($c->lecturer ?? ''),
                 'description' => (string) ($c->description ?? ''),
+                'slide_count' => (int) ($slideCounts[$c->id] ?? 0),
                 'lecture_count' => (int) ($lectureCounts[$c->id] ?? 0),
                 'created_at' => (string) $c->created_at,
                 'updated_at' => (string) $c->updated_at,
@@ -78,19 +84,19 @@ class CourseController extends Controller
         ]);
 
         $course = DB::table('courses')->where('id', $courseId)->first();
+        $payload = [
+            'id' => (int) $course->id,
+            'code' => (string) ($course->code ?? ''),
+            'name' => (string) $course->name,
+            'lecturer' => (string) ($course->lecturer ?? ''),
+            'description' => (string) ($course->description ?? ''),
+            'slide_count' => 0,
+            'lecture_count' => 0,
+            'created_at' => (string) $course->created_at,
+            'updated_at' => (string) $course->updated_at,
+        ];
 
-        return response()->json([
-            'course' => [
-                'id' => (int) $course->id,
-                'code' => (string) ($course->code ?? ''),
-                'name' => (string) $course->name,
-                'lecturer' => (string) ($course->lecturer ?? ''),
-                'description' => (string) ($course->description ?? ''),
-                'lecture_count' => 0,
-                'created_at' => (string) $course->created_at,
-                'updated_at' => (string) $course->updated_at,
-            ],
-        ], 201);
+        return response()->json(array_merge($payload, ['course' => $payload]), 201);
     }
 
     /**
@@ -121,19 +127,20 @@ class CourseController extends Controller
 
         $updated = DB::table('courses')->where('id', $courseId)->first();
         $lectureCount = DB::table('lectures')->where('course_id', $courseId)->count();
+        $slideCount = DB::table('course_slide_vaults')->where('course_id', $courseId)->count();
+        $payload = [
+            'id' => (int) $updated->id,
+            'code' => (string) ($updated->code ?? ''),
+            'name' => (string) $updated->name,
+            'lecturer' => (string) ($updated->lecturer ?? ''),
+            'description' => (string) ($updated->description ?? ''),
+            'slide_count' => (int) $slideCount,
+            'lecture_count' => (int) $lectureCount,
+            'created_at' => (string) $updated->created_at,
+            'updated_at' => (string) $updated->updated_at,
+        ];
 
-        return response()->json([
-            'course' => [
-                'id' => (int) $updated->id,
-                'code' => (string) ($updated->code ?? ''),
-                'name' => (string) $updated->name,
-                'lecturer' => (string) ($updated->lecturer ?? ''),
-                'description' => (string) ($updated->description ?? ''),
-                'lecture_count' => (int) $lectureCount,
-                'created_at' => (string) $updated->created_at,
-                'updated_at' => (string) $updated->updated_at,
-            ],
-        ], 200);
+        return response()->json(array_merge($payload, ['course' => $payload]), 200);
     }
 
     /**
@@ -148,6 +155,6 @@ class CourseController extends Controller
 
         DB::table('courses')->where('id', $courseId)->delete();
 
-        return response()->noContent();
+        return response()->json(['deleted' => true, 'id' => $courseId], 200);
     }
 }

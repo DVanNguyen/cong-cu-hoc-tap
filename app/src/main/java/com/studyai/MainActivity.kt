@@ -59,6 +59,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
 
+        // Nạp Server URL đã lưu trong SharedPreferences (nếu có) trước khi gọi API
+        ApiClient.init(applicationContext)
+
         // Tải dữ liệu toàn hệ thống từ 3 Trụ cột qua Backend API
         viewModel.loadAllData(courseId = 1L, lectureId = 1L)
 
