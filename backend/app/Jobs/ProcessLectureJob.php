@@ -28,6 +28,37 @@ class ProcessLectureJob implements ShouldQueue
         $this->slideClicks = $slideClicks;
     }
 
+    private function resolveLocalFilePath(?string $rawPath): string
+    {
+        $raw = trim((string) ($rawPath ?? ''));
+        if ($raw === '') {
+            return '';
+        }
+        $candidates = [
+            $raw,
+            storage_path('app/public/' . ltrim($raw, '/\\')),
+            storage_path('app/private/' . ltrim($raw, '/\\')),
+            storage_path('app/' . ltrim($raw, '/\\')),
+        ];
+        foreach ($candidates as $cand) {
+            if (file_exists($cand) && is_file($cand)) {
+                return $cand;
+            }
+        }
+        return $raw;
+    }
+
+    private function extractSlideNumberFromBlockId(?string $blockId): int
+    {
+        if (!$blockId) {
+            return 1;
+        }
+        if (preg_match('/^(?:slide_|s)(\d+)_b(\d+)$/i', $blockId, $m)) {
+            return max(1, (int) $m[1]);
+        }
+        return 1;
+    }
+
     public function handle(): void
     {
         $lecture = DB::table('lectures')->where('id', $this->lectureId)->first();
@@ -71,12 +102,15 @@ class ProcessLectureJob implements ShouldQueue
             }
         }
 
+        $resolvedSlidePath = $this->resolveLocalFilePath($lecture->slide_file_path ?? '');
+        $resolvedAudioPath = $this->resolveLocalFilePath($lecture->audio_file_path ?? '');
+
         try {
             $response = Http::timeout(1500)->post("{$aiBaseUrl}/pipeline/process-lecture", [
                 'lecture_id' => $this->lectureId,
                 'course_title' => $courseTitle,
-                'slide_path' => $lecture->slide_file_path,
-                'audio_path' => $lecture->audio_file_path,
+                'slide_path' => $resolvedSlidePath,
+                'audio_path' => $resolvedAudioPath,
                 'language' => $lecture->language_mode ?? 'auto',
                 'slide_clicks' => $this->slideClicks,
                 'teacher_embedding' => $teacherEmbedding,
@@ -94,6 +128,89 @@ class ProcessLectureJob implements ShouldQueue
             $transcriptSegments = $result['transcript_segments'] ?? [];
 
             DB::transaction(function () use ($lecture, $slides, $transcriptSegments) {
+                // 0. Snapshot dữ liệu người dùng tự đánh dấu/chỉnh sửa trước khi dọn bản ghi Live/cũ (tránh trùng hoặc lỗi UNIQUE)
+                $confusedByPageIdx = [];
+                $confusedByPageText = [];
+                $prevConfusedBlocks = DB::table('lecture_slide_blocks')
+                    ->where('lecture_id', $this->lectureId)
+                    ->where('is_confused', true)
+                    ->get();
+                foreach ($prevConfusedBlocks as $cb) {
+                    $p = (int) $cb->slide_page;
+                    $confusedByPageIdx["{$p}_" . ((int) $cb->block_index)] = true;
+                    $normTxt = mb_strtolower(trim((string) $cb->original_slide_text));
+                    if ($normTxt !== '') {
+                        $confusedByPageText["{$p}_{$normTxt}"] = true;
+                    }
+                }
+
+                // Giữ lại các ghi chú đã được sinh viên chỉnh sửa thủ công (từ lecture_notes hoặc inline_block_notes lúc Live)
+                $preservedUserNotes = [];
+                $seenTexts = [];
+                $oldSlides = DB::table('slides')->where('lecture_id', $this->lectureId)->get();
+                $oldSlideIdMap = $oldSlides->pluck('slide_number', 'id');
+                $oldSlideIds = $oldSlides->pluck('id');
+
+                if ($oldSlideIds->isNotEmpty()) {
+                    $editedLecNotes = DB::table('lecture_notes as ln')
+                        ->leftJoin('evidences as ev', 'ln.evidence_id', '=', 'ev.id')
+                        ->whereIn('ln.slide_id', $oldSlideIds)
+                        ->where('ln.is_edited_by_user', true)
+                        ->select('ln.slide_id', 'ln.bullet_content', 'ln.term_explanations', 'ev.exact_quote', 'ev.start_time_sec', 'ev.end_time_sec')
+                        ->get();
+                    foreach ($editedLecNotes as $en) {
+                        $txt = trim((string) $en->bullet_content);
+                        if ($txt === '' || isset($seenTexts[$txt])) {
+                            continue;
+                        }
+                        $seenTexts[$txt] = true;
+                        $sNum = (int) ($oldSlideIdMap[$en->slide_id] ?? 1);
+                        $preservedUserNotes[] = [
+                            'slide_number' => $sNum,
+                            'block_id' => null,
+                            'bullet_content' => $txt,
+                            'exact_quote' => (string) ($en->exact_quote ?: $txt),
+                            'start_time_sec' => (float) ($en->start_time_sec ?? 0.0),
+                            'end_time_sec' => (float) ($en->end_time_sec ?? 0.0),
+                            'term_explanations' => $en->term_explanations ?: json_encode(['category' => 'user_edited']),
+                        ];
+                    }
+                }
+
+                $editedInlineNotes = DB::table('inline_block_notes')
+                    ->where('lecture_id', $this->lectureId)
+                    ->whereColumn('updated_at', '>', 'created_at')
+                    ->get();
+                foreach ($editedInlineNotes as $ein) {
+                    $txt = trim((string) $ein->explanation_text);
+                    if ($txt === '' || isset($seenTexts[$txt])) {
+                        continue;
+                    }
+                    $seenTexts[$txt] = true;
+                    $preservedUserNotes[] = [
+                        'slide_number' => $this->extractSlideNumberFromBlockId($ein->block_id),
+                        'block_id' => $ein->block_id,
+                        'bullet_content' => $txt,
+                        'exact_quote' => (string) ($ein->raw_transcript ?: $txt),
+                        'start_time_sec' => (float) ($ein->timestamp_start_sec ?? 0.0),
+                        'end_time_sec' => (float) ($ein->timestamp_end_sec ?? 0.0),
+                        'term_explanations' => json_encode(['category' => 'user_edited']),
+                    ];
+                }
+
+                // Dọn sạch toàn bộ bảng con cũ của bài giảng theo đúng thứ tự khóa ngoại
+                DB::table('block_concept_highlights')->where('lecture_id', $this->lectureId)->delete();
+                DB::table('inline_block_notes')->where('lecture_id', $this->lectureId)->delete();
+                DB::table('lecture_slide_blocks')->where('lecture_id', $this->lectureId)->delete();
+                DB::table('transcript_segments')->where('lecture_id', $this->lectureId)->delete();
+                DB::table('slide_alignments')->where('lecture_id', $this->lectureId)->delete();
+                DB::table('concept_occurrences')->where('lecture_id', $this->lectureId)->delete();
+                if ($oldSlideIds->isNotEmpty()) {
+                    DB::table('lecture_notes')->whereIn('slide_id', $oldSlideIds)->delete();
+                }
+                DB::table('evidences')->where('lecture_id', $this->lectureId)->delete();
+                DB::table('slides')->where('lecture_id', $this->lectureId)->delete();
+
                 // 1. Lưu từng slide và ghi chú tương ứng trước để lấy slide_id thật
                 $slideNumberToId = [];
                 $slideBlocksMap = []; // slideNumber => [blockId1, blockId2, ...]
@@ -119,7 +236,7 @@ class ProcessLectureJob implements ShouldQueue
                     ]);
                     $slideNumberToId[$slideNumber] = $slideId;
 
-                    // Lưu Slide Blocks để phục vụ Inline Viewer
+                    // Lưu Slide Blocks để phục vụ Inline Viewer (khôi phục cờ is_confused nếu sinh viên đã đánh dấu lúc Live)
                     $cleanedBullets = $s['cleaned_slide_bullets'] ?? [];
                     if (empty($cleanedBullets) && !empty($rawText)) {
                         $cleanedBullets = array_filter(array_map('trim', explode("\n", $rawText)));
@@ -129,6 +246,10 @@ class ProcessLectureJob implements ShouldQueue
                     $slideBlocksMap[$slideNumber] = [];
                     foreach ($cleanedBullets as $bText) {
                         $blockId = "slide_{$slideNumber}_b{$blockIndex}";
+                        $normBText = mb_strtolower(trim((string) $bText));
+                        $wasConfused = isset($confusedByPageText["{$slideNumber}_{$normBText}"])
+                            || isset($confusedByPageIdx["{$slideNumber}_{$blockIndex}"]);
+
                         DB::table('lecture_slide_blocks')->insert([
                             'lecture_id' => $this->lectureId,
                             'slide_page' => $slideNumber,
@@ -136,7 +257,7 @@ class ProcessLectureJob implements ShouldQueue
                             'block_id' => $blockId,
                             'kind' => ($blockIndex === 1 && strlen($bText) < 80) ? 'heading' : 'bullet',
                             'original_slide_text' => $bText,
-                            'is_confused' => false,
+                            'is_confused' => $wasConfused,
                             'last_spoken_sec' => null,
                             'created_at' => now(),
                             'updated_at' => now(),
@@ -151,26 +272,25 @@ class ProcessLectureJob implements ShouldQueue
                     foreach ($notes as $nIdx => $n) {
                         $headline = (string) ($n['headline'] ?? '');
                         $content = (string) ($n['content'] ?? '');
+                        $bulletContent = !empty($headline) ? "{$headline}: {$content}" : $content;
                         $evidenceQuote = (string) ($n['evidence_quote'] ?? '');
+                        if ($evidenceQuote === '') {
+                            $evidenceQuote = $bulletContent;
+                        }
                         $startSec = (float) ($n['start_time_sec'] ?? 0.0);
                         $endSec = (float) ($n['end_time_sec'] ?? 0.0);
 
-                        $evidenceId = null;
-                        if (!empty($evidenceQuote)) {
-                            $evidenceId = DB::table('evidences')->insertGetId([
-                                'source_type' => 'lecture_audio',
-                                'lecture_id' => $this->lectureId,
-                                'slide_id' => $slideId,
-                                'raw_message_id' => null,
-                                'exact_quote' => $evidenceQuote,
-                                'start_time_sec' => $startSec,
-                                'end_time_sec' => $endSec,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ]);
-                        }
-
-                        $bulletContent = !empty($headline) ? "{$headline}: {$content}" : $content;
+                        $evidenceId = DB::table('evidences')->insertGetId([
+                            'source_type' => 'lecture_audio',
+                            'lecture_id' => $this->lectureId,
+                            'slide_id' => $slideId,
+                            'raw_message_id' => null,
+                            'exact_quote' => $evidenceQuote,
+                            'start_time_sec' => $startSec,
+                            'end_time_sec' => $endSec,
+                            'created_at' => now(),
+                            'updated_at' => now(),
+                        ]);
 
                         DB::table('lecture_notes')->insert([
                             'slide_id' => $slideId,
@@ -189,7 +309,7 @@ class ProcessLectureJob implements ShouldQueue
                         if ($llmTarget && in_array($llmTarget, $validBlocks, true)) {
                             $targetBlockId = $llmTarget;
                         } elseif ($totalBlocks > 1) {
-                            $targetBlockId = $validBlocks[min(1, $totalBlocks - 1)]; // b2: block nội dung đầu tiên
+                            $targetBlockId = $validBlocks[min(1, $totalBlocks - 1)];
                         } elseif ($totalBlocks === 1) {
                             $targetBlockId = $validBlocks[0];
                         }
@@ -207,6 +327,59 @@ class ProcessLectureJob implements ShouldQueue
                             'updated_at' => now(),
                         ]);
                     }
+                }
+
+                // 1B. Khôi phục các ghi chú đã được sinh viên chỉnh sửa thủ công (is_edited_by_user = true)
+                foreach ($preservedUserNotes as $un) {
+                    $sNum = (int) $un['slide_number'];
+                    $slideId = $slideNumberToId[$sNum] ?? reset($slideNumberToId) ?: null;
+                    if (!$slideId) {
+                        continue;
+                    }
+                    $validBlocks = $slideBlocksMap[$sNum] ?? [];
+                    $targetBlockId = "slide_{$sNum}_b1";
+                    if (!empty($un['block_id']) && in_array($un['block_id'], $validBlocks, true)) {
+                        $targetBlockId = $un['block_id'];
+                    } elseif (count($validBlocks) > 1) {
+                        $targetBlockId = $validBlocks[1];
+                    } elseif (count($validBlocks) === 1) {
+                        $targetBlockId = $validBlocks[0];
+                    }
+
+                    $evId = DB::table('evidences')->insertGetId([
+                        'source_type' => 'lecture_audio',
+                        'lecture_id' => $this->lectureId,
+                        'slide_id' => $slideId,
+                        'raw_message_id' => null,
+                        'exact_quote' => $un['exact_quote'],
+                        'start_time_sec' => $un['start_time_sec'],
+                        'end_time_sec' => $un['end_time_sec'],
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ]);
+
+                    DB::table('lecture_notes')->insert([
+                        'slide_id' => $slideId,
+                        'evidence_id' => $evId,
+                        'bullet_content' => $un['bullet_content'],
+                        'term_explanations' => $un['term_explanations'],
+                        'is_edited_by_user' => true,
+                        'created_at' => now()->subSeconds(5),
+                        'updated_at' => now(),
+                    ]);
+
+                    DB::table('inline_block_notes')->insert([
+                        'lecture_id' => $this->lectureId,
+                        'block_id' => $targetBlockId,
+                        'explanation_text' => $un['bullet_content'],
+                        'raw_transcript' => $un['exact_quote'],
+                        'timestamp_start_sec' => $un['start_time_sec'],
+                        'timestamp_end_sec' => $un['end_time_sec'],
+                        'novelty_score' => 0.95,
+                        'jumped_non_linear' => false,
+                        'created_at' => now()->subSeconds(5),
+                        'updated_at' => now(),
+                    ]);
                 }
 
                 // 2. Lưu transcript segments với aligned_slide_id thật
