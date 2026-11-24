@@ -110,6 +110,10 @@ fun MainStudyAiScreen(
     uploadProgress: Int = 0,
     uploadStatusText: String = "",
     onAnalyzeUploadedPair: (android.net.Uri, android.net.Uri) -> Unit = { _, _ -> },
+    voiceTestResult: com.studyai.data.model.VoiceNotesTestResponse? = null,
+    isVoiceTesting: Boolean = false,
+    onTestVoiceNotes: ((android.net.Uri) -> Unit)? = null,
+    onDismissVoiceTestResult: (() -> Unit)? = null,
 ) {
     var selectedTab by remember { mutableStateOf(StudyAiTab.NOTES) }
     var showCourseManagerSheet by remember { mutableStateOf(false) }
@@ -372,7 +376,11 @@ fun MainStudyAiScreen(
                                 },
                                 onAnalyzeUploadedPair = { slideUri, audioUri ->
                                     onAnalyzeUploadedPair(slideUri, audioUri)
-                                }
+                                },
+                                voiceTestResult = voiceTestResult,
+                                isVoiceTesting = isVoiceTesting,
+                                onTestVoiceNotes = onTestVoiceNotes,
+                                onDismissVoiceTestResult = onDismissVoiceTestResult
                             )
                         }
 

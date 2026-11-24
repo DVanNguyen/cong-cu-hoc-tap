@@ -129,6 +129,17 @@ class StudyAiViewModel(
     private val _errorMessage = MutableStateFlow<String?>(null)
     val errorMessage: StateFlow<String?> = _errorMessage.asStateFlow()
 
+    // State cho tính năng kiểm thử nhanh ghi chú giọng nói (Voice Only Test)
+    private val _voiceTestResult = MutableStateFlow<VoiceNotesTestResponse?>(null)
+    val voiceTestResult: StateFlow<VoiceNotesTestResponse?> = _voiceTestResult.asStateFlow()
+
+    private val _isVoiceTesting = MutableStateFlow(false)
+    val isVoiceTesting: StateFlow<Boolean> = _isVoiceTesting.asStateFlow()
+
+    fun clearVoiceTestResult() {
+        _voiceTestResult.value = null
+    }
+
     // =========================================================================
     // HÀM XỬ LÝ MÔN HỌC (COURSES)
     // =========================================================================
@@ -516,6 +527,29 @@ class StudyAiViewModel(
                 _errorMessage.value = "Lỗi upload bài giảng: ${e.message}"
             } finally {
                 _isProcessingQueue.value = false
+            }
+        }
+    }
+
+    fun testVoiceOnlyNotes(context: Context, audioUri: Uri, title: String = "Thử nghiệm ghi chú giọng nói") {
+        viewModelScope.launch {
+            _isVoiceTesting.value = true
+            _errorMessage.value = null
+            try {
+                val audioPart = uriToMultipartPart(context, audioUri, "audio_file")
+                val titleBody = title.toRequestBody("text/plain".toMediaTypeOrNull())
+                val langBody = "vi".toRequestBody("text/plain".toMediaTypeOrNull())
+
+                val res = apiService.testVoiceNotes(audioPart, titleBody, langBody)
+                if (res.isSuccessful && res.body() != null) {
+                    _voiceTestResult.value = res.body()
+                } else {
+                    _errorMessage.value = "Lỗi khi xử lý ghi chú giọng nói: ${res.code()} - ${res.message()}"
+                }
+            } catch (e: Exception) {
+                _errorMessage.value = "Lỗi kiểm thử giọng nói: ${e.message}"
+            } finally {
+                _isVoiceTesting.value = false
             }
         }
     }

@@ -85,6 +85,14 @@ interface StudyAiApiService {
     ): Response<LectureStatusResponse>
 
     @Multipart
+    @POST("api/v1/test/voice-notes")
+    suspend fun testVoiceNotes(
+        @Part audio_file: MultipartBody.Part,
+        @Part("title") title: RequestBody? = null,
+        @Part("language") language: RequestBody? = null
+    ): Response<VoiceNotesTestResponse>
+
+    @Multipart
     @POST("api/v1/lectures/upload-pair")
     suspend fun uploadLecturePair(
         @Part("course_id") courseId: RequestBody,

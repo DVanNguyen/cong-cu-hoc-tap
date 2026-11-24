@@ -92,6 +92,8 @@ class MainActivity : ComponentActivity() {
                     val isProcessingQueue by viewModel.isProcessingQueue.collectAsState()
                     val uploadProgress by viewModel.uploadProgress.collectAsState()
                     val uploadStatusText by viewModel.uploadStatusText.collectAsState()
+                    val voiceTestResult by viewModel.voiceTestResult.collectAsState()
+                    val isVoiceTesting by viewModel.isVoiceTesting.collectAsState()
 
                     if (isLoading && slides.isEmpty() && nodes.isEmpty() && dictionaryEntries.isEmpty()) {
                         StudyAiLoadingScreen()
@@ -158,6 +160,14 @@ class MainActivity : ComponentActivity() {
                             onAnalyzeUploadedPair = { slideUri, audioUri ->
                                 viewModel.uploadAndTrackLecture(this@MainActivity, slideUri, audioUri, null, selectedLanguageMode)
                             },
+                            voiceTestResult = voiceTestResult,
+                            isVoiceTesting = isVoiceTesting,
+                            onTestVoiceNotes = { uri ->
+                                viewModel.testVoiceOnlyNotes(this@MainActivity, uri)
+                            },
+                            onDismissVoiceTestResult = {
+                                viewModel.clearVoiceTestResult()
+                            }
                         )
                     }
                 }

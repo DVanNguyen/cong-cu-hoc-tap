@@ -329,3 +329,29 @@ data class LectureStatusResponse(
     @SerializedName("error_message") val errorMessage: String? = null
 )
 
+data class VoiceNoteItemDto(
+    @SerializedName("category") val category: String = "core_concept",
+    @SerializedName("headline") val headline: String = "",
+    @SerializedName("content") val content: String = "",
+    @SerializedName("timestamp_label") val timestampLabel: String = "00:00",
+    @SerializedName("start_time_sec") val startTimeSec: Float = 0f,
+    @SerializedName("end_time_sec") val endTimeSec: Float = 0f,
+    @SerializedName("evidence_quote") val evidenceQuote: String = ""
+)
+
+data class TechnicalTermDto(
+    @SerializedName("term") val term: String = "",
+    @SerializedName("explanation") val explanation: String = ""
+)
+
+data class VoiceNotesTestResponse(
+    @SerializedName("status") val status: String = "success",
+    @SerializedName("title") val title: String = "",
+    @SerializedName("duration_sec") val durationSec: Float = 0f,
+    @SerializedName("summary") val summary: String = "",
+    @SerializedName("key_points") val keyPoints: List<VoiceNoteItemDto> = emptyList(),
+    @SerializedName("technical_terms") val technicalTerms: List<TechnicalTermDto> = emptyList(),
+    @SerializedName("action_items_or_tips") val actionItemsOrTips: List<String> = emptyList(),
+    @SerializedName("markdown_notes") val markdownNotes: String = ""
+)
+

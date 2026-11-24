@@ -145,4 +145,52 @@ class LectureUploadController extends Controller
 
         return response()->json(['ok' => true]);
     }
+
+    /**
+     * POST /api/v1/test/voice-notes
+     * Endpoint thử nghiệm: Gửi tệp voice -> Gọi FastAPI -> Nhận ngay ghi chú lời giảng
+     */
+    public function quickVoiceNotes(Request $request)
+    {
+        $validated = $request->validate([
+            'audio_file' => 'required|file|mimes:m4a,mp3,wav,aac,ogg,mp4|max:122880',
+            'title' => 'nullable|string|max:200',
+            'language' => 'nullable|in:auto,vi,en',
+        ]);
+
+        $audioFile = $request->file('audio_file');
+        $title = $validated['title'] ?? 'Bài ghi âm thử nghiệm';
+        $language = $validated['language'] ?? 'vi';
+
+        $aiBaseUrl = env('AI_SERVICE_URL', 'http://127.0.0.1:8001');
+        if (!str_contains($aiBaseUrl, '/api/v1')) {
+            $aiBaseUrl = rtrim($aiBaseUrl, '/') . '/api/v1';
+        }
+
+        try {
+            $response = \Illuminate\Support\Facades\Http::timeout(600)
+                ->attach(
+                    'audio_file',
+                    fopen($audioFile->getRealPath(), 'r'),
+                    $audioFile->getClientOriginalName()
+                )
+                ->attach('title', $title)
+                ->attach('language', $language)
+                ->post("{$aiBaseUrl}/pipeline/test-voice-notes");
+
+            if (!$response->successful()) {
+                return response()->json([
+                    'error' => 'AI Service error',
+                    'detail' => $response->body()
+                ], $response->status());
+            }
+
+            return response()->json($response->json());
+        } catch (\Throwable $e) {
+            return response()->json([
+                'error' => 'Failed to process voice notes',
+                'message' => $e->getMessage()
+            ], 500);
+        }
+    }
 }

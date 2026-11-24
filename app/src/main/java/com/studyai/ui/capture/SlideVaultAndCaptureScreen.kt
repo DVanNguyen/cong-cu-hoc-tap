@@ -22,6 +22,11 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import com.studyai.data.model.VoiceNotesTestResponse
 import com.studyai.audio.AudioLectureRecorder
 import com.studyai.ui.notes.AnnotatedSlidePageUi
 import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
@@ -57,6 +62,10 @@ fun SlideVaultAndCaptureScreen(
     onMarkCurrentBlockConfused: () -> Unit,
     onToggleConfusedBlock: (String) -> Unit,
     onAnalyzeUploadedPair: (slideUri: Uri, audioUri: Uri) -> Unit,
+    voiceTestResult: VoiceNotesTestResponse? = null,
+    isVoiceTesting: Boolean = false,
+    onTestVoiceNotes: ((Uri) -> Unit)? = null,
+    onDismissVoiceTestResult: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -419,6 +428,29 @@ fun SlideVaultAndCaptureScreen(
                     }
                 }
 
+                // Nút kiểm thử nhanh: Chỉ ghi chú từ Voice
+                OutlinedButton(
+                    onClick = {
+                        batchAudioUri?.let { onTestVoiceNotes?.invoke(it) }
+                    },
+                    enabled = batchAudioUri != null && !isVoiceTesting && !isProcessingQueue && !isDirectMicRecording,
+                    shape = RoundedCornerShape(14.dp),
+                    modifier = Modifier.fillMaxWidth().height(48.dp),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        contentColor = MaterialTheme.colorScheme.primary
+                    )
+                ) {
+                    if (isVoiceTesting) {
+                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
+                        Spacer(Modifier.width(8.dp))
+                        Text("AI đang nghe & tạo ghi chú...")
+                    } else {
+                        Icon(Icons.Default.GraphicEq, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("⚡ Thử nghiệm: Chỉ ghi chú từ Voice (Không cần Slide)")
+                    }
+                }
+
                 Spacer(Modifier.weight(1f))
 
                 val isReadyToProcess = (batchSlideUri != null) && (batchAudioUri != null) && !isProcessingQueue && !isDirectMicRecording
@@ -444,6 +476,127 @@ fun SlideVaultAndCaptureScreen(
                 }
             }
         }
+    }
+
+    if (voiceTestResult != null) {
+        val clipboardManager = LocalClipboardManager.current
+        AlertDialog(
+            onDismissRequest = { onDismissVoiceTestResult?.invoke() },
+            title = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = voiceTestResult.title.ifBlank { "Vở ghi chép từ Voice" },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 2
+                    )
+                }
+            },
+            text = {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 420.dp)
+                        .verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Column(modifier = Modifier.padding(10.dp)) {
+                            Text(
+                                text = "📌 Tóm tắt tổng quan (${voiceTestResult.durationSec.toInt()}s audio)",
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = voiceTestResult.summary,
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    if (voiceTestResult.keyPoints.isNotEmpty()) {
+                        Text(
+                            text = "💡 Các ý chính & Bài học cốt lõi:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        voiceTestResult.keyPoints.forEachIndexed { idx, kp ->
+                            Card(
+                                shape = RoundedCornerShape(8.dp),
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f))
+                            ) {
+                                Column(modifier = Modifier.padding(8.dp)) {
+                                    Text(
+                                        text = "${idx + 1}. [${kp.timestampLabel}] ${kp.headline}",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(Modifier.height(2.dp))
+                                    Text(text = kp.content, style = MaterialTheme.typography.bodySmall)
+                                    if (kp.evidenceQuote.isNotBlank()) {
+                                        Spacer(Modifier.height(4.dp))
+                                        Text(
+                                            text = "🔊 \"${kp.evidenceQuote}\"",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    if (voiceTestResult.technicalTerms.isNotEmpty()) {
+                        Text(
+                            text = "📖 Thuật ngữ chuyên ngành:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        voiceTestResult.technicalTerms.forEach { t ->
+                            Text(
+                                text = "• ${t.term}: ${t.explanation}",
+                                style = MaterialTheme.typography.bodySmall
+                            )
+                        }
+                    }
+
+                    if (voiceTestResult.actionItemsOrTips.isNotEmpty()) {
+                        Text(
+                            text = "⚠️ Dặn dò & Việc cần làm:",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold
+                        )
+                        voiceTestResult.actionItemsOrTips.forEach { a ->
+                            Text(text = "• $a", style = MaterialTheme.typography.bodySmall)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = { onDismissVoiceTestResult?.invoke() }) {
+                    Text("Đóng")
+                }
+            },
+            dismissButton = {
+                if (voiceTestResult.markdownNotes.isNotBlank()) {
+                    TextButton(onClick = {
+                        clipboardManager.setText(AnnotatedString(voiceTestResult.markdownNotes))
+                    }) {
+                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text("Sao chép Markdown")
+                    }
+                }
+            }
+        )
     }
 }
 

@@ -1,3 +1,4 @@
+import os
 import re
 import math
 from datetime import datetime, timedelta
@@ -6,7 +7,7 @@ from typing import List, Dict, Any, Optional
 from collections import deque
 import numpy as np
 from pydantic import BaseModel, Field
-from fastapi import APIRouter
+from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from rapidfuzz import fuzz
 
 from app.modules.deadline.regex_filter import is_deadline_candidate
@@ -841,5 +842,157 @@ def process_lecture_pipeline(req: ProcessLecturePipelineRequest):
         "transcript_segments": aligned_segments,
         "metadata": metadata
     }
+
+
+# ============================================================================
+# ENDPOINT KIỂM THỬ: GỬI FILE VOICE & TỔNG HỢP VỞ GHI CHÉP TỪ GIỌNG NÓI
+# ============================================================================
+class VoiceNotesPathRequest(BaseModel):
+    audio_path: str
+    title: Optional[str] = "Bài ghi âm lời giảng"
+    language: Optional[str] = "vi"
+
+
+@router.post("/test-voice-notes")
+def test_voice_notes(
+    audio_file: Optional[UploadFile] = File(None),
+    audio_path: Optional[str] = Form(None),
+    title: Optional[str] = Form(None),
+    language: Optional[str] = Form("vi")
+):
+    """
+    Endpoint thử nghiệm nhanh:
+    Gửi tệp voice (.m4a, .mp3, .wav) -> Chạy ASR Faster-Whisper nhận diện giọng nói
+    -> Gọi Gemini LLM tổng hợp vở ghi chép thông minh theo cấu trúc hoàn chỉnh.
+    """
+    import shutil
+    import tempfile
+    from app.services.asr_vad_service import SlideAwareASREngine
+    from app.modules.lecture_notes.note_synthesizer import synthesize_voice_only_notes
+
+    temp_file_created = False
+    target_audio_path = audio_path
+
+    if audio_file is not None and audio_file.filename:
+        suffix = os.path.splitext(audio_file.filename)[1] or ".m4a"
+        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+            shutil.copyfileobj(audio_file.file, tmp)
+            target_audio_path = tmp.name
+            temp_file_created = True
+
+    if not target_audio_path or not os.path.exists(target_audio_path):
+        raise HTTPException(status_code=400, detail="Không tìm thấy tệp âm thanh hợp lệ.")
+
+    try:
+        # 1. Chạy ASR nhận dạng giọng nói
+        asr_engine = SlideAwareASREngine()
+        segments, metadata = asr_engine.transcribe_with_metadata(
+            audio_path=target_audio_path,
+            slide_terms=[],
+            course_title=title or "Bài giảng",
+            language=language or "vi"
+        )
+
+        # 2. Gọi Gemini LLM tổng hợp ghi chú từ giọng nói
+        notes_res = synthesize_voice_only_notes(
+            transcript_segments=segments,
+            title_hint=title or "Bài ghi âm lời giảng"
+        )
+
+        # 3. Tạo định dạng Markdown trực quan
+        md_lines = [
+            f"# 🎙️ VỞ GHI CHÉP: {notes_res.title}",
+            "",
+            "## 📌 Tóm tắt tổng quan",
+            notes_res.summary,
+            "",
+            "## 💡 Các ý chính & Bài học cốt lõi",
+        ]
+
+        category_labels = {
+            "core_concept": "Bản chất / Khái niệm",
+            "example_code": "Ví dụ minh họa / Code",
+            "exam_tip": "Lưu ý quan trọng / Mẹo thi",
+            "announcement": "Thông báo / Bài tập",
+        }
+
+        for idx, kp in enumerate(notes_res.key_points, 1):
+            cat_name = category_labels.get(kp.category, "Kiến thức")
+            md_lines.append(f"### {idx}. [{kp.timestamp_label}] {kp.headline} *({cat_name})*")
+            md_lines.append(f"{kp.content}")
+            if kp.evidence_quote:
+                md_lines.append(f"> 🔊 *Trích nguyên văn:* \"{kp.evidence_quote}\"")
+            md_lines.append("")
+
+        if notes_res.technical_terms:
+            md_lines.append("## 📖 Thuật ngữ chuyên ngành")
+            for t in notes_res.technical_terms:
+                md_lines.append(f"- **{t.term}**: {t.explanation}")
+            md_lines.append("")
+
+        if notes_res.action_items_or_tips:
+            md_lines.append("## ⚠️ Dặn dò & Việc cần làm")
+            for item in notes_res.action_items_or_tips:
+                md_lines.append(f"- {item}")
+            md_lines.append("")
+
+        markdown_doc = "\n".join(md_lines)
+        total_duration = metadata.get("duration_sec", 0.0)
+        if total_duration == 0.0 and segments:
+            total_duration = segments[-1].get("end_sec", 0.0)
+
+        return {
+            "status": "success",
+            "title": notes_res.title,
+            "duration_sec": total_duration,
+            "summary": notes_res.summary,
+            "key_points": [p.model_dump() for p in notes_res.key_points],
+            "technical_terms": [t.model_dump() for t in notes_res.technical_terms],
+            "action_items_or_tips": notes_res.action_items_or_tips,
+            "transcript_count": len(segments),
+            "transcript_segments": segments,
+            "markdown_notes": markdown_doc
+        }
+
+    finally:
+        if temp_file_created and os.path.exists(target_audio_path):
+            try:
+                os.remove(target_audio_path)
+            except Exception:
+                pass
+
+
+@router.post("/test-voice-notes-path")
+def test_voice_notes_path(req: VoiceNotesPathRequest):
+    """Gọi thử nghiệm voice notes bằng đường dẫn tệp trên ổ cứng."""
+    if not os.path.exists(req.audio_path):
+        raise HTTPException(status_code=400, detail=f"Không tìm thấy tệp tại {req.audio_path}")
+
+    from app.services.asr_vad_service import SlideAwareASREngine
+    asr_engine = SlideAwareASREngine()
+    segments, metadata = asr_engine.transcribe_with_metadata(
+        audio_path=req.audio_path,
+        slide_terms=[],
+        course_title=req.title or "Bài giảng",
+        language=req.language or "vi"
+    )
+
+    from app.modules.lecture_notes.note_synthesizer import synthesize_voice_only_notes
+    notes_res = synthesize_voice_only_notes(
+        transcript_segments=segments,
+        title_hint=req.title or "Bài ghi âm lời giảng"
+    )
+
+    return {
+        "status": "success",
+        "title": notes_res.title,
+        "summary": notes_res.summary,
+        "key_points": [p.model_dump() for p in notes_res.key_points],
+        "technical_terms": [t.model_dump() for t in notes_res.technical_terms],
+        "action_items_or_tips": notes_res.action_items_or_tips,
+        "transcript_count": len(segments),
+        "transcript_segments": segments,
+    }
+
 
 

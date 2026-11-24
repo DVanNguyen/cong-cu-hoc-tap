@@ -6,6 +6,9 @@ from app.schemas import verify_evidence_grounding
 
 logger = logging.getLogger(__name__)
 
+# ==============================================================================
+# 1. SCHEMA CHO TỔNG HỢP GHI CHÚ BÁM SLIDE (SLIDE-AWARE)
+# ==============================================================================
 class StructuredNoteBlock(BaseModel):
     category: Literal["core_explanation", "worked_example", "exam_tip"] = Field(
         description="core_explanation: thầy giải thích bản chất/trực quan; worked_example: ví dụ thực tế/code; exam_tip: lưu ý dễ sai hoặc hay ra thi"
@@ -93,10 +96,8 @@ Hãy trích xuất và tổng hợp vở ghi chép thông minh theo đúng quy t
         verified_notes = []
         for note in result.notes:
             if not note.evidence_quote or not full_transcript_raw:
-                # Nếu không có transcript mà sinh note thì bỏ qua
                 continue
 
-            # Kiểm chứng trích dẫn bám sát transcript
             is_grounded = verify_evidence_grounding(note.evidence_quote, full_transcript_raw, threshold=70.0)
             if is_grounded:
                 verified_notes.append(note)
@@ -111,10 +112,130 @@ Hãy trích xuất và tổng hợp vở ghi chép thông minh theo đúng quy t
 
     except Exception as e:
         logger.error(f"Lỗi khi gọi LLM sinh note cho slide {slide_number}: {e}")
-        # Fallback an toàn
         cleaned_bullets = [line.strip() for line in slide_text.split("\n") if line.strip() and len(line.strip()) > 3][:6]
         return SlideSynthesisResult(
             slide_number=slide_number,
             cleaned_slide_bullets=cleaned_bullets,
             notes=[]
+        )
+
+
+# ==============================================================================
+# 2. SCHEMA & HÀM XỬ LÝ GHI CHÚ BÀI GIẢNG CHỈ TỪ GIỌNG NÓI (VOICE-ONLY TEST)
+# ==============================================================================
+class VoiceNoteItem(BaseModel):
+    category: Literal["core_concept", "example_code", "exam_tip", "announcement"] = Field(
+        description="core_concept: khái niệm/bản chất; example_code: ví dụ/minh họa; exam_tip: lưu ý/mẹo thi; announcement: dặn dò/bài tập"
+    )
+    headline: str = Field(description="Tiêu đề súc tích 4-8 từ")
+    content: str = Field(description="Nội dung viết lại mạch lạc, rõ ràng 1-3 câu")
+    timestamp_label: str = Field(description="Mốc thời gian dạng MM:SS, ví dụ '01:25'")
+    start_time_sec: float
+    end_time_sec: float
+    evidence_quote: str = Field(description="Câu trích dẫn nguyên văn từ lời nói làm bằng chứng")
+
+
+class TechnicalTermItem(BaseModel):
+    term: str = Field(description="Thuật ngữ kỹ thuật hoặc tiếng Anh chuyên ngành")
+    explanation: str = Field(description="Giải thích ngắn gọn, dễ hiểu")
+
+
+class VoiceLectureNoteResult(BaseModel):
+    title: str = Field(description="Tiêu đề ngắn gọn phản ánh đúng nội dung người nói")
+    summary: str = Field(description="Tóm tắt tổng quan 2-4 câu nội dung cốt lõi của file âm thanh")
+    key_points: List[VoiceNoteItem] = Field(description="Danh sách các ý chính, kiến thức hoặc hướng dẫn trong bài nói")
+    technical_terms: List[TechnicalTermItem] = Field(default_factory=list, description="Các thuật ngữ quan trọng nếu có")
+    action_items_or_tips: List[str] = Field(default_factory=list, description="Các lưu ý quan trọng, bài tập hoặc việc cần làm")
+
+
+VOICE_ONLY_SYSTEM_INSTRUCTION = """Bạn là trợ lý biên tập vở ghi chép học thuật thông minh từ file ghi âm giọng nói.
+Đầu vào là toàn bộ bản ghi âm lời giảng/hội thoại của người nói kèm mốc thời gian [start_sec - end_sec].
+
+Nhiệm vụ:
+1. Đặt tiêu đề (title) ngắn gọn, chuẩn xác thể hiện đúng chủ đề được nói.
+2. Viết đoạn tóm tắt (summary) 2-4 câu tổng quan nội dung chính.
+3. Trích xuất danh sách các ý kiến thức/bài giảng cốt lõi (key_points):
+   - Loại bỏ từ đệm, nói lắp ("ờ", "à", "ừ thì").
+   - Mỗi ý phải có `evidence_quote` trích nguyên văn câu nói làm bằng chứng, kèm đúng `start_time_sec`, `end_time_sec` và `timestamp_label` (định dạng MM:SS).
+   - Phân loại rõ: core_concept (khái niệm), example_code (ví dụ), exam_tip (lưu ý/mẹo), announcement (dặn dò).
+4. Liệt kê các thuật ngữ chuyên ngành (technical_terms) được nhắc tới.
+5. Liệt kê các việc cần làm / bài tập / hạn nộp / lưu ý thực hành (action_items_or_tips) nếu có.
+6. TUYỆT ĐỐI KHÔNG BỊA ĐẶT những ý người nói không đề cập. Giữ nguyên thuật ngữ tiếng Anh chuyên ngành.
+"""
+
+
+def synthesize_voice_only_notes(
+    transcript_segments: List[dict],
+    title_hint: str = ""
+) -> VoiceLectureNoteResult:
+    """
+    Nhận danh sách transcript segments từ audio, gọi Gemini LLM tổng hợp vở ghi chép hoàn chỉnh.
+    """
+    llm = get_llm_client()
+
+    if not transcript_segments:
+        return VoiceLectureNoteResult(
+            title=title_hint or "Ghi chú âm thanh",
+            summary="Không nhận diện được giọng nói trong tệp âm thanh này.",
+            key_points=[],
+            technical_terms=[],
+            action_items_or_tips=[]
+        )
+
+    # Gom transcript thành chuỗi có mốc thời gian
+    transcript_lines = []
+    combined_transcript_text = []
+    for s in transcript_segments:
+        start = float(s.get("start_sec", s.get("start_time_sec", 0.0)))
+        end = float(s.get("end_sec", s.get("end_time_sec", 0.0)))
+        txt = s.get("text", "").strip()
+        if txt:
+            m = int(start // 60)
+            sec = int(start % 60)
+            ts_label = f"{m:02d}:{sec:02d}"
+            transcript_lines.append(f"[{ts_label}] ({start:.1f}s - {end:.1f}s): {txt}")
+            combined_transcript_text.append(txt)
+
+    full_transcript_str = "\n".join(transcript_lines)
+    full_transcript_raw = " ".join(combined_transcript_text)
+
+    prompt = f"""Tiêu đề gợi ý (nếu có): {title_hint}
+
+[TOÀN BỘ TRANSCRIPT CỦA TỆP ÂM THANH]:
+{full_transcript_str}
+
+Hãy nghe và biên tập lại thành vở ghi chép thông minh theo đúng schema JSON yêu cầu.
+"""
+
+    try:
+        result = llm.generate_structured(
+            prompt,
+            VoiceLectureNoteResult,
+            system_instruction=VOICE_ONLY_SYSTEM_INSTRUCTION
+        )
+
+        # Hậu kiểm chống bịa đặt (Anti-Hallucination Gate)
+        verified_points = []
+        for point in result.key_points:
+            if not point.evidence_quote:
+                continue
+            is_grounded = verify_evidence_grounding(point.evidence_quote, full_transcript_raw, threshold=65.0)
+            if is_grounded:
+                verified_points.append(point)
+            else:
+                logger.warning(
+                    f"Loại bỏ ý bịa đặt/không khớp lời nói: '{point.headline}' - Quote: '{point.evidence_quote}'"
+                )
+
+        result.key_points = verified_points
+        return result
+
+    except Exception as e:
+        logger.error(f"Lỗi khi gọi LLM sinh voice notes: {e}")
+        return VoiceLectureNoteResult(
+            title=title_hint or "Ghi chú bài giảng",
+            summary=full_transcript_raw[:300] + ("..." if len(full_transcript_raw) > 300 else ""),
+            key_points=[],
+            technical_terms=[],
+            action_items_or_tips=[]
         )
