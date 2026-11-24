@@ -88,6 +88,13 @@ class TeacherVoiceFilterService:
             hf_token = os.getenv("HF_TOKEN", "")
             if not hf_token:
                 try:
+                    from dotenv import load_dotenv
+                    load_dotenv()
+                    hf_token = os.getenv("HF_TOKEN", "")
+                except Exception:
+                    pass
+            if not hf_token:
+                try:
                     from huggingface_hub import get_token
                     hf_token = get_token() or ""
                 except Exception:
@@ -96,15 +103,20 @@ class TeacherVoiceFilterService:
                 raise ValueError("Thiếu HF_TOKEN trong .env để tải pyannote/speaker-diarization-3.1")
             
             try:
-                self._diarizer = Pipeline.from_pretrained(
-                    "pyannote/speaker-diarization-3.1",
-                    use_auth_token=hf_token,
-                )
-            except TypeError:
-                # pyannote newer versions use token= instead of use_auth_token=
+                from huggingface_hub import login
+                login(token=hf_token, add_to_git_credential=False)
+            except Exception as e:
+                logger.warning(f"huggingface_hub login warning: {e}")
+
+            try:
                 self._diarizer = Pipeline.from_pretrained(
                     "pyannote/speaker-diarization-3.1",
                     token=hf_token,
+                )
+            except TypeError:
+                self._diarizer = Pipeline.from_pretrained(
+                    "pyannote/speaker-diarization-3.1",
+                    use_auth_token=hf_token,
                 )
             self._diarizer.to(torch.device(self.device))
             logger.info(f"Loaded pyannote speaker-diarization-3.1 on {self.device}")
