@@ -17,6 +17,21 @@ VI_STOPWORDS_ASCII = {
     "chua", "biet", "chay", "xem", "doc", "viet", "xoa", "sua", "them", "moi"
 }
 
+# Các từ tiếng Anh thông dụng thường viết HOA toàn bộ trên tiêu đề slide (TODAY, TOPICS, LECTURE...)
+# Cần loại để tránh nhận nhầm thành từ viết tắt chuyên ngành hoặc tự động IN HOA giữa câu transcript.
+COMMON_EN_UPPER_STOPWORDS = {
+    "NOTE", "NOTES", "TODAY", "WELCOME", "LECTURE", "LECTURES", "TOPICS", "TOPIC",
+    "SUMMARY", "REVIEW", "EXAMPLE", "EXAMPLES", "EXERCISE", "EXERCISES",
+    "AGENDA", "OVERVIEW", "OUTLINE", "ROADMAP", "PLAN", "GOALS", "GOAL", "RECAP",
+    "WARNING", "TIP", "TIPS", "QUIZ", "EXAM", "HOMEWORK", "PROJECT", "PROJECTS",
+    "PART", "SECTION", "CHAPTER", "SLIDE", "SLIDES", "PAGE", "INTRO", "INTRODUCTION",
+    "WHAT", "WHY", "HOW", "WHEN", "WHERE", "WHO", "THIS", "THAT", "THESE", "THOSE",
+    "WITH", "FROM", "INTO", "ONLY", "ALSO", "NEXT", "LAST", "FIRST", "SECOND", "THIRD",
+    "GOOD", "LUCK", "THANK", "THANKS", "QUESTIONS", "QUESTION", "ANSWER", "ANSWERS",
+    "READ", "WRITE", "DOING", "DONE", "MORE", "MOST", "SOME", "MANY", "MUCH", "VERY",
+    "TRUE", "FALSE", "NONE", "NULL", "TEST", "CODE", "DATA", "TYPE", "TYPES", "LIST",
+}
+
 def extract_slide_terms_and_bilingual_pairs(raw_text: str) -> Dict[str, Any]:
     """
     Trích xuất:
@@ -36,12 +51,21 @@ def extract_slide_terms_and_bilingual_pairs(raw_text: str) -> Dict[str, Any]:
         # Bỏ các từ nằm trong danh sách stopwords tiếng Việt không dấu
         if cleaned.lower() in VI_STOPWORDS_ASCII:
             return None
-        # Với từ đơn: bỏ các từ quá ngắn (< 4 ký tự) trừ khi là từ viết tắt in hoa (SQL, AI, A*)
+        # Với từ đơn: loại từ tiếng Anh thông dụng và từ quá ngắn (< 4 ký tự trừ acronym/A*)
         words = cleaned.split()
         if len(words) == 1:
+            if cleaned.upper() in COMMON_EN_UPPER_STOPWORDS:
+                return None
             if len(cleaned) < 4 and not (cleaned.isupper() and len(cleaned) >= 2) and not cleaned.endswith("*"):
                 return None
         return cleaned
+
+    all_alpha_words = re.findall(r"[A-Za-zÀ-ỹ]+", raw_text)
+    ascii_word_ratio = (
+        sum(1 for w in all_alpha_words if w.isascii()) / len(all_alpha_words)
+        if all_alpha_words else 0.0
+    )
+    is_predominantly_english = ascii_word_ratio > 0.80
 
     # 1. Bắt các thuật toán có dấu * như A*, IDA*, AO*
     for star_term in re.findall(r"\b[A-Z]{1,4}\*(?:\s+[A-Za-z]+)?\b", raw_text):
@@ -49,28 +73,50 @@ def extract_slide_terms_and_bilingual_pairs(raw_text: str) -> Dict[str, Any]:
         if c:
             domain_terms.add(c)
 
-    # 2. Bắt cặp song ngữ dạng: Cụm tiếng Việt (Cụm tiếng Anh)
-    paren_pattern = re.compile(r"([A-ZÀ-Ỹa-zà-ỹ\s]{3,45})\s*\(([A-Za-z0-9\-\*\s]{2,45})\)")
-    for vi_part, en_part in paren_pattern.findall(raw_text):
-        vi_clean = " ".join(vi_part.split()).strip(" -•:")
-        en_clean = _clean_and_validate_term(en_part)
-        if en_clean and not en_clean.isdigit():
-            domain_terms.add(en_clean)
-            if len(vi_clean) >= 3:
-                bilingual_pairs.append({"vi": vi_clean, "en": en_clean})
+    # 2. Bắt cặp song ngữ dạng: Cụm tiếng Việt (Cụm tiếng Anh) — chỉ áp dụng trên slide tiếng Việt/song ngữ
+    if not is_predominantly_english:
+        paren_pattern = re.compile(r"([A-ZÀ-Ỹa-zà-ỹ\s]{3,45})\s*\(([A-Za-z0-9\-\*\s]{2,45})\)")
+        for vi_part, en_part in paren_pattern.findall(raw_text):
+            vi_clean = " ".join(vi_part.split()).strip(" -•:")
+            en_clean = _clean_and_validate_term(en_part)
+            if en_clean and not en_clean.isdigit():
+                domain_terms.add(en_clean)
+                if len(vi_clean) >= 3:
+                    bilingual_pairs.append({"vi": vi_clean, "en": en_clean})
 
-    # 3. Bắt từ viết tắt chuyên ngành in hoa (PEAS, BFS, DFS, UCS, IDS, CSP, FIFO, LIFO...)
-    for acronym in re.findall(r"\b[A-Z]{2,8}\b", raw_text):
+    # 3. Bắt từ viết tắt chuyên ngành in hoa (giới hạn <= 6 ký tự trên slide thuần tiếng Anh)
+    acronym_re = r"\b[A-Z]{2,6}\b" if is_predominantly_english else r"\b[A-Z]{2,8}\b"
+    for acronym in re.findall(acronym_re, raw_text):
         c = _clean_and_validate_term(acronym)
         if c:
             domain_terms.add(c)
 
-    # 4. Bắt các cụm từ tiếng Anh chuyên ngành (CamelCase, Hyphenated, hoặc cụm từ ASCII)
-    for phrase in re.findall(r"\b[A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+){0,2}\b", raw_text):
-        if phrase.isascii():
-            c = _clean_and_validate_term(phrase)
-            if c:
-                domain_terms.add(c)
+    # 4. Trích xuất thuật ngữ chuyên ngành / định danh code
+    if is_predominantly_english:
+        # Slide thuần tiếng Anh (>80% ASCII): bỏ regex cụm 3 từ tự do để tránh nhiễu câu giao tiếp;
+        # chỉ giữ CamelCase, tên hàm, snake_case và thuật ngữ ghép dấu gạch nối (VD: PyTorch, T-SQL, UTF-8).
+        code_patterns = [
+            r"\b[A-Za-z]*[a-z][A-Z][A-Za-z0-9]*\b",
+            r"\b[a-zA-Z_][a-zA-Z0-9_]*\(\)",
+            r"\b[a-zA-Z]+_[a-zA-Z0-9_]+\b",
+            r"\b[A-Z0-9]+-[A-Za-z0-9]+\b",
+        ]
+        for pat in code_patterns:
+            for match in re.findall(pat, raw_text):
+                cleaned_tok = match.strip()
+                if cleaned_tok.endswith("()"):
+                    if len(cleaned_tok) >= 4:
+                        domain_terms.add(cleaned_tok)
+                else:
+                    c = _clean_and_validate_term(cleaned_tok)
+                    if c:
+                        domain_terms.add(c)
+    else:
+        for phrase in re.findall(r"\b[A-Za-z][A-Za-z\-]+(?:\s+[A-Za-z][A-Za-z\-]+){0,2}\b", raw_text):
+            if phrase.isascii():
+                c = _clean_and_validate_term(phrase)
+                if c:
+                    domain_terms.add(c)
 
     return {
         "domain_terms": sorted(domain_terms),

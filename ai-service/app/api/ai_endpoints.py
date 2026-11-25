@@ -41,17 +41,29 @@ def get_asr_engine() -> SlideAwareASREngine:
 
 
 def extract_terms_from_text(text: str) -> List[str]:
-    """Trích xuất các thuật ngữ kỹ thuật, viết tắt in hoa hoặc từ khóa nổi bật."""
+    """Trích xuất các thuật ngữ kỹ thuật, viết tắt in hoa hoặc từ khóa nổi bật (lọc từ tiếng Anh thường)."""
+    from app.services.slide_extractor import COMMON_EN_UPPER_STOPWORDS
+
     terms = set()
     # Các từ viết tắt in hoa (AI, BFS, DFS, PEAS, SQL, T-SQL, DAG, v.v.)
     acronyms = re.findall(r"\b[A-Z]{2,8}(?:\-[A-Z0-9]+)?\b", text)
-    terms.update(acronyms)
-    # Các thuật ngữ dạng Title Case
-    capitalized = re.findall(r"\b[A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*\b", text)
-    for c in capitalized:
-        if len(c) > 3 and c.lower() not in {"slide", "chapter", "trang", "bài giảng", "chương", "phần"}:
-            terms.add(c)
-    return list(terms)[:30]
+    for a in acronyms:
+        if a.upper() not in COMMON_EN_UPPER_STOPWORDS:
+            terms.add(a)
+    # Các thuật ngữ dạng Title Case / CamelCase
+    all_alpha = re.findall(r"[A-Za-zÀ-ỹ]+", text)
+    ascii_ratio = sum(1 for w in all_alpha if w.isascii()) / len(all_alpha) if all_alpha else 0.0
+    if ascii_ratio <= 0.80:
+        capitalized = re.findall(r"\b[A-Z][a-z0-9]+(?:\s+[A-Z][a-z0-9]+)*\b", text)
+        for c in capitalized:
+            if len(c) > 3 and c.upper() not in COMMON_EN_UPPER_STOPWORDS and c.lower() not in {"slide", "chapter", "trang", "bài giảng", "chương", "phần"}:
+                terms.add(c)
+    else:
+        camel_or_code = re.findall(r"\b[A-Za-z]*[a-z][A-Z][A-Za-z0-9]*\b|\b[a-zA-Z]+_[a-zA-Z0-9_]+\b", text)
+        for c in camel_or_code:
+            if len(c) >= 3 and c.upper() not in COMMON_EN_UPPER_STOPWORDS:
+                terms.add(c)
+    return sorted(terms)[:30]
 
 
 # ============================================================================

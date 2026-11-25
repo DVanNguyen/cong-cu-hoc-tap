@@ -3,6 +3,7 @@ import re
 import logging
 from typing import Any, Dict, List, Optional, Tuple
 from faster_whisper import WhisperModel
+from app.services.slide_extractor import COMMON_EN_UPPER_STOPWORDS
 
 logger = logging.getLogger("asr_vad_service")
 
@@ -58,6 +59,15 @@ SPOKEN_CS_PHRASE_FIXES: List[Tuple[str, str]] = [
 
 # Ngôn ngữ được hỗ trợ tường minh; None hoặc "auto" sẽ để Whisper tự động nhận diện
 SUPPORTED_LANGUAGES = {"vi", "en"}
+
+# Tập từ tiếng Anh phổ thông không bao giờ được tự động ép IN HOA giữa câu transcript tiếng Anh
+EN_PROSE_COLLISION_WORDS = COMMON_EN_UPPER_STOPWORDS | {
+    "BEGIN", "END", "SET", "SELECT", "FROM", "WHERE", "GROUP", "ORDER", "INTO", "WITH",
+    "WHEN", "THEN", "ELSE", "CASE", "CHECK", "TABLE", "DATE", "TIME", "TEXT", "PRINT",
+    "OPEN", "CLOSE", "NEXT", "FETCH", "BREAK", "WHILE", "EXEC", "VIEW", "USER", "KEY",
+    "ALL", "ANY", "AND", "NOT", "FOR", "IN", "IS", "AS", "BY", "ON", "OR", "TO", "DO",
+    "IF", "GO",
+}
 
 
 class SlideAwareASREngine:
@@ -181,14 +191,32 @@ class SlideAwareASREngine:
             # Sắp xếp cụm dài hơn thay thế trước để tránh xung đột tiền tố/hậu tố
             replacement_pairs.sort(key=lambda item: len(item[0]), reverse=True)
             for variant, canonical_term in replacement_pairs:
-                pattern = re.compile(rf"\b{re.escape(variant)}\b", flags=re.IGNORECASE)
+                pattern = re.compile(rf"(?<!\w){re.escape(variant)}(?!\w)", flags=re.IGNORECASE)
                 corrected = pattern.sub(canonical_term, corrected)
 
-        # 2. Chuẩn hóa chữ hoa/thường theo đúng từ gốc trên Slide (an toàn cho cả VI và EN)
+        # 2. Chuẩn hóa chữ hoa/thường CHỈ cho từ viết tắt chuyên ngành ngắn (len <= 6) hoặc CamelCase/code
         for lower_term, exact_slide_term in active_lower_map.items():
-            if len(exact_slide_term) >= 2 and not exact_slide_term.islower():
+            if " " in exact_slide_term:
+                continue
+            upper_tok = exact_slide_term.upper()
+            if upper_tok in COMMON_EN_UPPER_STOPWORDS:
+                continue
+            if detected_language == "en" and upper_tok in EN_PROSE_COLLISION_WORDS:
+                continue
+
+            is_short_acronym = (
+                2 <= len(exact_slide_term) <= 6
+                and any(c.isalpha() for c in exact_slide_term)
+                and all(c.isupper() for c in exact_slide_term if c.isalpha())
+            )
+            is_camel_or_code = (
+                bool(re.search(r"[a-z][A-Z]", exact_slide_term))
+                or "_" in exact_slide_term
+                or exact_slide_term.endswith("()")
+            )
+            if is_short_acronym or is_camel_or_code:
                 pattern = re.compile(
-                    rf"\b{re.escape(lower_term)}\b", flags=re.IGNORECASE
+                    rf"(?<!\w){re.escape(lower_term)}(?!\w)", flags=re.IGNORECASE
                 )
                 corrected = pattern.sub(exact_slide_term, corrected)
 
@@ -217,6 +245,7 @@ class SlideAwareASREngine:
         # Không truyền hotwords logit-bias trực tiếp và không bật hallucination_silence_threshold:
         # khi giảng viên vừa giảng vừa gõ code (nghỉ >= 2s), hai cờ đó khiến faster-whisper lặp
         # từ khóa hotword ("DECLARE MSSV") hoặc nhảy bỏ cả vùng 30s có chứa khoảng lặng gõ phím.
+        # Giảm max_speech_duration_s=18 để bài giảng tiếng Anh nói nhanh (~175 wpm) không chạm trần token.
         segments_iter, info = self.model.transcribe(
             audio_path,
             language=normalized_lang,  # None => Whisper tự động nhận diện (hỗ trợ full EN & VI)
@@ -226,9 +255,9 @@ class SlideAwareASREngine:
             vad_parameters=dict(
                 threshold=0.35,
                 min_speech_duration_ms=250,
-                max_speech_duration_s=28,
-                min_silence_duration_ms=700,
-                speech_pad_ms=400,
+                max_speech_duration_s=18,
+                min_silence_duration_ms=500,
+                speech_pad_ms=350,
             ),
             condition_on_previous_text=False,
             beam_size=5,

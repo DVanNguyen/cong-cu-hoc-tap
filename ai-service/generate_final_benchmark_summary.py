@@ -38,7 +38,15 @@ def main():
 
     w3_m = w3.get("metrics", {})
     w3_in = w3_m.get("in_range_tsql_first_760s", {})
-    dtw_s2 = w3_in.get("monotonic_dtw_rapidfuzz", {}).get("slide_2_pct", 78.88)
+    dtw_m = w3_in.get("monotonic_dtw_rapidfuzz", {})
+    dtw_s2 = dtw_m.get("slide_2_pct", 78.88)
+    dtw_in = dtw_m.get("in_slide_1_9_pct", 67.39)
+    dtw_drift = dtw_m.get("segments_on_slide_15_21", 29)
+    dtw_summary = (
+        f"DTW `rapidfuzz`: **{dtw_s2}%** kẹt ở Slide 2"
+        if dtw_s2 >= 20.0
+        else f"DTW `rapidfuzz`: **{dtw_in}%** trong Slide 1–9, trôi **{dtw_drift}** đoạn sang Slide 15–21"
+    )
     vit_in = w3_in.get("viterbi_bge_m3", {}).get("in_slide_1_9_pct", 100.0)
     vit_s2 = w3_in.get("viterbi_bge_m3", {}).get("slide_2_pct", 0.31)
     vit_drift = w3_in.get("viterbi_bge_m3", {}).get("segments_on_slide_15_21", 0)
@@ -87,7 +95,7 @@ def main():
         "| :--- | :--- | :--- | :--- |",
         f"| **Lọc tiếng sinh viên chen ngang (Batch)** | Chưa có (`0%`) | `pyannote 3.1` + `ECAPA-TDNN`: **{w2_rej}%** Rejection, **{w2_recall}%** Teacher Recall (EER `{w2_eer}%`) | Loại bỏ hoàn toàn nhiễu bàn tán trong lớp |",
         f"| **Lọc tiếng sinh viên trực tiếp (Live 8s)** | Chưa có (`0%`) | `verify_short_chunk`: **{w5_rej}%** (`{w5_rej_cnt}`) chặn trong **{w5_rej_ms}ms**, giữ **{w5_keep}%** chunk giảng viên | Chặn trước ASR, tiết kiệm 100% thời gian Whisper cho đoạn nhiễu |",
-        f"| **Căn gióng bài giảng T-SQL (760s, 322 đoạn)** | DTW `rapidfuzz`: **{dtw_s2}%** kẹt ở Slide 2 | `viterbi_bge_m3`: **{vit_in}%** trong Slide 1–9, Slide 2 còn **{vit_s2}%**, **{vit_drift}** đoạn trôi Slide 15–21 | Phá triệt để \"Hố đen Mục lục\" & chống trôi cuối bài |",
+        f"| **Căn gióng bài giảng T-SQL (760s, 322 đoạn)** | {dtw_summary} | `viterbi_bge_m3`: **{vit_in}%** trong Slide 1–9, Slide 2 còn **{vit_s2}%**, **{vit_drift}** đoạn trôi Slide 15–21 | Phá triệt để \"Hố đen Mục lục\" & chống trôi cuối bài |",
         f"| **Căn gióng song ngữ Việt–Anh (CS188, 67 slide)** | `rapidfuzz`: **{cl_rf}%** Top-1 | `viterbi_bge_m3`: **{cl_hyb}%** Top-1 (hybrid) / **{cl_sem}%** (semantic) | Tăng **+{cl_gain} điểm %** xuyên ngôn ngữ |",
         f"| **Phục hồi nhảy phi tuyến (Non-Monotonic)** | DTW: **{nm_dtw}%** (`0/2` quay lại Slide 8) | `viterbi_bge_m3`: **{nm_vit}%** (`5/5` lùi Slide 3, `2/2` quay lại Slide 8) | Bám sát giảng viên lật ngược slide cũ để nhắc bài |",
         f"| **Bám Slide trực tiếp Live (94 chunk × 8s)** | `NonMonotonicSlideTracker`: **{w5_old_in}%**, trôi **{w5_old_dr}** chunk | `windowed_bge_m3_live`: **{w5_new_in}%**, **{w5_new_dr}** chunk trôi Slide 15–21; song ngữ Live **{w5_bil}%** (`5/5`) | Ổn định thời gian thực cho cả bài thuần Việt & song ngữ |",
@@ -105,8 +113,8 @@ def main():
         "### 2.2. Căn gióng ngữ nghĩa đa ngôn ngữ & Chống trôi Slide (Tuần 3)",
         "- **Mô hình nhúng:** Singleton `BAAI/bge-m3` (1024 chiều) tích hợp bộ nhớ đệm vector (thời gian nhân ma trận `120 × 23` khi ấm cache đạt `0.001s`).",
         "- **Thuật toán Windowed Non-Monotonic Viterbi:**",
-        "  - Khử hiện tượng *hubness* của các trang slide dài nhiều chữ bằng cách trừ nền phân vị thứ 25 của từng cột.",
-        "  - Gắn trọng số phát xạ theo mật độ từ khóa nội dung (`min(1.0, content_tokens / 4.0)`) để các từ đệm ngắn (*\"ờ\", \"rồi\", \"ok\"*) không kéo trôi trang.",
+        "  - Khử hiện tượng *hubness* của các trang slide dài nhiều chữ bằng cách trừ nền phân vị thứ 40 chỉ trên tập câu có nội dung thực chất, kết hợp bù ngữ nghĩa tiêu đề một chiều cho các slide nặng mã nguồn.",
+        "  - Gắn trọng số phát xạ theo mật độ từ khóa thực chất (`min(1.0, substantive_tokens / 3.0)`) và ma trận chuyển trạng thái bất đối xứng để câu đệm ngắn (*\"ờ\", \"rồi\", \"ok\"*) không kéo trôi hoặc lùi ngược trang.",
         "  - Phân bố 322 đoạn trên 760s đầu bài giảng T-SQL: `"
         + json.dumps(w3_in.get("viterbi_bge_m3", {}).get("distribution", {}), ensure_ascii=False)
         + "`.",

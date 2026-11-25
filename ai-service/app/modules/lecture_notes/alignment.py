@@ -169,7 +169,7 @@ def compute_novelty_score(
 def monotonic_dtw_alignment(
     transcript_segments: List[Dict[str, Any]], 
     slides: List[Dict[str, Any]],
-    gamma_next: float = 0.015,
+    gamma_next: float = 0.04,
     gamma_skip: float = 0.25,
     gamma_back: float = 0.30
 ) -> List[int]:
@@ -181,35 +181,25 @@ def monotonic_dtw_alignment(
         D(t-1, k-2) + gamma_skip,   # Nhảy cóc 1 slide
         D(t-1, k+1) + gamma_back    # Lùi lại 1 slide
     )
-    Đã vá lỗi 'Hố đen Mục lục':
-    - Giảm gamma_next xuống 0.015 giúp bước chuyển slide mượt mà.
-    - Thêm overview_penalty = 0.12 cho các slide mục lục/tổng quan sau phút đầu tiên (start_sec > 60s).
+    Đã vá lỗi 'Hố đen Mục lục' & trượt cuối deck dài:
+    - Nâng gamma_next lên 0.04 tránh DTW fallback trôi trượt sang cuối bộ slide dài (35+ trang).
+    - Dùng slide_is_overview() (bao gồm TODAY, TOPICS, ROADMAP, PLAN) cộng overview_penalty = 0.12 sau 60s.
     """
     T = len(transcript_segments)
     K = len(slides)
     if T == 0 or K == 0:
         return []
 
-    # Nhận diện các slide mục lục / tổng quan
-    overview_keywords = [
-        "tổng quan", "mục lục", "nội dung bài học", "nội dung chính", 
-        "agenda", "overview", "table of contents", "outline"
-    ]
-    is_overview_slide = [False] * K
-    for k in range(K):
-        s_title = (slides[k].get("title") or "").lower()
-        s_text = (slides[k].get("raw_text") or slides[k].get("slide_text") or "").lower()
-        if any(kw in s_title for kw in overview_keywords) or any(kw in s_text[:120] for kw in overview_keywords):
-            is_overview_slide[k] = True
+    is_overview_slide = [slide_is_overview(sl) for sl in slides]
 
-    # 1. Ma trận chi phí C[t][k] = 1 - CosineSim(u_t, s_k) + overview_penalty
+    # 1. Ma trận chi phí C[t][k] = 1 - HybridSim(u_t, s_k) + overview_penalty
     C = [[1.0 for _ in range(K)] for _ in range(T)]
     for t in range(T):
         u_text = transcript_segments[t].get("text", "")
         start_sec = float(transcript_segments[t].get("start_sec", transcript_segments[t].get("start_time_sec", 0.0)))
         for k in range(K):
             s_text = slides[k].get("raw_text") or slides[k].get("slide_text") or ""
-            sim = compute_semantic_similarity(u_text, s_text)
+            sim = 0.65 * compute_semantic_similarity(u_text, s_text) + 0.35 * compute_token_overlap(u_text, s_text)
             cost = 1.0 - sim
             if start_sec > 60.0 and is_overview_slide[k]:
                 cost += 0.12
@@ -339,10 +329,17 @@ def align_transcript_to_slides(
 # ==============================================================================
 # TUẦN 3: Windowed Non-Monotonic Viterbi trên vector đa ngôn ngữ (BGE-M3 / e5)
 # ==============================================================================
-_OVERVIEW_KEYWORDS = [
+_OVERVIEW_PHRASE_KEYWORDS = [
     "tổng quan", "mục lục", "nội dung bài học", "nội dung chính",
-    "agenda", "overview", "table of contents", "outline",
+    "table of contents",
 ]
+_OVERVIEW_WORD_KEYWORDS = [
+    "agenda", "overview", "outline", "today", "topics", "roadmap", "plan", "contents",
+]
+_OVERVIEW_KEYWORDS = _OVERVIEW_PHRASE_KEYWORDS + _OVERVIEW_WORD_KEYWORDS
+_OVERVIEW_WORD_RE = re.compile(
+    r"\b(?:" + "|".join(_OVERVIEW_WORD_KEYWORDS) + r")\b", flags=re.IGNORECASE
+)
 
 
 def _viterbi_transition_matrix(K: int):
@@ -448,9 +445,18 @@ def compute_hybrid_score_matrix(
 
 
 def slide_is_overview(slide: Dict[str, Any]) -> bool:
-    title = (slide.get("title") or "").lower()
-    body = (slide.get("raw_text") or slide.get("slide_text") or "").lower()[:120]
-    return any(kw in title or kw in body for kw in _OVERVIEW_KEYWORDS)
+    title = (slide.get("title") or "").strip().lower()
+    raw = (slide.get("raw_text") or slide.get("slide_text") or "").strip()
+    body = raw.lower()[:120]
+    first_line = raw.splitlines()[0].strip().lower() if raw else ""
+    heading = title or (first_line if (len(first_line.split()) <= 7 and not first_line.endswith(".")) else "")
+    if heading == "nội dung":
+        return True
+    if any(kw in title or kw in body for kw in _OVERVIEW_PHRASE_KEYWORDS):
+        return True
+    if heading and not re.search(r"\b(?:execution|query)\s+plan\b", heading) and _OVERVIEW_WORD_RE.search(heading):
+        return True
+    return False
 
 
 def viterbi_semantic_alignment(

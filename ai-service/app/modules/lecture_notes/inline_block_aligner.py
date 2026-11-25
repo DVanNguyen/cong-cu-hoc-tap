@@ -138,14 +138,20 @@ class NonMonotonicSlideTracker:
         base_score = 0.45 * fuzzy_sim + 0.35 * overlap_on_block + 0.20 * overlap_on_seg
 
         bonus = 0.0
+        jump_dist = abs(block.slide_page - self.current_slide_page)
         if base_score >= 0.22:
             if block.slide_page == self.current_slide_page:
                 bonus = self.continuity_bonus
             elif block.slide_page == self.current_slide_page + 1:
                 bonus = self.continuity_bonus * 0.6
+            elif jump_dist > 4:
+                # Chặn nhảy xa > 4 trang chỉ vì trùng 1 từ khóa đơn lẻ
+                if len(intersection) < 2:
+                    return 0.0, 1.0
+                bonus = -0.15
 
         novelty = 1.0 - overlap_on_seg
-        return min(1.0, base_score + bonus), round(novelty, 3)
+        return max(0.0, min(1.0, base_score + bonus)), round(novelty, 3)
 
     def process_utterance(
         self,

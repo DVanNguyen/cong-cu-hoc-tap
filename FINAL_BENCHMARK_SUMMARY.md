@@ -12,11 +12,11 @@
 | Bài toán đánh giá | Phiên bản cũ (Baseline v1) | Phiên bản nâng cấp (StudyAI v2) | Cải thiện đạt được |
 | :--- | :--- | :--- | :--- |
 | **Lọc tiếng sinh viên chen ngang (Batch)** | Chưa có (`0%`) | `pyannote 3.1` + `ECAPA-TDNN`: **100.0%** Rejection, **100.0%** Teacher Recall (EER `0.0%`) | Loại bỏ hoàn toàn nhiễu bàn tán trong lớp |
-| **Lọc tiếng sinh viên trực tiếp (Live 8s)** | Chưa có (`0%`) | `verify_short_chunk`: **100.0%** (`3/3`) chặn trong **94.9ms**, giữ **100.0%** chunk giảng viên | Chặn trước ASR, tiết kiệm 100% thời gian Whisper cho đoạn nhiễu |
-| **Căn gióng bài giảng T-SQL (760s, 322 đoạn)** | DTW `rapidfuzz`: **78.88%** kẹt ở Slide 2 | `viterbi_bge_m3`: **100.0%** trong Slide 1–9, Slide 2 còn **0.0%**, **0** đoạn trôi Slide 15–21 | Phá triệt để "Hố đen Mục lục" & chống trôi cuối bài |
+| **Lọc tiếng sinh viên trực tiếp (Live 8s)** | Chưa có (`0%`) | `verify_short_chunk`: **100.0%** (`3/3`) chặn trong **96.9ms**, giữ **100.0%** chunk giảng viên | Chặn trước ASR, tiết kiệm 100% thời gian Whisper cho đoạn nhiễu |
+| **Căn gióng bài giảng T-SQL (760s, 322 đoạn)** | DTW `rapidfuzz`: **67.39%** trong Slide 1–9, trôi **29** đoạn sang Slide 15–21 | `viterbi_bge_m3`: **100.0%** trong Slide 1–9, Slide 2 còn **0.0%**, **0** đoạn trôi Slide 15–21 | Phá triệt để "Hố đen Mục lục" & chống trôi cuối bài |
 | **Căn gióng song ngữ Việt–Anh (CS188, 67 slide)** | `rapidfuzz`: **22.58%** Top-1 | `viterbi_bge_m3`: **96.77%** Top-1 (hybrid) / **93.55%** (semantic) | Tăng **+74.19 điểm %** xuyên ngôn ngữ |
 | **Phục hồi nhảy phi tuyến (Non-Monotonic)** | DTW: **71.43%** (`0/2` quay lại Slide 8) | `viterbi_bge_m3`: **100.0%** (`5/5` lùi Slide 3, `2/2` quay lại Slide 8) | Bám sát giảng viên lật ngược slide cũ để nhắc bài |
-| **Bám Slide trực tiếp Live (94 chunk × 8s)** | `NonMonotonicSlideTracker`: **74.47%**, trôi **17** chunk | `windowed_bge_m3_live`: **95.74%**, **0** chunk trôi Slide 15–21; song ngữ Live **100.0%** (`5/5`) | Ổn định thời gian thực cho cả bài thuần Việt & song ngữ |
+| **Bám Slide trực tiếp Live (94 chunk × 8s)** | `NonMonotonicSlideTracker`: **93.62%**, trôi **2** chunk | `windowed_bge_m3_live`: **95.74%**, **0** chunk trôi Slide 15–21; song ngữ Live **100.0%** (`5/5`) | Ổn định thời gian thực cho cả bài thuần Việt & song ngữ |
 | **Gắn ghi chú đúng cấp Block trên Slide** | Gắn cứng `b1`: **0.0%** | Semantic Block Mapping (`BGE-M3`): **93.33%** (`14/15` mẫu đúng block) | Hiển thị ghi chú ngay dưới đúng ý/công thức đang giảng |
 
 ---
@@ -26,13 +26,13 @@
 ### 2.1. Xác thực giọng giảng viên & Lọc nhiễu giảng đường (Tuần 2 & Tuần 5)
 - **Mô hình:** `speechbrain/spkrec-ecapa-voxceleb` (vector chuẩn hóa L2 192 chiều) kết hợp phân đoạn người nói `pyannote/speaker-diarization-3.1` (có fallback cửa sổ trượt mượt trên Windows).
 - **Độ phân tách Cosine Similarity (Batch):** Trung bình giọng giảng viên đạt **`0.7765`**, trong khi tạp âm/sinh viên nói chuyện ở mức **`-0.1063`**.
-- **Chế độ Live (8s/chunk):** Dùng trực tiếp `verify_short_chunk(threshold=0.35)` trước khi gọi Faster-Whisper, phản hồi từ chối trung bình chỉ **`94.9ms`** trên CPU.
+- **Chế độ Live (8s/chunk):** Dùng trực tiếp `verify_short_chunk(threshold=0.35)` trước khi gọi Faster-Whisper, phản hồi từ chối trung bình chỉ **`96.9ms`** trên CPU.
 
 ### 2.2. Căn gióng ngữ nghĩa đa ngôn ngữ & Chống trôi Slide (Tuần 3)
 - **Mô hình nhúng:** Singleton `BAAI/bge-m3` (1024 chiều) tích hợp bộ nhớ đệm vector (thời gian nhân ma trận `120 × 23` khi ấm cache đạt `0.001s`).
 - **Thuật toán Windowed Non-Monotonic Viterbi:**
-  - Khử hiện tượng *hubness* của các trang slide dài nhiều chữ bằng cách trừ nền phân vị thứ 25 của từng cột.
-  - Gắn trọng số phát xạ theo mật độ từ khóa nội dung (`min(1.0, content_tokens / 4.0)`) để các từ đệm ngắn (*"ờ", "rồi", "ok"*) không kéo trôi trang.
+  - Khử hiện tượng *hubness* của các trang slide dài nhiều chữ bằng cách trừ nền phân vị thứ 40 chỉ trên tập câu có nội dung thực chất, kết hợp bù ngữ nghĩa tiêu đề một chiều cho các slide nặng mã nguồn.
+  - Gắn trọng số phát xạ theo mật độ từ khóa thực chất (`min(1.0, substantive_tokens / 3.0)`) và ma trận chuyển trạng thái bất đối xứng để câu đệm ngắn (*"ờ", "rồi", "ok"*) không kéo trôi hoặc lùi ngược trang.
   - Phân bố 322 đoạn trên 760s đầu bài giảng T-SQL: `{"3": 40, "4": 36, "5": 18, "6": 2, "7": 100, "8": 102, "9": 24}`.
 
 ### 2.3. Tổng hợp ghi chú chống ảo giác & Trải nghiệm người dùng toàn trình (Tuần 4 & Tuần 6)
