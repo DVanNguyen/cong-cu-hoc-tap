@@ -18,7 +18,43 @@ PHONETIC_TERM_ALIASES: Dict[str, List[str]] = {
     "heuristic": ["hiu rit tich", "hơ rit tich", "hyu rit tich"],
     "admissible heuristic": ["át mit xơ bồ hiu rit tich", "admissible hiu rit tich"],
     "Simulated Annealing": ["si miu lây tựt ơ ni linh", "simulated ơ ni linh"],
+    "T-SQL": ["json sql", "ti ét quy eo", "t-s-v-l", "t-j-s-c-o-t"],
+    "SQL Server": ["suy co server", "xi co server", "ét quy eo server"],
+    "NVARCHAR": ["n ba cha", "n va cha", "n3020"],
+    "DATETIME": ["đét thay", "date time"],
+    "GETDATE()": ["ghét đét", "get đét"],
+    "Stored Procedure": ["storeprojector", "store procedure"],
+    "CONCAT": ["con kết", "con két"],
 }
+
+# Các cụm lỗi phiên âm đa âm tiết đặc trưng khi giảng viên CNTT nói tiếng Việt trộn thuật ngữ lập trình/CSDL
+# (Chỉ áp dụng cho ngôn ngữ khác 'en', hoàn toàn không phụ thuộc việc từ khóa có in sẵn trên slide hay không)
+SPOKEN_CS_PHRASE_FIXES: List[Tuple[str, str]] = [
+    ("hạng nổi tiếng nhất là concave", "hàm nổi tiếng nhất là CONCAT"),
+    ("dùng hàm concave", "dùng hàm CONCAT"),
+    ("concave lại", "CONCAT lại"),
+    ("copy và pull ra", "copy PowerPoint ra"),
+    ("copy bao bôn ra", "copy PowerPoint ra"),
+    ("5 chừng tháng chừng ngày", "năm trừ tháng trừ ngày (YYYY-MM-DD)"),
+    ("năm chừng tháng chừng ngày", "năm trừ tháng trừ ngày (YYYY-MM-DD)"),
+    ("tháng, xẹt ngày, xẹt năm", "tháng/ngày/năm (MM/DD/YYYY)"),
+    ("tháng xẹt ngày xẹt năm", "tháng/ngày/năm (MM/DD/YYYY)"),
+    ("con vật từ kiểu đét", "convert từ kiểu date"),
+    ("con vật từ kiểu", "convert từ kiểu"),
+    ("kiểu đét thay", "kiểu datetime"),
+    ("suy đét 2", "kiểu datetime"),
+    ("kiểu đét", "kiểu date"),
+    ("xét a cộng", "SET @"),
+    ("suy co server", "SQL Server"),
+    ("xi co server", "SQL Server"),
+    ("select cọt", "SELECT cột"),
+    ("1 cọt, 2 cọt, 3 cọt", "1 cột, 2 cột, 3 cột"),
+    ("mấy cọt", "mấy cột"),
+    ("function, storage, trigger", "Function, Stored Procedure, Trigger"),
+    ("function, storeprojector, trigger", "Function, Stored Procedure, Trigger"),
+    ("n viết khoai", "N viết hoa"),
+    ("test end test image", "text, ntext, image"),
+]
 
 # Ngôn ngữ được hỗ trợ tường minh; None hoặc "auto" sẽ để Whisper tự động nhận diện
 SUPPORTED_LANGUAGES = {"vi", "en"}
@@ -130,6 +166,10 @@ class SlideAwareASREngine:
 
         # 1. Chỉ chạy khôi phục phiên âm Việt-Anh khi ngôn ngữ không phải full tiếng Anh
         if detected_language != "en":
+            for wrong_phrase, fixed_phrase in SPOKEN_CS_PHRASE_FIXES:
+                pattern = re.compile(re.escape(wrong_phrase), flags=re.IGNORECASE)
+                corrected = pattern.sub(fixed_phrase, corrected)
+
             replacement_pairs: List[Tuple[str, str]] = []
             for canonical_term, phonetic_variants in PHONETIC_TERM_ALIASES.items():
                 if canonical_term.lower() in active_lower_map or any(
@@ -174,12 +214,14 @@ class SlideAwareASREngine:
             language=normalized_lang,
         )
 
+        # Không truyền hotwords logit-bias trực tiếp và không bật hallucination_silence_threshold:
+        # khi giảng viên vừa giảng vừa gõ code (nghỉ >= 2s), hai cờ đó khiến faster-whisper lặp
+        # từ khóa hotword ("DECLARE MSSV") hoặc nhảy bỏ cả vùng 30s có chứa khoảng lặng gõ phím.
         segments_iter, info = self.model.transcribe(
             audio_path,
             language=normalized_lang,  # None => Whisper tự động nhận diện (hỗ trợ full EN & VI)
             task="transcribe",
             initial_prompt=bias["initial_prompt"],
-            hotwords=bias["hotwords"],
             vad_filter=use_vad,
             vad_parameters=dict(
                 threshold=0.35,
@@ -189,13 +231,8 @@ class SlideAwareASREngine:
                 speech_pad_ms=400,
             ),
             condition_on_previous_text=False,
-            word_timestamps=True,
             beam_size=5,
-            temperature=0.0,
-            max_new_tokens=224,
-            repetition_penalty=1.15,
-            no_repeat_ngram_size=3,
-            hallucination_silence_threshold=2.0,
+            temperature=(0.0, 0.2, 0.4, 0.6, 0.8, 1.0),
         )
 
         detected_lang = getattr(info, "language", normalized_lang or "unknown")

@@ -59,6 +59,12 @@ STOPWORDS: Set[str] = {
     "rất", "cũng", "về", "trên", "dưới", "theo", "hay", "hoặc", "nhưng", "vì", "nên",
 }
 
+_SPOKEN_WEIGHT_STOPWORDS: Set[str] = STOPWORDS | {
+    "tôi", "tui", "mình", "bạn", "em", "ta", "nó", "họ", "cái",
+    "đây", "đấy", "rồi", "nha", "nhé", "ha", "hả", "ạ",
+    "ờ", "à", "ừ", "ok", "nè", "nhỉ", "chứ", "thôi", "đi",
+}
+
 
 def is_filler_sentence(text: str) -> bool:
     """Loại bỏ câu đệm giao tiếp (VI & EN) nếu < 5 từ hoặc khớp mẫu điểm danh/xã giao."""
@@ -83,6 +89,32 @@ def _extract_content_tokens(text: str) -> Set[str]:
         if tok not in STOPWORDS and (len(tok) >= 2 or tok in {"c", "r", "x", "y", "n", "k"})
     }
     return filtered if filtered else set(raw_tokens)
+
+
+def _extract_substantive_tokens(text: str) -> Set[str]:
+    """Tách từ thực chất để tính trọng số bằng chứng Viterbi (câu đệm/đại từ thuần túy -> 0)."""
+    raw_tokens = re.findall(r"[a-zA-Z0-9_\*\+#]+|[^\W\d_]+", text.lower())
+    return {
+        tok for tok in raw_tokens
+        if tok not in _SPOKEN_WEIGHT_STOPWORDS and (len(tok) >= 2 or tok in {"c", "r", "x", "y", "n", "k"})
+    }
+
+
+def _extract_technical_ascii_tokens(text: str) -> Set[str]:
+    """Chỉ lấy từ khóa kỹ thuật/ký hiệu/số ASCII để tránh từ tiếng Việt đơn lẻ làm lệch khớp song ngữ."""
+    toks = re.findall(r"[a-zA-Z0-9_\*\+#@]+", text.lower())
+    return {
+        t for t in toks
+        if t.isascii() and t not in STOPWORDS and (len(t) >= 2 or "*" in t or "#" in t or "+" in t)
+    }
+
+
+def _compute_technical_ascii_overlap(segment_text: str, slide_text: str) -> float:
+    tu = _extract_technical_ascii_tokens(segment_text)
+    if not tu:
+        return 0.0
+    ts = _extract_technical_ascii_tokens(slide_text)
+    return len(tu & ts) / len(tu)
 
 
 def compute_token_overlap(segment_text: str, slide_text: str) -> float:
@@ -322,11 +354,15 @@ def _viterbi_transition_matrix(K: int):
             if d == 0:
                 c = 0.0
             elif d == 1:
-                c = 0.05
+                c = 0.06
             elif d == 2:
-                c = 0.14
-            elif d in (-1, -2):
-                c = 0.13
+                c = 0.17
+            elif d > 2:
+                c = 0.30 + 0.025 * d
+            elif d == -1:
+                c = 0.27
+            elif d == -2:
+                c = 0.32
             else:
                 c = 0.32 + 0.025 * abs(d)
             TR[j, k] = c
@@ -370,6 +406,17 @@ def viterbi_from_scores(
     return path
 
 
+def _slide_code_density(raw_text: str) -> float:
+    """Tỷ lệ dòng thân slide chứa ký hiệu cú pháp lập trình/toán học (code-heavy slide)."""
+    lines = [ln.strip() for ln in (raw_text or "").splitlines() if ln.strip()]
+    body = lines[1:] if len(lines) > 1 else lines
+    if not body:
+        return 0.0
+    code_chars = set("()[]{};=@<>+-*/")
+    code_lines = sum(1 for ln in body if sum(1 for ch in ln if ch in code_chars) >= 2 or ln.isupper())
+    return code_lines / len(body)
+
+
 def compute_hybrid_score_matrix(
     transcript_segments: List[Dict[str, Any]],
     slides: List[Dict[str, Any]],
@@ -378,13 +425,25 @@ def compute_hybrid_score_matrix(
     import numpy as np
     from app.services.semantic_embedder import get_semantic_embedder
 
+    embedder = get_semantic_embedder()
     u_texts = [seg.get("text", "") for seg in transcript_segments]
     s_texts = [(sl.get("raw_text") or sl.get("slide_text") or "") for sl in slides]
-    sim = get_semantic_embedder().similarity_matrix(u_texts, s_texts)
+    s_titles = [
+        ((sl.get("title") or "").strip() or (s_texts[i].splitlines()[0].strip() if s_texts[i] else ""))
+        for i, sl in enumerate(slides)
+    ]
+    sim_full = embedder.similarity_matrix(u_texts, s_texts)
+    sim_title = embedder.similarity_matrix(u_texts, s_titles)
+    # Chỉ bù ngữ nghĩa tiêu đề cho các slide nặng code mẫu (tỷ lệ dòng code >= 0.45) để tránh tiêu đề ngắn gây nhiễu
+    code_mask = np.array([0.35 if _slide_code_density(txt) >= 0.45 else 0.0 for txt in s_texts], dtype=np.float64)[None, :]
+    sim = sim_full + code_mask * np.maximum(0.0, sim_title - sim_full)
+
+    lex_cap = min(0.12, max(0.0, 1.0 - semantic_weight))
     score = np.zeros(sim.shape, dtype=np.float64)
     for t, u in enumerate(u_texts):
+        ov_weight = lex_cap if _extract_technical_ascii_tokens(u) else 0.0
         for k, s in enumerate(s_texts):
-            score[t, k] = semantic_weight * float(sim[t, k]) + (1.0 - semantic_weight) * compute_token_overlap(u, s)
+            score[t, k] = (1.0 - ov_weight) * float(sim[t, k]) + ov_weight * _compute_technical_ascii_overlap(u, s)
     return score
 
 
@@ -403,25 +462,45 @@ def viterbi_semantic_alignment(
     Căn gióng cấp trang bằng Windowed Non-Monotonic Viterbi.
     Trả về list dict: slide_page (1-indexed), semantic_score, jumped_non_linear.
     """
+    import numpy as np
     T, K = len(transcript_segments), len(slides)
     if T == 0 or K == 0:
         return []
     raw_score = compute_hybrid_score_matrix(transcript_segments, slides, semantic_weight)
     score = raw_score.copy()
-    if T >= 30:
-        # Khử hubness theo phân vị 25 (nền background của từng slide): giảm ưu thế ảo của slide dài
-        # mà không phạt các slide thực sự đang được giảng (nằm ở phân vị cao).
-        import numpy as np
+    weights = np.array(
+        [min(1.0, len(_extract_substantive_tokens(seg.get("text", ""))) / 3.0) for seg in transcript_segments],
+        dtype=np.float64,
+    )
+    subst_mask = weights >= 0.66
+    if subst_mask.sum() >= 20 and K >= 5:
+        # Khử hubness chỉ trên các câu có nội dung thực (tránh câu đệm 1 từ như 'Rồi', 'OK' làm lệch phân vị)
+        bg = np.percentile(score[subst_mask], 40, axis=0, keepdims=True)
+        score = score - bg + bg.mean()
+    elif T >= 30:
         bg = np.percentile(score, 25, axis=0, keepdims=True)
         score = score - bg + bg.mean()
-    weights = [
-        min(1.0, len(_extract_content_tokens(seg.get("text", ""))) / 4.0)
-        for seg in transcript_segments
-    ]
+
     starts = [
         float(s.get("start_sec", s.get("start_time_sec", 0.0))) for s in transcript_segments
     ]
-    path = viterbi_from_scores(score, starts, [slide_is_overview(sl) for sl in slides], weights=weights)
+    ends = [
+        float(s.get("end_sec", s.get("end_time_sec", starts[i]))) for i, s in enumerate(transcript_segments)
+    ]
+    # Làm mượt ngữ cảnh cục bộ giữa các mệnh đề liền kề (< 3.5s) để câu cụt không kéo trôi trang
+    smoothed = score.copy()
+    for t in range(T):
+        w_sum = 0.65
+        acc = 0.65 * score[t]
+        if t > 0 and (starts[t] - ends[t - 1]) <= 3.5 and weights[t - 1] > 0.3:
+            acc += 0.175 * score[t - 1]
+            w_sum += 0.175
+        if t + 1 < T and (starts[t + 1] - ends[t]) <= 3.5 and weights[t + 1] > 0.3:
+            acc += 0.175 * score[t + 1]
+            w_sum += 0.175
+        smoothed[t] = acc / w_sum
+
+    path = viterbi_from_scores(smoothed, starts, [slide_is_overview(sl) for sl in slides], weights=weights.tolist())
     results = []
     for t in range(T):
         k = path[t]
