@@ -85,7 +85,9 @@ data class InlineLecturerNoteDto(
     val id: String,
     val explanationText: String,
     val timestampSec: Float,
-    val timestampLabel: String = ""
+    val timestampLabel: String = "",
+    val category: String? = "core_explanation",
+    val evidenceQuote: String? = ""
 )
 
 data class InlineConceptHighlightDto(
@@ -114,7 +116,8 @@ data class InlineNoteDto(
     @SerializedName("timestamp_start_sec") val timestampStartSec: Float = 0f,
     @SerializedName("timestamp_end_sec") val timestampEndSec: Float = 0f,
     @SerializedName("novelty_score") val noveltyScore: Float = 0.8f,
-    @SerializedName("jumped_non_linear") val jumpedNonLinear: Boolean = false
+    @SerializedName("jumped_non_linear") val jumpedNonLinear: Boolean = false,
+    val category: String? = "core_explanation"
 )
 
 data class FinishLiveLectureRequest(

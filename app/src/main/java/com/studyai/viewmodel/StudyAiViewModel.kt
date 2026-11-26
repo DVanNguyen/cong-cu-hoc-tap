@@ -123,6 +123,9 @@ class StudyAiViewModel(
     private val _targetAudioSec = MutableStateFlow<Float?>(null)
     val targetAudioSec: StateFlow<Float?> = _targetAudioSec.asStateFlow()
 
+    private val _targetSlidePage = MutableStateFlow<Int?>(null)
+    val targetSlidePage: StateFlow<Int?> = _targetSlidePage.asStateFlow()
+
     private val _slides = MutableStateFlow<List<SlideUi>>(emptyList())
     val slides: StateFlow<List<SlideUi>> = _slides.asStateFlow()
 
@@ -243,8 +246,7 @@ class StudyAiViewModel(
 
     fun selectCourse(courseId: Long) {
         _selectedCourseId.value = courseId
-        loadAllData(courseId = courseId)
-        loadSlideVault(courseId = courseId)
+        loadAllData(courseId = courseId, lectureId = null)
     }
 
     // =========================================================================
@@ -397,6 +399,8 @@ class StudyAiViewModel(
                                 explanationText = n.explanationText,
                                 timestampSec = n.timestampSec,
                                 timestampLabel = n.timestampLabel,
+                                category = n.category,
+                                evidenceQuote = n.evidenceQuote,
                             )
                         },
                         highlights = b.highlights.map { h ->
@@ -677,11 +681,14 @@ class StudyAiViewModel(
                             }
                             var updatedNotes = b.inlineNotes
                             if (b.blockId == ev.matchedBlockId && ev.inlineNote != null && ev.action == "attach_inline_note") {
+                                val rawText = ev.inlineNote.rawTranscript ?: ""
                                 val newNote = InlineLecturerNote(
                                     id = ev.inlineNote.id ?: "live_note_${System.currentTimeMillis()}",
                                     explanationText = ev.inlineNote.explanationText,
                                     timestampSec = ev.inlineNote.timestampStartSec,
-                                    timestampLabel = formatSeconds(ev.inlineNote.timestampStartSec)
+                                    timestampLabel = formatSeconds(ev.inlineNote.timestampStartSec),
+                                    category = inferNoteCategory(ev.inlineNote.category, ev.inlineNote.explanationText),
+                                    evidenceQuote = rawText,
                                 )
                                 updatedNotes = updatedNotes + newNote
                             }
@@ -972,6 +979,34 @@ class StudyAiViewModel(
     // =========================================================================
     // CÁC HÀM MAP DTO & UTILS
     // =========================================================================
+    private fun inferNoteCategory(rawCategory: String?, text: String): String {
+        val cleaned = rawCategory?.trim()?.lowercase()
+        if (cleaned == "worked_example" || cleaned == "exam_tip") {
+            return cleaned
+        }
+        val lower = text.trim().lowercase()
+        if (
+            lower.startsWith("lưu ý") ||
+            lower.startsWith("mẹo") ||
+            lower.startsWith("cảnh báo") ||
+            lower.contains("bắt buộc") ||
+            lower.contains("tránh lỗi") ||
+            lower.contains("cẩn thận") ||
+            lower.contains("hay ra thi")
+        ) {
+            return "exam_tip"
+        }
+        if (
+            lower.startsWith("ví dụ") ||
+            lower.startsWith("thực hành") ||
+            lower.startsWith("minh họa") ||
+            lower.contains("ví dụ thực tế")
+        ) {
+            return "worked_example"
+        }
+        return if (cleaned == "core_explanation") cleaned else "core_explanation"
+    }
+
     private fun mapDtoToAnnotatedPages(dtoPages: List<AnnotatedSlidePageDto>): List<AnnotatedSlidePageUi> {
         return dtoPages.map { p ->
             AnnotatedSlidePageUi(
@@ -989,7 +1024,9 @@ class StudyAiViewModel(
                                 id = n.id,
                                 explanationText = n.explanationText,
                                 timestampSec = n.timestampSec,
-                                timestampLabel = n.timestampLabel.ifEmpty { formatSeconds(n.timestampSec) }
+                                timestampLabel = n.timestampLabel.ifEmpty { formatSeconds(n.timestampSec) },
+                                category = inferNoteCategory(n.category, n.explanationText),
+                                evidenceQuote = n.evidenceQuote ?: "",
                             )
                         },
                         highlights = b.highlights.map { h ->
@@ -1085,19 +1122,21 @@ class StudyAiViewModel(
         }
     }
 
-    fun loadAllData(courseId: Long = 1L, lectureId: Long = 1L) {
+    fun loadAllData(courseId: Long = 1L, lectureId: Long? = null) {
         viewModelScope.launch {
             _isLoading.value = true
             _errorMessage.value = null
+            var fallbackLectureId = lectureId ?: _currentLectureId.value
             try {
                 loadCourses()
                 loadSlideVault(courseId)
-                loadLectureInlineNotes(lectureId)
 
-                // 0. Tải danh mục Bài giảng
+                // 0. Tải danh mục Bài giảng của môn học trước để chọn đúng lecture thuộc môn này
+                var lecturesLoadedFromServer = false
                 try {
                     val lecRes = apiService.getCourseLectures(courseId)
                     if (lecRes.isSuccessful && lecRes.body() != null) {
+                        lecturesLoadedFromServer = true
                         _chapters.value = lecRes.body()!!.lectures.map {
                             ChapterUiModel(
                                 id = it.id,
@@ -1108,19 +1147,37 @@ class StudyAiViewModel(
                     }
                 } catch (_: Exception) {}
 
-                // 1. Tải workspace cũ
-                val workspaceRes = apiService.getLectureWorkspace(lectureId)
-                if (workspaceRes.isSuccessful && workspaceRes.body() != null) {
-                    val body = workspaceRes.body()!!
-                    _slides.value = mapSlides(body.slides)
-                    _currentLectureId.value = lectureId
-                    val matchedTitle = _chapters.value.find { it.id == lectureId }?.title
-                        ?: (body.lecture["title"] as? String)
-                        ?: "Chapter $lectureId"
-                    _currentLectureTitle.value = matchedTitle
+                val resolvedLectureId: Long? = when {
+                    lecturesLoadedFromServer && _chapters.value.isEmpty() -> null
+                    lectureId != null && (_chapters.value.isEmpty() || _chapters.value.any { it.id == lectureId }) -> lectureId
+                    else -> _chapters.value.lastOrNull()?.id ?: _chapters.value.firstOrNull()?.id ?: 1L
+                }
+
+                if (resolvedLectureId != null) {
+                    fallbackLectureId = resolvedLectureId
+                    _currentLectureId.value = resolvedLectureId
+                    loadLectureInlineNotes(resolvedLectureId)
+
+                    // 1. Tải workspace & danh sách slide
+                    val workspaceRes = apiService.getLectureWorkspace(resolvedLectureId)
+                    if (workspaceRes.isSuccessful && workspaceRes.body() != null) {
+                        val body = workspaceRes.body()!!
+                        _slides.value = mapSlides(body.slides)
+                        val matchedTitle = _chapters.value.find { it.id == resolvedLectureId }?.title
+                            ?: (body.lecture["title"] as? String)
+                            ?: "Bài giảng #$resolvedLectureId"
+                        _currentLectureTitle.value = matchedTitle
+                        _currentSlideIndex.value = 0
+                        _isOfflineMode.value = false
+                        saveLectureOfflineCache(lectureId = resolvedLectureId, title = matchedTitle, workspace = body)
+                    }
+                } else {
+                    _slides.value = emptyList()
+                    _inlinePages.value = emptyList()
+                    _generalNotes.value = emptyList()
+                    val courseName = _courses.value.find { it.id == courseId }?.name ?: "Môn học"
+                    _currentLectureTitle.value = "$courseName • Chưa có bài giảng"
                     _currentSlideIndex.value = 0
-                    _isOfflineMode.value = false
-                    saveLectureOfflineCache(lectureId = lectureId, title = matchedTitle, workspace = body)
                 }
 
                 // 2. Tải Knowledge Graph
@@ -1178,7 +1235,7 @@ class StudyAiViewModel(
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "loadAllData error", e)
-                if (!applyOfflineCacheIfAvailable(lectureId)) {
+                if (!applyOfflineCacheIfAvailable(fallbackLectureId)) {
                     _errorMessage.value = "Lỗi kết nối máy chủ StudyAI: ${e.localizedMessage ?: e.message ?: e.javaClass.simpleName}"
                 }
             } finally {
@@ -1225,6 +1282,7 @@ class StudyAiViewModel(
     fun jumpToChapterSlide(lectureId: Int, slideNumber: Int, timestampSec: Float) {
         dismissConceptDetail()
         val targetSlideIdx = (slideNumber - 1).coerceAtLeast(0)
+        _targetSlidePage.value = slideNumber.coerceAtLeast(1)
         if (lectureId.toLong() == _currentLectureId.value) {
             _currentSlideIndex.value = targetSlideIdx.coerceIn(0, (_slides.value.size - 1).coerceAtLeast(0))
             if (timestampSec > 0f) {
@@ -1241,6 +1299,14 @@ class StudyAiViewModel(
 
     fun clearTargetAudio() {
         _targetAudioSec.value = null
+    }
+
+    fun requestScrollToSlide(pageNumber: Int) {
+        _targetSlidePage.value = pageNumber.coerceAtLeast(1)
+    }
+
+    fun clearTargetSlidePage() {
+        _targetSlidePage.value = null
     }
 
     fun loadConceptDetail(conceptId: Long) {

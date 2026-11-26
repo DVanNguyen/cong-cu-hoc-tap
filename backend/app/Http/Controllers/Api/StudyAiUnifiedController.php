@@ -734,6 +734,21 @@ class StudyAiUnifiedController extends Controller
             ->get()
             ->groupBy('block_id');
 
+        $categoryByContent = [];
+        $lectureNoteRows = DB::table('lecture_notes as ln')
+            ->join('slides as s', 'ln.slide_id', '=', 's.id')
+            ->where('s.lecture_id', $lectureId)
+            ->select('ln.bullet_content', 'ln.term_explanations')
+            ->get();
+        foreach ($lectureNoteRows as $ln) {
+            $meta = json_decode($ln->term_explanations ?? '{}', true);
+            $cat = is_array($meta) ? ($meta['category'] ?? 'core_explanation') : 'core_explanation';
+            $key = trim((string) $ln->bullet_content);
+            if ($key !== '') {
+                $categoryByContent[$key] = $cat;
+            }
+        }
+
         $highlights = DB::table('block_concept_highlights')
             ->where('lecture_id', $lectureId)
             ->get()
@@ -748,15 +763,18 @@ class StudyAiUnifiedController extends Controller
                 ? $firstBlock->original_slide_text
                 : "Trang {$pageNum}";
 
-            $pageBlocks = $bList->map(function ($b) use ($inlineNotes, $highlights) {
-                $notes = ($inlineNotes->get($b->block_id) ?? collect())->map(function ($n) {
+            $pageBlocks = $bList->map(function ($b) use ($inlineNotes, $highlights, $categoryByContent) {
+                $notes = ($inlineNotes->get($b->block_id) ?? collect())->map(function ($n) use ($categoryByContent) {
                     $min = floor($n->timestamp_start_sec / 60);
                     $sec = floor($n->timestamp_start_sec % 60);
+                    $textKey = trim((string) $n->explanation_text);
                     return [
                         'id' => (string) $n->id,
                         'explanationText' => $n->explanation_text,
                         'timestampSec' => (float) $n->timestamp_start_sec,
                         'timestampLabel' => sprintf('%02d:%02d', $min, $sec),
+                        'category' => $categoryByContent[$textKey] ?? 'core_explanation',
+                        'evidenceQuote' => (string) ($n->raw_transcript ?? ''),
                     ];
                 })->values();
 

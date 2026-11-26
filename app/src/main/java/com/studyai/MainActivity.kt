@@ -5,10 +5,9 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
-import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
@@ -34,7 +33,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -62,8 +61,8 @@ class MainActivity : ComponentActivity() {
         // Nạp Server URL đã lưu trong SharedPreferences (nếu có) trước khi gọi API
         ApiClient.init(applicationContext)
 
-        // Tải dữ liệu toàn hệ thống từ 3 Trụ cột qua Backend API
-        viewModel.loadAllData(courseId = 1L, lectureId = 1L)
+        // Tải dữ liệu toàn hệ thống qua Backend API
+        viewModel.loadAllData(courseId = 1L, lectureId = null)
 
         setContent {
             val systemDark = isSystemInDarkTheme()
@@ -81,6 +80,7 @@ class MainActivity : ComponentActivity() {
                     val currentLectureTitle by viewModel.currentLectureTitle.collectAsState()
                     val currentSlideIndex by viewModel.currentSlideIndex.collectAsState()
                     val targetAudioSec by viewModel.targetAudioSec.collectAsState()
+                    val targetSlidePage by viewModel.targetSlidePage.collectAsState()
                     val nodes by viewModel.nodes.collectAsState()
                     val edges by viewModel.edges.collectAsState()
                     val dictionaryEntries by viewModel.dictionaryEntries.collectAsState()
@@ -107,7 +107,7 @@ class MainActivity : ComponentActivity() {
                         viewModel.checkVoiceprintStatus(selectedCourseId)
                     }
 
-                    if (isLoading && slides.isEmpty() && nodes.isEmpty() && dictionaryEntries.isEmpty()) {
+                    if (isLoading && slides.isEmpty() && nodes.isEmpty() && dictionaryEntries.isEmpty() && inlinePages.isEmpty()) {
                         StudyAiLoadingScreen()
                     } else {
                         MainStudyAiScreen(
@@ -120,6 +120,8 @@ class MainActivity : ComponentActivity() {
                             onSlideIdxChange = { idx -> viewModel.setSlideIndex(idx) },
                             targetAudioSec = targetAudioSec,
                             onClearTargetAudio = { viewModel.clearTargetAudio() },
+                            targetSlidePage = targetSlidePage,
+                            onClearTargetSlidePage = { viewModel.clearTargetSlidePage() },
                             sampleNodes = nodes,
                             sampleEdges = edges,
                             dictionaryEntries = dictionaryEntries,
@@ -213,29 +215,21 @@ private fun StudyAiLoadingScreen() {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center,
     ) {
-        Box(
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(20.dp))
-                .background(
-                    Brush.linearGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary,
-                        )
-                    )
-                ),
-            contentAlignment = Alignment.Center,
+        Surface(
+            modifier = Modifier.size(68.dp),
+            shape = RoundedCornerShape(18.dp),
+            color = MaterialTheme.colorScheme.primaryContainer,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
         ) {
             Icon(
-                imageVector = Icons.Default.AutoAwesome,
+                imageVector = Icons.AutoMirrored.Filled.MenuBook,
                 contentDescription = "StudyAI",
-                tint = MaterialTheme.colorScheme.onPrimary,
-                modifier = Modifier.size(32.dp),
+                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                modifier = Modifier.padding(18.dp),
             )
         }
 
-        Spacer(modifier = Modifier.height(16.dp))
+        Spacer(modifier = Modifier.height(18.dp))
 
         Text(
             text = "StudyAI",
@@ -246,19 +240,21 @@ private fun StudyAiLoadingScreen() {
         Spacer(modifier = Modifier.height(6.dp))
 
         Text(
-            text = "Đang đồng bộ bài giảng, đồ thị tri thức và từ điển sống...",
+            text = "Đang đồng bộ vở ghi chép, kho slide và từ điển học thuật...",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
         )
 
-        Spacer(modifier = Modifier.height(20.dp))
+        Spacer(modifier = Modifier.height(22.dp))
 
         LinearProgressIndicator(
             modifier = Modifier
-                .width(180.dp)
-                .clip(RoundedCornerShape(8.dp)),
+                .width(190.dp)
+                .height(4.dp)
+                .clip(RoundedCornerShape(4.dp)),
             color = MaterialTheme.colorScheme.primary,
-            trackColor = MaterialTheme.colorScheme.primaryContainer,
+            trackColor = MaterialTheme.colorScheme.surfaceVariant,
         )
     }
 }

@@ -2,31 +2,56 @@ package com.studyai.ui.graph
 
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTransformGestures
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.RestartAlt
+import androidx.compose.material.icons.filled.WarningAmber
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 
 enum class RoadmapViewMode {
-    LAYERED, // Lộ trình phân tầng (Mặc định - Mobile First)
-    GRAPH    // Sơ đồ thu phóng (Pill badges ngắn gọn)
+    LAYERED,
+    GRAPH
 }
 
 data class RoadmapItemUi(
@@ -47,18 +72,15 @@ data class RoadmapTierUi(
     val items: List<RoadmapItemUi>
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun KnowledgeRoadmapScreen(
-    courseTitle: String = "Trí tuệ Nhân tạo (AI)",
+    courseTitle: String = "Môn học",
     conceptNodes: List<ConceptNodeUi> = emptyList(),
     conceptEdges: List<ConceptEdgeUi> = emptyList(),
     onJumpToSlide: (lectureId: Int, slideNo: Int) -> Unit = { _, _ -> }
 ) {
     var viewMode by remember { mutableStateOf(RoadmapViewMode.LAYERED) }
-    var selectedItemDetail by remember { mutableStateOf<RoadmapItemUi?>(null) }
 
-    // Dữ liệu phân tầng mẫu kết hợp dữ liệu thực tế từ ConceptNodeUi
     val tiers = remember(conceptNodes) {
         if (conceptNodes.isNotEmpty()) {
             val tier1Nodes = conceptNodes.filter { it.firstIntroducedLectureId <= 1 }
@@ -72,7 +94,7 @@ fun KnowledgeRoadmapScreen(
                     items = tier1Nodes.map { n ->
                         RoadmapItemUi(
                             id = n.id.toString(),
-                            shortCode = n.canonicalNameEn.take(4).uppercase(),
+                            shortCode = n.canonicalNameEn.take(4).uppercase().ifBlank { "KN" },
                             title = n.canonicalNameVi,
                             location = "Bài ${n.firstIntroducedLectureId} • Slide ${n.firstIntroducedSlideNo}",
                             lectureId = n.firstIntroducedLectureId,
@@ -84,84 +106,57 @@ fun KnowledgeRoadmapScreen(
                     }
                 ),
                 RoadmapTierUi(
-                    levelName = "Tầng 2 • Thuật toán lõi & Tìm kiếm",
+                    levelName = "Tầng 2 • Khái niệm cốt lõi",
                     progressPercent = 65,
                     items = tier2Nodes.map { n ->
                         RoadmapItemUi(
                             id = n.id.toString(),
-                            shortCode = if (n.canonicalNameEn.contains("A*")) "A*" else n.canonicalNameEn.take(4).uppercase(),
+                            shortCode = if (n.canonicalNameEn.contains("A*")) "A*" else n.canonicalNameEn.take(4).uppercase().ifBlank { "KN" },
                             title = n.canonicalNameVi,
                             location = "Bài ${n.firstIntroducedLectureId} • Slide ${n.firstIntroducedSlideNo}",
                             lectureId = n.firstIntroducedLectureId,
                             slideNumber = n.firstIntroducedSlideNo,
                             mastered = !n.hasViolation,
                             isWarning = n.hasViolation,
-                            prerequisites = if (n.canonicalNameEn.contains("A*")) listOf("BFS", "Heuristic") else listOf("Agent")
+                            prerequisites = if (n.canonicalNameEn.contains("A*")) listOf("BFS", "Heuristic") else listOf("Nền tảng")
                         )
                     }
                 ),
                 RoadmapTierUi(
-                    levelName = "Tầng 3 • Tối ưu & Mô hình nâng cao",
+                    levelName = "Tầng 3 • Mở rộng & Ứng dụng",
                     progressPercent = 30,
                     items = tier3Nodes.map { n ->
                         RoadmapItemUi(
                             id = n.id.toString(),
-                            shortCode = if (n.canonicalNameEn.contains("GAN")) "GAN" else n.canonicalNameEn.take(4).uppercase(),
+                            shortCode = if (n.canonicalNameEn.contains("GAN")) "GAN" else n.canonicalNameEn.take(4).uppercase().ifBlank { "KN" },
                             title = n.canonicalNameVi,
                             location = "Bài ${n.firstIntroducedLectureId} • Slide ${n.firstIntroducedSlideNo}",
                             lectureId = n.firstIntroducedLectureId,
                             slideNumber = n.firstIntroducedSlideNo,
                             mastered = false,
                             isWarning = n.hasViolation,
-                            prerequisites = listOf("A*")
+                            prerequisites = emptyList()
                         )
                     }
                 )
-            )
+            ).filter { it.items.isNotEmpty() }
         } else {
-            // Mẫu dự phòng khi chưa tải được từ máy chủ
-            listOf(
-                RoadmapTierUi(
-                    levelName = "Tầng 1 • Nền tảng cơ sở",
-                    progressPercent = 100,
-                    items = listOf(
-                        RoadmapItemUi("1", "AGENT", "Tác tử thông minh (Intelligent Agent)", "Chương 1 • Slide 4", 1, 4, true),
-                        RoadmapItemUi("2", "PEAS", "Mô hình môi trường PEAS", "Chương 1 • Slide 6", 1, 6, true, prerequisites = listOf("Agent"))
-                    )
-                ),
-                RoadmapTierUi(
-                    levelName = "Tầng 2 • Thuật toán lõi & Heuristic",
-                    progressPercent = 65,
-                    items = listOf(
-                        RoadmapItemUi("3", "BFS", "Tìm kiếm theo chiều rộng (BFS)", "Chương 2 • Slide 8", 2, 8, true, prerequisites = listOf("Agent")),
-                        RoadmapItemUi("4", "A*", "Thuật toán tìm kiếm A*", "Chương 3 • Slide 6", 3, 6, false, isWarning = true, prerequisites = listOf("BFS", "Heuristic"))
-                    )
-                ),
-                RoadmapTierUi(
-                    levelName = "Tầng 3 • Tối ưu & Học sâu",
-                    progressPercent = 30,
-                    items = listOf(
-                        RoadmapItemUi("5", "SA", "Mô phỏng tôi thép (Simulated Annealing)", "Chương 4 • Slide 11", 4, 11, false, prerequisites = listOf("A*")),
-                        RoadmapItemUi("6", "GAN", "Mạng đối nghịch tạo sinh (GAN)", "Chương 5 • Slide 12", 5, 12, false, prerequisites = listOf("SA"))
-                    )
-                )
-            )
+            emptyList()
         }
     }
 
-    val violationCount = remember(tiers) {
-        tiers.sumOf { tier -> tier.items.count { it.isWarning } }
+    val violationItems = remember(tiers) {
+        tiers.flatMap { it.items }.filter { it.isWarning }
     }
 
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .padding(horizontal = 16.dp),
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item { Spacer(modifier = Modifier.height(4.dp)) }
-
-        // Header: Tiêu đề + Nút chuyển chế độ (Lộ trình vs Sơ đồ)
+        // Header: Tiêu đề + Bộ chuyển chế độ Lộ trình / Sơ đồ
         item {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -170,35 +165,39 @@ fun KnowledgeRoadmapScreen(
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Hệ thống hoá kiến thức",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
+                        text = "Hệ thống hóa kiến thức",
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                     Text(
-                        text = "Sắp xếp theo thứ tự tiên quyết (Prerequisite DAG)",
+                        text = "$courseTitle • ${conceptNodes.size} khái niệm",
                         style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
 
+                Spacer(Modifier.width(8.dp))
+
                 Surface(
                     shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
                 ) {
                     Row(modifier = Modifier.padding(3.dp)) {
                         val isLayered = viewMode == RoadmapViewMode.LAYERED
                         Surface(
                             onClick = { viewMode = RoadmapViewMode.LAYERED },
                             shape = RoundedCornerShape(9.dp),
-                            color = if (isLayered) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                            color = if (isLayered) MaterialTheme.colorScheme.surface else Color.Transparent,
                         ) {
                             Text(
                                 text = "Lộ trình",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isLayered) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isLayered) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isLayered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
 
@@ -206,14 +205,14 @@ fun KnowledgeRoadmapScreen(
                         Surface(
                             onClick = { viewMode = RoadmapViewMode.GRAPH },
                             shape = RoundedCornerShape(9.dp),
-                            color = if (isGraph) MaterialTheme.colorScheme.primaryContainer else Color.Transparent
+                            color = if (isGraph) MaterialTheme.colorScheme.surface else Color.Transparent,
                         ) {
                             Text(
                                 text = "Sơ đồ",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = if (isGraph) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
+                                style = MaterialTheme.typography.labelMedium,
+                                fontWeight = if (isGraph) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isGraph) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
                             )
                         }
                     }
@@ -221,16 +220,19 @@ fun KnowledgeRoadmapScreen(
             }
         }
 
-        // Cảnh báo sư phạm nếu có khái niệm dùng trước khi định nghĩa
-        if (violationCount > 0) {
+        // Cảnh báo sư phạm nếu phát hiện khái niệm được nhắc trước khi định nghĩa chính thức
+        if (violationItems.isNotEmpty()) {
             item {
+                val firstWarn = violationItems.first()
                 Surface(
+                    onClick = { onJumpToSlide(firstWarn.lectureId, firstWarn.slideNumber) },
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.85f),
+                    color = MaterialTheme.colorScheme.errorContainer,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(12.dp),
+                        modifier = Modifier.padding(14.dp),
                         verticalAlignment = Alignment.Top
                     ) {
                         Icon(
@@ -240,15 +242,15 @@ fun KnowledgeRoadmapScreen(
                             modifier = Modifier.size(20.dp)
                         )
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
+                        Column(modifier = Modifier.weight(1f)) {
                             Text(
-                                text = "Cảnh báo sư phạm ($violationCount vị trí):",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
+                                text = "Lưu ý thứ tự khái niệm (${violationItems.size} vị trí)",
+                                style = MaterialTheme.typography.labelLarge,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
+                            Spacer(modifier = Modifier.height(2.dp))
                             Text(
-                                text = "Khái niệm 'Thuật toán A*' được nhắc tại Chương 1 trước khi được định nghĩa chính thức tại Chương 3 (Slide 6).",
+                                text = "'${firstWarn.title}' xuất hiện sớm trước khi định nghĩa chính thức tại ${firstWarn.location}. Chạm để mở slide.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
@@ -258,13 +260,44 @@ fun KnowledgeRoadmapScreen(
             }
         }
 
-        if (viewMode == RoadmapViewMode.LAYERED) {
-            // Chế độ 1: Lộ trình phân tầng (Layered Roadmap) - Không bao giờ đè chữ
+        if (tiers.isEmpty()) {
+            item {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AccountTree,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                        Text(
+                            text = "Chưa có đồ thị khái niệm cho môn học này",
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = "Hãy tải bài giảng kèm âm thanh ở tab Thu âm để StudyAI xây dựng cây khái niệm tiên quyết tự động.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        } else if (viewMode == RoadmapViewMode.LAYERED) {
             items(tiers) { tier ->
                 OutlinedCard(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -275,26 +308,24 @@ fun KnowledgeRoadmapScreen(
                         ) {
                             Text(
                                 text = tier.levelName,
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.titleMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "${tier.progressPercent}% nắm vững",
+                                text = "${tier.items.size} khái niệm",
                                 style = MaterialTheme.typography.labelSmall,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.secondary
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(6.dp))
+                        Spacer(modifier = Modifier.height(8.dp))
 
-                        // Thanh tiến độ nắm vững môn học
                         LinearProgressIndicator(
                             progress = { tier.progressPercent / 100f },
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(6.dp)
+                                .height(5.dp)
                                 .clip(RoundedCornerShape(3.dp)),
                             color = MaterialTheme.colorScheme.secondary,
                             trackColor = MaterialTheme.colorScheme.surfaceVariant
@@ -302,23 +333,22 @@ fun KnowledgeRoadmapScreen(
 
                         Spacer(modifier = Modifier.height(12.dp))
 
-                        // Danh sách khái niệm trong tầng này
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             tier.items.forEach { item ->
                                 Surface(
                                     onClick = { onJumpToSlide(item.lectureId, item.slideNumber) },
                                     shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f),
+                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Row(
                                         modifier = Modifier.padding(10.dp),
                                         verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        // Badge mã viết tắt (Short Code)
                                         Box(
                                             modifier = Modifier
-                                                .size(36.dp)
+                                                .size(38.dp)
                                                 .clip(RoundedCornerShape(10.dp))
                                                 .background(
                                                     when {
@@ -332,7 +362,7 @@ fun KnowledgeRoadmapScreen(
                                             Text(
                                                 text = item.shortCode,
                                                 style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.ExtraBold,
+                                                fontWeight = FontWeight.Bold,
                                                 color = when {
                                                     item.isWarning -> MaterialTheme.colorScheme.onErrorContainer
                                                     item.mastered -> MaterialTheme.colorScheme.onSecondaryContainer
@@ -363,10 +393,12 @@ fun KnowledgeRoadmapScreen(
                                                 )
                                                 if (item.prerequisites.isNotEmpty()) {
                                                     Text(
-                                                        text = "• Cần biết: ${item.prerequisites.joinToString(", ")}",
+                                                        text = "• Tiên quyết: ${item.prerequisites.joinToString(", ")}",
                                                         style = MaterialTheme.typography.labelSmall,
                                                         color = MaterialTheme.colorScheme.primary,
-                                                        fontWeight = FontWeight.Medium
+                                                        fontWeight = FontWeight.Medium,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
                                                     )
                                                 }
                                             }
@@ -374,7 +406,7 @@ fun KnowledgeRoadmapScreen(
 
                                         Icon(
                                             imageVector = Icons.Default.ChevronRight,
-                                            contentDescription = null,
+                                            contentDescription = "Mở slide",
                                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.size(18.dp)
                                         )
@@ -386,15 +418,14 @@ fun KnowledgeRoadmapScreen(
                 }
             }
         } else {
-            // Chế độ 2: Sơ đồ thu phóng (Zoomable Map) với Nhãn ngắn gọn không đè chữ
             item {
                 var scale by remember { mutableFloatStateOf(1f) }
                 var offset by remember { mutableStateOf(Offset.Zero) }
 
                 OutlinedCard(
-                    shape = RoundedCornerShape(18.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
                     modifier = Modifier.fillMaxWidth()
                 ) {
                     Column(modifier = Modifier.padding(14.dp)) {
@@ -403,22 +434,30 @@ fun KnowledgeRoadmapScreen(
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text(
-                                text = "Sơ đồ phụ thuộc (Chạm để mở Slide)",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer
-                            ) {
+                            Column(modifier = Modifier.weight(1f)) {
                                 Text(
-                                    text = "Nhãn rút gọn",
+                                    text = "Sơ đồ phụ thuộc (Chạm để mở Slide)",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "Chụm hai ngón hoặc kéo để thu phóng bản đồ",
                                     style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                            IconButton(
+                                onClick = {
+                                    scale = 1f
+                                    offset = Offset.Zero
+                                },
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.RestartAlt,
+                                    contentDescription = "Đặt lại thu phóng",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
                                 )
                             }
                         }
@@ -428,50 +467,62 @@ fun KnowledgeRoadmapScreen(
                         Box(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(260.dp)
+                                .height(300.dp)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
                                 .pointerInput(Unit) {
                                     detectTransformGestures { _, pan, zoom, _ ->
-                                        scale = (scale * zoom).coerceIn(0.8f, 2.5f)
+                                        scale = (scale * zoom).coerceIn(0.75f, 2.2f)
                                         offset += pan
                                     }
                                 },
                             contentAlignment = Alignment.Center
                         ) {
-                            // Bố trí mạng lưới các nút viên nang trực quan
                             Column(
-                                verticalArrangement = Arrangement.spacedBy(22.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
+                                verticalArrangement = Arrangement.spacedBy(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                modifier = Modifier
+                                    .padding(16.dp)
+                                    .graphicsLayer(
+                                        scaleX = scale,
+                                        scaleY = scale,
+                                        translationX = offset.x,
+                                        translationY = offset.y,
+                                    )
                             ) {
-                                // Tầng 1
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    CompactPillNode("1. Agent", MaterialTheme.colorScheme.primary) { onJumpToSlide(1, 4) }
-                                    CompactPillNode("2. PEAS", MaterialTheme.colorScheme.secondary) { onJumpToSlide(1, 6) }
-                                }
-                                // Mũi tên liên kết
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDownward,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                // Tầng 2
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    CompactPillNode("3. BFS", MaterialTheme.colorScheme.secondary) { onJumpToSlide(2, 8) }
-                                    CompactPillNode("4. A* (!)", MaterialTheme.colorScheme.error) { onJumpToSlide(3, 6) }
-                                }
-                                // Mũi tên liên kết
-                                Icon(
-                                    imageVector = Icons.Default.ArrowDownward,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.outline,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                // Tầng 3
-                                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                                    CompactPillNode("5. Simulated Annealing", MaterialTheme.colorScheme.primary) { onJumpToSlide(4, 11) }
-                                    CompactPillNode("6. GAN", MaterialTheme.colorScheme.primary) { onJumpToSlide(5, 12) }
+                                tiers.forEachIndexed { idx, tier ->
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                    ) {
+                                        tier.items.take(3).forEach { node ->
+                                            val bg = when {
+                                                node.isWarning -> MaterialTheme.colorScheme.errorContainer
+                                                node.mastered -> MaterialTheme.colorScheme.secondaryContainer
+                                                else -> MaterialTheme.colorScheme.primaryContainer
+                                            }
+                                            val fg = when {
+                                                node.isWarning -> MaterialTheme.colorScheme.onErrorContainer
+                                                node.mastered -> MaterialTheme.colorScheme.onSecondaryContainer
+                                                else -> MaterialTheme.colorScheme.onPrimaryContainer
+                                            }
+                                            CompactPillNode(
+                                                label = "${node.shortCode}: ${node.title.take(18)}",
+                                                bgColor = bg,
+                                                fgColor = fg,
+                                            ) {
+                                                onJumpToSlide(node.lectureId, node.slideNumber)
+                                            }
+                                        }
+                                    }
+                                    if (idx < tiers.lastIndex) {
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowDownward,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.outline,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -480,28 +531,32 @@ fun KnowledgeRoadmapScreen(
             }
         }
 
-        item { Spacer(modifier = Modifier.height(24.dp)) }
+        item { Spacer(modifier = Modifier.height(16.dp)) }
     }
 }
 
 @Composable
 private fun CompactPillNode(
     label: String,
-    tintColor: Color,
+    bgColor: Color,
+    fgColor: Color,
     onClick: () -> Unit
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = tintColor,
-        shadowElevation = 2.dp
+        color = bgColor,
+        border = BorderStroke(1.dp, fgColor.copy(alpha = 0.25f)),
+        shadowElevation = 1.dp
     ) {
         Text(
             text = label,
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.Bold,
-            color = Color.White,
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp)
+            color = fgColor,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
         )
     }
 }

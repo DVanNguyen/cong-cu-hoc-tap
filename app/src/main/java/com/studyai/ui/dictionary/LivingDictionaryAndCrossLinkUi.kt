@@ -5,22 +5,61 @@ import android.net.Uri
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.automirrored.filled.MenuBook
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.Lightbulb
+import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
+import com.studyai.ui.theme.StudyAiExtras
 
 // =========================================================================
 // 1. DATA MODELS CHO LIÊN KẾT CHÉO LIÊN CHƯƠNG & TỪ ĐIỂN SỐNG
@@ -30,7 +69,7 @@ data class CrossChapterLinkUiModel(
     val conceptId: Long,
     val conceptNameVi: String,
     val conceptNameEn: String,
-    val linkDirection: String, // "BACK_TO_ORIGIN" | "FORWARD_TO_LATER_CHAPTER"
+    val linkDirection: String,
     val targetLectureId: Int,
     val targetLectureOrder: Int,
     val targetLectureTitle: String,
@@ -43,7 +82,7 @@ data class ExternalReferenceUiModel(
     val id: Long,
     val title: String,
     val url: String,
-    val sourceProvider: String, // "WIKIPEDIA" | "SEMANTIC_SCHOLAR" | "WEB_TUTORIAL" | "YOUTUBE_VIDEO"
+    val sourceProvider: String,
     val domainName: String,
     val snippetSummary: String,
     val finalRankScore: Float,
@@ -78,7 +117,7 @@ data class CourseDictionaryItemUi(
 )
 
 // =========================================================================
-// 2. COMPONENT HIỂN THỊ LIÊN KẾT CHÉO GIỮA CÁC CHƯƠNG NGAY TRÊN SLIDE
+// 2. COMPONENT LIÊN KẾT CHÉO KIẾN THỨC GIỮA CÁC CHƯƠNG
 // =========================================================================
 
 @Composable
@@ -88,50 +127,53 @@ fun CrossChapterLinksSection(
 ) {
     if (links.isEmpty()) return
 
-    Card(
+    val extras = StudyAiExtras.colors
+
+    Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFFE8F5E9)),
-        shape = RoundedCornerShape(12.dp)
+            .padding(vertical = 4.dp),
+        color = extras.successBg,
+        border = BorderStroke(1.dp, extras.successBorder),
+        shape = RoundedCornerShape(14.dp)
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Icon(
                     imageVector = Icons.Default.AccountTree,
                     contentDescription = null,
-                    tint = Color(0xFF1B5E20),
+                    tint = extras.successFg,
                     modifier = Modifier.size(18.dp)
                 )
                 Spacer(modifier = Modifier.width(6.dp))
                 Text(
-                    text = "LIÊN KẾT CHÉO KIẾN THỨC LIÊN CHƯƠNG (${links.size})",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(0xFF1B5E20)
+                    text = "Liên kết chéo giữa các bài giảng (${links.size})",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = extras.successFg
                 )
             }
 
-            Spacer(modifier = Modifier.height(6.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             links.forEach { link ->
                 val isBackLink = link.linkDirection == "BACK_TO_ORIGIN"
                 Surface(
+                    onClick = {
+                        onNavigateToChapterSlide(
+                            link.targetLectureId,
+                            link.targetSlideNumber,
+                            link.targetTimestampSec
+                        )
+                    },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 3.dp)
-                        .clickable {
-                            onNavigateToChapterSlide(
-                                link.targetLectureId,
-                                link.targetSlideNumber,
-                                link.targetTimestampSec
-                            )
-                        },
-                    shape = RoundedCornerShape(8.dp),
-                    color = Color.White
+                        .padding(vertical = 3.dp),
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -140,18 +182,19 @@ fun CrossChapterLinksSection(
                                 text = "${link.conceptNameVi} (${link.conceptNameEn})",
                                 style = MaterialTheme.typography.bodySmall,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(0xFF0D47A1)
+                                color = MaterialTheme.colorScheme.primary
                             )
                             Text(
                                 text = link.badgeText,
                                 style = MaterialTheme.typography.labelSmall,
-                                color = Color(0xFF2E7D32)
+                                color = MaterialTheme.colorScheme.secondary
                             )
                         }
                         Icon(
-                            imageVector = if (isBackLink) Icons.Default.History else Icons.Default.ArrowForward,
-                            contentDescription = "Chuyển hướng",
-                            tint = Color(0xFF1565C0)
+                            imageVector = if (isBackLink) Icons.Default.History else Icons.AutoMirrored.Filled.ArrowForward,
+                            contentDescription = "Chuyển tới bài giảng",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(18.dp)
                         )
                     }
                 }
@@ -172,43 +215,48 @@ fun LivingDictionaryBottomSheet(
     onNavigateToChapterSlide: (lectureId: Int, slideNumber: Int, timestampSec: Float) -> Unit
 ) {
     val context = LocalContext.current
+    val extras = StudyAiExtras.colors
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        containerColor = MaterialTheme.colorScheme.surface,
         shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
     ) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 16.dp),
+                .padding(horizontal = 18.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Header: Metadata nằm phía trên tiêu đề để tên thuật ngữ dài hiển thị trọn 100% chiều rộng
             item {
                 val originLink = entry.crossChapterLinks.firstOrNull()
                 val metaLine = if (originLink != null) {
-                    "Chương ${originLink.targetLectureOrder} • Slide ${originLink.targetSlideNumber} • ${entry.externalReferences.size} nguồn"
+                    "Bài ${originLink.targetLectureOrder} • Slide ${originLink.targetSlideNumber} • ${entry.externalReferences.size} nguồn"
                 } else {
-                    "Từ điển sống • ${entry.externalReferences.size} nguồn tham khảo"
+                    "Từ điển học thuật • ${entry.externalReferences.size} nguồn tham khảo"
                 }
                 Column(modifier = Modifier.fillMaxWidth()) {
-                    Text(
-                        text = metaLine,
-                        style = MaterialTheme.typography.labelSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
+                    Surface(
+                        shape = RoundedCornerShape(8.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                    ) {
+                        Text(
+                            text = metaLine,
+                            style = MaterialTheme.typography.labelSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
                         text = "${entry.canonicalNameVi} (${entry.canonicalNameEn})",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.ExtraBold,
+                        style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface
                     )
                 }
             }
 
-            // Khối 1: Liên kết chéo qua các chương (Nếu khái niệm xuất hiện ở nhiều bài)
             if (entry.crossChapterLinks.isNotEmpty()) {
                 item {
                     CrossChapterLinksSection(
@@ -221,57 +269,101 @@ fun LivingDictionaryBottomSheet(
                 }
             }
 
-            // Khối 2: Giảng viên đã nói gì trên lớp + AI Giải thích đào sâu
             item {
-                OutlinedCard(modifier = Modifier.fillMaxWidth()) {
-                    Column(modifier = Modifier.padding(12.dp)) {
-                        Text(
-                            text = "1. Lời giảng viên giải thích trên lớp:",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF1565C0)
-                        )
+                OutlinedCard(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(14.dp),
+                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.RecordVoiceOver,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Lời giảng viên giải thích trên lớp",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Text(
                             text = "\"${entry.lecturerOralExplanation}\"",
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
-                        HorizontalDivider()
+                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
 
-                        Text(
-                            text = "2. Giải thích đào sâu bản chất (Bổ trợ khung sườn Slide):",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(0xFF6A1B9A),
-                            modifier = Modifier.padding(top = 8.dp)
-                        )
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.secondary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Giải thích đào sâu bản chất",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.secondary
+                            )
+                        }
                         Text(
                             text = entry.aiDeepExplanation,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(top = 4.dp)
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface
                         )
 
                         if (!entry.intuitionExample.isNullOrBlank()) {
-                            Spacer(modifier = Modifier.height(6.dp))
-                            Text(
-                                text = "💡 Ví dụ trực quan: ${entry.intuitionExample}",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color(0xFF2E7D32)
-                            )
+                            Surface(
+                                shape = RoundedCornerShape(10.dp),
+                                color = extras.exampleBg,
+                                border = BorderStroke(1.dp, extras.exampleBorder),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(10.dp),
+                                    verticalAlignment = Alignment.Top,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Lightbulb,
+                                        contentDescription = null,
+                                        tint = extras.exampleBadgeFg,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Ví dụ trực quan: ${entry.intuitionExample}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = extras.exampleBadgeFg
+                                    )
+                                }
+                            }
                         }
                     }
                 }
             }
 
-            // Khối 3: Danh sách Liên kết Tham khảo Bên ngoài (Đã kiểm chứng & xếp hạng)
             item {
-                Text(
-                    text = "NGUỒN TÀI LIỆU THAM KHẢO MỞ RỘNG (${entry.externalReferences.size})",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary
-                )
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Icon(
+                        imageVector = Icons.Default.Public,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Text(
+                        text = "Tài liệu tham khảo mở rộng (${entry.externalReferences.size})",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
 
             items(entry.externalReferences, key = { it.url }) { ref ->
@@ -298,18 +390,21 @@ fun ExternalReferenceCard(
     ref: ExternalReferenceUiModel,
     onOpenUrl: (String) -> Unit
 ) {
-    val badgeColor = when (ref.sourceProvider) {
-        "SEMANTIC_SCHOLAR" -> Color(0xFFB71C1C)
-        "WIKIPEDIA" -> Color(0xFF0D47A1)
-        "YOUTUBE_VIDEO" -> Color(0xFFD84315)
-        else -> Color(0xFF2E7D32)
+    val extras = StudyAiExtras.colors
+    val (badgeBg, badgeFg) = when (ref.sourceProvider) {
+        "SEMANTIC_SCHOLAR" -> extras.scholarBg to extras.scholarFg
+        "WIKIPEDIA" -> extras.wikiBg to extras.wikiFg
+        "YOUTUBE_VIDEO" -> extras.videoBg to extras.videoFg
+        else -> extras.successBg to extras.successFg
     }
 
-    ElevatedCard(
+    OutlinedCard(
         modifier = Modifier
             .fillMaxWidth()
             .clickable { onOpenUrl(ref.url) },
-        shape = RoundedCornerShape(12.dp)
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
     ) {
         Column(modifier = Modifier.padding(12.dp)) {
             Row(
@@ -318,19 +413,21 @@ fun ExternalReferenceCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Surface(
-                    color = badgeColor.copy(alpha = 0.12f),
-                    shape = RoundedCornerShape(6.dp)
+                    color = badgeBg,
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = "${ref.citationBadge} • ${ref.domainName}",
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
-                        color = badgeColor,
+                        color = badgeFg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
                     )
                 }
                 Text(
-                    text = "Độ khớp: ${(ref.finalRankScore * 100).toInt()}%",
+                    text = "Khớp ${(ref.finalRankScore * 100).toInt()}%",
                     style = MaterialTheme.typography.labelSmall,
                     fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -342,25 +439,25 @@ fun ExternalReferenceCard(
             Text(
                 text = ref.title,
                 style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.Bold
+                color = MaterialTheme.colorScheme.onSurface
             )
 
             Text(
                 text = ref.snippetSummary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 3.dp)
+                modifier = Modifier.padding(top = 4.dp)
             )
 
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 6.dp),
+                    .padding(top = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.End
             ) {
                 Icon(
-                    imageVector = Icons.Default.OpenInNew,
+                    imageVector = Icons.AutoMirrored.Filled.OpenInNew,
                     contentDescription = null,
                     modifier = Modifier.size(14.dp),
                     tint = MaterialTheme.colorScheme.primary
@@ -378,24 +475,25 @@ fun ExternalReferenceCard(
 }
 
 // =========================================================================
-// 5. TOÀN CẢNH MÀN HÌNH TỪ ĐIỂN SỐNG (BỘ TỪ ĐIỂN MÔN HỌC & HỌC THUẬT QUỐC TẾ)
+// 5. TOÀN CẢNH MÀN HÌNH TỪ ĐIỂN SỐNG
 // =========================================================================
 
 @Composable
 fun CourseDictionaryScreen(
-    courseTitle: String = "Trí tuệ Nhân tạo (AI)",
+    courseTitle: String = "Môn học",
     dictionaryEntries: List<CourseDictionaryItemUi>,
     onSelectConcept: (Long) -> Unit,
     onNavigateToChapterSlide: (Int, Int, Float) -> Unit = { _, _, _ -> }
 ) {
     var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("ALL") } // ALL | LECTURE | ACADEMIC
+    var selectedFilter by remember { mutableStateOf("ALL") }
 
     val filteredEntries = remember(dictionaryEntries, searchQuery, selectedFilter) {
         dictionaryEntries.filter { item ->
             val matchQuery = searchQuery.isBlank() ||
                     item.canonicalNameVi.contains(searchQuery, ignoreCase = true) ||
-                    item.canonicalNameEn.contains(searchQuery, ignoreCase = true)
+                    item.canonicalNameEn.contains(searchQuery, ignoreCase = true) ||
+                    item.aliases.any { it.contains(searchQuery, ignoreCase = true) }
 
             val isAcademic = item.referencesCount >= 3 || item.abstractnessScore >= 0.75f
             val matchFilter = when (selectedFilter) {
@@ -413,13 +511,12 @@ fun CourseDictionaryScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 16.dp)
     ) {
-        Spacer(modifier = Modifier.height(4.dp))
+        Spacer(modifier = Modifier.height(10.dp))
 
-        // Thanh tìm kiếm thuật ngữ
         OutlinedTextField(
             value = searchQuery,
             onValueChange = { searchQuery = it },
-            placeholder = { Text("Tra khái niệm mới hoặc thuật ngữ...", style = MaterialTheme.typography.bodySmall) },
+            placeholder = { Text("Tra cứu thuật ngữ hoặc khái niệm...", style = MaterialTheme.typography.bodySmall) },
             leadingIcon = {
                 Icon(
                     imageVector = Icons.Default.Search,
@@ -428,20 +525,31 @@ fun CourseDictionaryScreen(
                     modifier = Modifier.size(20.dp)
                 )
             },
-            shape = RoundedCornerShape(16.dp),
+            trailingIcon = if (searchQuery.isNotEmpty()) {
+                {
+                    IconButton(onClick = { searchQuery = "" }) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Xóa từ khóa tìm kiếm",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            } else null,
+            shape = RoundedCornerShape(14.dp),
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surface,
                 unfocusedContainerColor = MaterialTheme.colorScheme.surface,
                 focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
             ),
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
 
-        // Bộ lọc nguồn: Tất cả / Từ bài giảng / Học thuật quốc tế (Semantic Scholar • arXiv)
         Row(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             modifier = Modifier.fillMaxWidth()
@@ -458,7 +566,7 @@ fun CourseDictionaryScreen(
             FilterChip(
                 selected = selectedFilter == "LECTURE",
                 onClick = { selectedFilter = "LECTURE" },
-                label = { Text("Từ bài giảng", style = MaterialTheme.typography.labelSmall) },
+                label = { Text("Bài giảng", style = MaterialTheme.typography.labelSmall) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
@@ -467,7 +575,7 @@ fun CourseDictionaryScreen(
             FilterChip(
                 selected = selectedFilter == "ACADEMIC",
                 onClick = { selectedFilter = "ACADEMIC" },
-                label = { Text("Học thuật quốc tế", style = MaterialTheme.typography.labelSmall) },
+                label = { Text("Học thuật", style = MaterialTheme.typography.labelSmall) },
                 colors = FilterChipDefaults.filterChipColors(
                     selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
                     selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
@@ -475,47 +583,62 @@ fun CourseDictionaryScreen(
             )
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(6.dp))
 
         if (filteredEntries.isEmpty()) {
             Surface(
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 12.dp)
+                    .padding(vertical = 8.dp)
             ) {
                 Column(
-                    modifier = Modifier.padding(18.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                    modifier = Modifier.padding(22.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text(
-                        text = "Chưa có trong bài giảng trước",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                    Icon(
+                        imageVector = Icons.Default.AutoStories,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(30.dp)
                     )
-                    Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "StudyAI tự động kích hoạt truy vấn nguồn học thuật quốc tế (Semantic Scholar, arXiv, MIT OCW) cho từ khóa: \"$searchQuery\"",
+                        text = if (dictionaryEntries.isEmpty()) "Từ điển môn $courseTitle đang trống" else "Không tìm thấy kết quả khớp",
+                        style = MaterialTheme.typography.titleMedium,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        textAlign = TextAlign.Center
+                    )
+                    Text(
+                        text = if (searchQuery.isNotBlank()) {
+                            "Chưa có thuật ngữ \"$searchQuery\" trong bộ từ điển ngoại tuyến của môn học này."
+                        } else {
+                            "Khi xử lý bài giảng ở tab Thu âm, StudyAI sẽ tự động tổng hợp thuật ngữ kèm giải thích của giảng viên tại đây."
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
+                        textAlign = TextAlign.Center
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = { /* Kích hoạt Semantic Scholar API Fallback */ },
-                        shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.tertiary)
-                    ) {
-                        Text("Tra cứu học thuật quốc tế ngay", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    if (searchQuery.isNotBlank() || selectedFilter != "ALL") {
+                        Button(
+                            onClick = {
+                                searchQuery = ""
+                                selectedFilter = "ALL"
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                        ) {
+                            Text("Xóa bộ lọc tìm kiếm", style = MaterialTheme.typography.labelMedium)
+                        }
                     }
                 }
             }
         } else {
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
+                contentPadding = PaddingValues(bottom = 20.dp),
                 modifier = Modifier.fillMaxSize()
             ) {
                 items(filteredEntries, key = { it.id }) { item ->
@@ -526,20 +649,31 @@ fun CourseDictionaryScreen(
                             .clickable { onSelectConcept(item.id) },
                         shape = RoundedCornerShape(16.dp),
                         colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f))
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            // Dòng metadata gọn nằm trên tiêu đề (không còn nhãn phần trăm bóp chữ)
-                            Surface(
-                                color = if (isAcademic) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                shape = RoundedCornerShape(8.dp)
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
                             ) {
+                                Surface(
+                                    color = if (isAcademic) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Text(
+                                        text = "Bài ${item.firstIntroducedLectureId} • Slide ${item.firstIntroducedSlideNo}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isAcademic) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    )
+                                }
+
                                 Text(
-                                    text = "Chương ${item.firstIntroducedLectureId} • Slide ${item.firstIntroducedSlideNo} • ${item.referencesCount} nguồn",
+                                    text = "${item.referencesCount} nguồn tham khảo",
                                     style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isAcademic) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 )
                             }
 
@@ -548,16 +682,17 @@ fun CourseDictionaryScreen(
                             Text(
                                 text = item.canonicalNameVi,
                                 style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
 
-                            Text(
-                                text = item.canonicalNameEn,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                fontWeight = FontWeight.Medium
-                            )
+                            if (item.canonicalNameEn.isNotBlank() && !item.canonicalNameEn.equals(item.canonicalNameVi, ignoreCase = true)) {
+                                Text(
+                                    text = item.canonicalNameEn,
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
 
                             Spacer(modifier = Modifier.height(6.dp))
 
@@ -565,7 +700,8 @@ fun CourseDictionaryScreen(
                                 text = item.definitionSummary.ifBlank { item.aiDeepExplanation },
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3
+                                maxLines = 3,
+                                overflow = TextOverflow.Ellipsis
                             )
 
                             Spacer(modifier = Modifier.height(10.dp))
@@ -576,23 +712,22 @@ fun CourseDictionaryScreen(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = if (isAcademic) "Chưa có ở bài trước -> Tra cứu học thuật" else "Đã giảng tại Chương ${item.firstIntroducedLectureId}",
+                                    text = if (isAcademic) "Nguồn học thuật mở rộng" else "Trích từ bài giảng trên lớp",
                                     style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary,
+                                    color = MaterialTheme.colorScheme.secondary,
                                     fontWeight = FontWeight.Medium
                                 )
 
                                 Text(
-                                    text = "${item.referencesCount} nguồn tham khảo →",
+                                    text = "Xem chi tiết →",
                                     style = MaterialTheme.typography.labelSmall,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.primary
                                 )
                             }
                         }
                     }
                 }
-                item { Spacer(modifier = Modifier.height(24.dp)) }
             }
         }
     }

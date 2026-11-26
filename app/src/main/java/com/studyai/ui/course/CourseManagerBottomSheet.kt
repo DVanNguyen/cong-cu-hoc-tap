@@ -1,12 +1,13 @@
 package com.studyai.ui.course
 
 import androidx.compose.foundation.BorderStroke
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -18,7 +19,6 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -38,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -51,8 +52,7 @@ data class CourseUiItem(
 )
 
 /**
- * BottomSheet quản lý & chọn môn học (hỗ trợ đầy đủ Thêm / Sửa / Xóa môn học).
- * Dùng để thay thế menu chọn môn cố định trên thanh tiêu đề của StudyAI.
+ * BottomSheet quản lý & chọn môn học theo phong cách Editorial Academic Notebook.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -78,32 +78,33 @@ fun CourseManagerBottomSheet(
                 .fillMaxWidth()
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
                         text = "Môn học của bạn",
                         style = MaterialTheme.typography.titleLarge,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = "Chọn môn để xem vở ghi chép, kho slide và từ điển riêng",
+                        text = "Chạm để chuyển vở ghi chép, kho slide và từ điển riêng",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
+                Spacer(Modifier.width(8.dp))
                 FilledTonalButton(
                     onClick = { showCreateDialog = true },
-                    shape = RoundedCornerShape(14.dp),
+                    shape = RoundedCornerShape(12.dp),
                 ) {
                     Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Thêm môn")
+                    Text("Thêm môn", style = MaterialTheme.typography.labelLarge)
                 }
             }
 
@@ -113,55 +114,90 @@ fun CourseManagerBottomSheet(
             ) {
                 items(courses, key = { it.id }) { course ->
                     val isSelected = course.id == selectedCourseId
+                    val badgeText = remember(course.code, course.name) {
+                        val raw = course.code.ifBlank { course.name }.trim()
+                        raw.take(4).uppercase().ifBlank { "MON" }
+                    }
+
                     Surface(
                         onClick = {
                             onSelectCourse(course)
                             onDismiss()
                         },
-                        shape = RoundedCornerShape(16.dp),
+                        shape = RoundedCornerShape(14.dp),
                         color = if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
                         } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f)
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         },
                         border = BorderStroke(
                             width = if (isSelected) 1.5.dp else 1.dp,
                             color = if (isSelected) {
                                 MaterialTheme.colorScheme.primary
                             } else {
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.25f)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
                             },
                         ),
                     ) {
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(horizontal = 14.dp, vertical = 12.dp),
+                                .padding(horizontal = 12.dp, vertical = 12.dp),
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Icon(
-                                imageVector = if (isSelected) Icons.Default.CheckCircle else Icons.Default.School,
-                                contentDescription = null,
-                                tint = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                modifier = Modifier.size(22.dp),
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Column(modifier = Modifier.weight(1f)) {
+                            Box(
+                                modifier = Modifier
+                                    .size(42.dp)
+                                    .clip(RoundedCornerShape(11.dp))
+                                    .background(
+                                        if (isSelected) {
+                                            MaterialTheme.colorScheme.primary
+                                        } else {
+                                            MaterialTheme.colorScheme.primaryContainer
+                                        }
+                                    ),
+                                contentAlignment = Alignment.Center,
+                            ) {
                                 Text(
-                                    text = course.name,
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface,
+                                    text = badgeText,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) {
+                                        MaterialTheme.colorScheme.onPrimary
+                                    } else {
+                                        MaterialTheme.colorScheme.onPrimaryContainer
+                                    },
                                     maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
                                 )
+                            }
+
+                            Spacer(Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                ) {
+                                    Text(
+                                        text = course.name,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.weight(1f, fill = false),
+                                    )
+                                    if (isSelected) {
+                                        Icon(
+                                            imageVector = Icons.Default.CheckCircle,
+                                            contentDescription = "Đang chọn",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                }
                                 val subtitle = buildString {
-                                    if (course.code.isNotBlank()) append("${course.code} • ")
-                                    if (course.lecturer.isNotBlank()) append("GV: ${course.lecturer} • ")
+                                    if (course.lecturer.isNotBlank()) append("${course.lecturer} • ")
                                     append("${course.slideCount} slide")
                                 }
                                 Text(
@@ -172,7 +208,11 @@ fun CourseManagerBottomSheet(
                                     overflow = TextOverflow.Ellipsis,
                                 )
                             }
-                            IconButton(onClick = { editingCourse = course }) {
+
+                            IconButton(
+                                onClick = { editingCourse = course },
+                                modifier = Modifier.size(40.dp),
+                            ) {
                                 Icon(
                                     imageVector = Icons.Default.Edit,
                                     contentDescription = "Sửa môn học",
@@ -183,6 +223,7 @@ fun CourseManagerBottomSheet(
                             IconButton(
                                 onClick = { deletingCourse = course },
                                 enabled = courses.size > 1,
+                                modifier = Modifier.size(40.dp),
                             ) {
                                 Icon(
                                     imageVector = Icons.Default.DeleteOutline,
@@ -235,9 +276,12 @@ fun CourseManagerBottomSheet(
     deletingCourse?.let { target ->
         AlertDialog(
             onDismissRequest = { deletingCourse = null },
-            title = { Text("Xóa môn học?") },
+            title = { Text("Xóa môn học?", style = MaterialTheme.typography.titleLarge) },
             text = {
-                Text("Bạn có chắc muốn xóa môn \"${target.name}\"? Các slide và ghi chú gắn với môn này sẽ bị ẩn khỏi danh sách.")
+                Text(
+                    text = "Bạn có chắc muốn xóa môn \"${target.name}\"? Các slide và ghi chú gắn với môn này sẽ bị ẩn khỏi danh sách.",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
             },
             confirmButton = {
                 Button(onClick = {
@@ -272,7 +316,7 @@ private fun CourseEditDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(title) },
+        title = { Text(title, style = MaterialTheme.typography.titleLarge) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedTextField(
@@ -287,7 +331,7 @@ private fun CourseEditDialog(
                     value = code,
                     onValueChange = { code = it },
                     label = { Text("Mã học phần") },
-                    placeholder = { Text("VD: IT3020 / VKU") },
+                    placeholder = { Text("VD: IT3020") },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
