@@ -386,6 +386,7 @@ class StudyAiViewModel(
             AnnotatedSlidePageDto(
                 pageNumber = page.pageNumber,
                 slideTitle = page.slideTitle,
+                timeRangeLabel = page.timeRangeLabel,
                 blocks = page.blocks.map { b ->
                     SlideDocumentBlockDto(
                         blockId = b.blockId,
@@ -401,6 +402,7 @@ class StudyAiViewModel(
                                 timestampLabel = n.timestampLabel,
                                 category = n.category,
                                 evidenceQuote = n.evidenceQuote,
+                                isEdited = n.isEdited,
                             )
                         },
                         highlights = b.highlights.map { h ->
@@ -441,7 +443,7 @@ class StudyAiViewModel(
                 blocks = page.blocks.map { block ->
                     block.copy(
                         inlineNotes = block.inlineNotes.map { n ->
-                            if (n.id == noteId) n.copy(explanationText = cleaned) else n
+                            if (n.id == noteId) n.copy(explanationText = cleaned, isEdited = true) else n
                         }
                     )
                 }
@@ -1009,37 +1011,54 @@ class StudyAiViewModel(
 
     private fun mapDtoToAnnotatedPages(dtoPages: List<AnnotatedSlidePageDto>): List<AnnotatedSlidePageUi> {
         return dtoPages.map { p ->
+            val mappedBlocks = p.blocks.map { b ->
+                SlideDocumentBlockUi(
+                    blockId = b.blockId,
+                    kind = b.kind,
+                    originalSlideText = b.originalSlideText,
+                    isCurrentlySpoken = b.isCurrentlySpoken,
+                    isMarkedConfused = b.isMarkedConfused,
+                    inlineNotes = b.inlineNotes.map { n ->
+                        InlineLecturerNote(
+                            id = n.id,
+                            explanationText = n.explanationText,
+                            timestampSec = n.timestampSec,
+                            timestampLabel = n.timestampLabel.ifEmpty { formatSeconds(n.timestampSec) },
+                            category = inferNoteCategory(n.category, n.explanationText),
+                            evidenceQuote = n.evidenceQuote ?: "",
+                            isEdited = n.isEdited == true,
+                        )
+                    },
+                    highlights = b.highlights.map { h ->
+                        InlineConceptHighlight(
+                            term = h.term,
+                            sourceType = if (h.sourceType.equals("previous_lecture", true))
+                                HighlightSourceType.PREVIOUS_LECTURE else HighlightSourceType.ACADEMIC_INTERNET,
+                            sourceLabel = h.sourceLabel,
+                            explanation = h.explanation
+                        )
+                    }
+                )
+            }
+            val resolvedTimeRange = p.timeRangeLabel?.takeIf { it.isNotBlank() } ?: run {
+                val noteTimes = mappedBlocks.flatMap { it.inlineNotes }
+                    .map { it.timestampSec }
+                    .filter { it > 0f }
+                if (noteTimes.isEmpty()) {
+                    ""
+                } else {
+                    val minSec = noteTimes.minOrNull() ?: 0f
+                    val maxSec = noteTimes.maxOrNull() ?: 0f
+                    val startStr = formatSeconds(minSec)
+                    val endStr = formatSeconds(maxSec)
+                    if (maxSec > minSec && endStr != startStr) "$startStr – $endStr" else startStr
+                }
+            }
             AnnotatedSlidePageUi(
                 pageNumber = p.pageNumber,
                 slideTitle = p.slideTitle,
-                blocks = p.blocks.map { b ->
-                    SlideDocumentBlockUi(
-                        blockId = b.blockId,
-                        kind = b.kind,
-                        originalSlideText = b.originalSlideText,
-                        isCurrentlySpoken = b.isCurrentlySpoken,
-                        isMarkedConfused = b.isMarkedConfused,
-                        inlineNotes = b.inlineNotes.map { n ->
-                            InlineLecturerNote(
-                                id = n.id,
-                                explanationText = n.explanationText,
-                                timestampSec = n.timestampSec,
-                                timestampLabel = n.timestampLabel.ifEmpty { formatSeconds(n.timestampSec) },
-                                category = inferNoteCategory(n.category, n.explanationText),
-                                evidenceQuote = n.evidenceQuote ?: "",
-                            )
-                        },
-                        highlights = b.highlights.map { h ->
-                            InlineConceptHighlight(
-                                term = h.term,
-                                sourceType = if (h.sourceType.equals("previous_lecture", true))
-                                    HighlightSourceType.PREVIOUS_LECTURE else HighlightSourceType.ACADEMIC_INTERNET,
-                                sourceLabel = h.sourceLabel,
-                                explanation = h.explanation
-                            )
-                        }
-                    )
-                }
+                timeRangeLabel = resolvedTimeRange,
+                blocks = mappedBlocks,
             )
         }
     }

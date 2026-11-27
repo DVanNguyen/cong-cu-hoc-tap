@@ -68,6 +68,7 @@ data class StartLiveLectureResponse(
 data class AnnotatedSlidePageDto(
     val pageNumber: Int,
     val slideTitle: String,
+    val timeRangeLabel: String? = "",
     val blocks: List<SlideDocumentBlockDto>
 )
 
@@ -87,7 +88,8 @@ data class InlineLecturerNoteDto(
     val timestampSec: Float,
     val timestampLabel: String = "",
     val category: String? = "core_explanation",
-    val evidenceQuote: String? = ""
+    val evidenceQuote: String? = "",
+    val isEdited: Boolean? = false
 )
 
 data class InlineConceptHighlightDto(

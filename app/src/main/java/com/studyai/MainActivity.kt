@@ -66,7 +66,8 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val systemDark = isSystemInDarkTheme()
-            var isDarkTheme by rememberSaveable { mutableStateOf(systemDark) }
+            var darkThemeOverride by rememberSaveable { mutableStateOf<Boolean?>(null) }
+            val isDarkTheme = darkThemeOverride ?: systemDark
             var selectedLanguageMode by rememberSaveable { mutableStateOf(LectureLanguageMode.AUTO) }
 
             StudyAiTheme(darkTheme = isDarkTheme) {
@@ -145,7 +146,7 @@ class MainActivity : ComponentActivity() {
                                 viewModel.switchCourse(courseId)
                             },
                             isDarkTheme = isDarkTheme,
-                            onToggleDarkTheme = { isDarkTheme = !isDarkTheme },
+                            onToggleDarkTheme = { darkThemeOverride = !isDarkTheme },
                             selectedLanguageMode = selectedLanguageMode,
                             onLanguageModeChange = { mode ->
                                 selectedLanguageMode = mode

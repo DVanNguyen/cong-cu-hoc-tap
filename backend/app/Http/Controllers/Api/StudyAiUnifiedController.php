@@ -735,10 +735,11 @@ class StudyAiUnifiedController extends Controller
             ->groupBy('block_id');
 
         $categoryByContent = [];
+        $editedByContent = [];
         $lectureNoteRows = DB::table('lecture_notes as ln')
             ->join('slides as s', 'ln.slide_id', '=', 's.id')
             ->where('s.lecture_id', $lectureId)
-            ->select('ln.bullet_content', 'ln.term_explanations')
+            ->select('ln.bullet_content', 'ln.term_explanations', 'ln.is_edited_by_user')
             ->get();
         foreach ($lectureNoteRows as $ln) {
             $meta = json_decode($ln->term_explanations ?? '{}', true);
@@ -746,6 +747,57 @@ class StudyAiUnifiedController extends Controller
             $key = trim((string) $ln->bullet_content);
             if ($key !== '') {
                 $categoryByContent[$key] = $cat;
+                $editedByContent[$key] = (bool) ($ln->is_edited_by_user ?? false);
+            }
+        }
+
+        $slideIdToNumber = [];
+        $slidesRows = DB::table('slides')
+            ->where('lecture_id', $lectureId)
+            ->select('id', 'slide_number', 'page_number')
+            ->get();
+        foreach ($slidesRows as $sr) {
+            $num = (int) ($sr->slide_number ?? $sr->page_number ?? 0);
+            if ($num > 0) {
+                $slideIdToNumber[(int) $sr->id] = $num;
+            }
+        }
+
+        $pageTimeBounds = [];
+        $alignmentRows = DB::table('slide_alignments')
+            ->where('lecture_id', $lectureId)
+            ->select('slide_id', 'start_time_sec', 'end_time_sec')
+            ->get();
+        foreach ($alignmentRows as $ar) {
+            $pNum = $slideIdToNumber[(int) $ar->slide_id] ?? null;
+            if (!$pNum) continue;
+            $s = (float) ($ar->start_time_sec ?? 0.0);
+            $e = (float) ($ar->end_time_sec ?? $s);
+            if (!isset($pageTimeBounds[$pNum])) {
+                $pageTimeBounds[$pNum] = ['min' => $s, 'max' => $e];
+            } else {
+                $pageTimeBounds[$pNum]['min'] = min($pageTimeBounds[$pNum]['min'], $s);
+                $pageTimeBounds[$pNum]['max'] = max($pageTimeBounds[$pNum]['max'], $e);
+            }
+        }
+
+        if (empty($pageTimeBounds)) {
+            $segRows = DB::table('transcript_segments')
+                ->where('lecture_id', $lectureId)
+                ->whereNotNull('aligned_slide_id')
+                ->select('aligned_slide_id', 'start_time_sec', 'end_time_sec')
+                ->get();
+            foreach ($segRows as $sr) {
+                $pNum = $slideIdToNumber[(int) $sr->aligned_slide_id] ?? null;
+                if (!$pNum) continue;
+                $s = (float) ($sr->start_time_sec ?? 0.0);
+                $e = (float) ($sr->end_time_sec ?? $s);
+                if (!isset($pageTimeBounds[$pNum])) {
+                    $pageTimeBounds[$pNum] = ['min' => $s, 'max' => $e];
+                } else {
+                    $pageTimeBounds[$pNum]['min'] = min($pageTimeBounds[$pNum]['min'], $s);
+                    $pageTimeBounds[$pNum]['max'] = max($pageTimeBounds[$pNum]['max'], $e);
+                }
             }
         }
 
@@ -757,24 +809,41 @@ class StudyAiUnifiedController extends Controller
         $byPage = $blocks->groupBy('slide_page');
         $pages = [];
 
+        $formatMmSs = function (float $sec): string {
+            $total = max(0, (int) floor($sec));
+            return sprintf('%02d:%02d', intdiv($total, 60), $total % 60);
+        };
+
         foreach ($byPage as $pageNum => $bList) {
             $firstBlock = $bList->first();
             $pageTitle = ($firstBlock && $firstBlock->kind === 'heading')
                 ? $firstBlock->original_slide_text
                 : "Trang {$pageNum}";
 
-            $pageBlocks = $bList->map(function ($b) use ($inlineNotes, $highlights, $categoryByContent) {
-                $notes = ($inlineNotes->get($b->block_id) ?? collect())->map(function ($n) use ($categoryByContent) {
-                    $min = floor($n->timestamp_start_sec / 60);
-                    $sec = floor($n->timestamp_start_sec % 60);
+            $pageNoteStartMin = null;
+            $pageNoteEndMax = null;
+
+            $pageBlocks = $bList->map(function ($b) use ($inlineNotes, $highlights, $categoryByContent, $editedByContent, &$pageNoteStartMin, &$pageNoteEndMax) {
+                $notes = ($inlineNotes->get($b->block_id) ?? collect())->map(function ($n) use ($categoryByContent, $editedByContent, &$pageNoteStartMin, &$pageNoteEndMax) {
+                    $startSec = (float) $n->timestamp_start_sec;
+                    $endSec = (float) ($n->timestamp_end_sec ?? $startSec);
+                    $min = floor($startSec / 60);
+                    $sec = floor($startSec % 60);
                     $textKey = trim((string) $n->explanation_text);
+                    if ($startSec > 0.0 || $endSec > 0.0) {
+                        $pageNoteStartMin = ($pageNoteStartMin === null) ? $startSec : min($pageNoteStartMin, $startSec);
+                        $pageNoteEndMax = ($pageNoteEndMax === null) ? max($startSec, $endSec) : max($pageNoteEndMax, $startSec, $endSec);
+                    }
+                    $updatedMoreThan2s = !empty($n->updated_at) && !empty($n->created_at)
+                        && (strtotime((string) $n->updated_at) - strtotime((string) $n->created_at)) >= 2;
                     return [
                         'id' => (string) $n->id,
                         'explanationText' => $n->explanation_text,
-                        'timestampSec' => (float) $n->timestamp_start_sec,
+                        'timestampSec' => $startSec,
                         'timestampLabel' => sprintf('%02d:%02d', $min, $sec),
                         'category' => $categoryByContent[$textKey] ?? 'core_explanation',
                         'evidenceQuote' => (string) ($n->raw_transcript ?? ''),
+                        'isEdited' => (bool) (($editedByContent[$textKey] ?? false) || $updatedMoreThan2s),
                     ];
                 })->values();
 
@@ -798,9 +867,23 @@ class StudyAiUnifiedController extends Controller
                 ];
             })->values();
 
+            $pInt = (int) $pageNum;
+            $bounds = $pageTimeBounds[$pInt] ?? null;
+            $minSec = $bounds ? $bounds['min'] : $pageNoteStartMin;
+            $maxSec = $bounds ? $bounds['max'] : $pageNoteEndMax;
+            $timeRangeLabel = '';
+            if ($minSec !== null && $maxSec !== null && ($minSec > 0.0 || $maxSec > 0.0)) {
+                $startStr = $formatMmSs($minSec);
+                $endStr = $formatMmSs($maxSec);
+                $timeRangeLabel = ($maxSec > $minSec && $endStr !== $startStr)
+                    ? "{$startStr} – {$endStr}"
+                    : $startStr;
+            }
+
             $pages[] = [
-                'pageNumber' => (int) $pageNum,
+                'pageNumber' => $pInt,
                 'slideTitle' => $pageTitle,
+                'timeRangeLabel' => $timeRangeLabel,
                 'blocks' => $pageBlocks,
             ];
         }

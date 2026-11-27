@@ -1,5 +1,6 @@
 package com.studyai.ui
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.tween
@@ -20,12 +21,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AccountTree
 import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.IosShare
@@ -33,11 +36,12 @@ import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material.icons.filled.UnfoldMore
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -57,6 +61,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -64,6 +69,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
@@ -93,6 +99,7 @@ import com.studyai.ui.notes.InlineLecturerNote
 import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
 import com.studyai.ui.notes.SlideDocumentBlockUi
 import com.studyai.ui.notes.SlideUi
+import com.studyai.ui.theme.StudyAiPalette
 import kotlinx.coroutines.launch
 
 enum class StudyAiTab(val title: String, val shortTitle: String, val icon: ImageVector) {
@@ -203,6 +210,9 @@ fun MainStudyAiScreen(
     var showCourseManagerSheet by remember { mutableStateOf(false) }
     var showLecturePickerSheet by remember { mutableStateOf(false) }
     var showServerConfigDialog by remember { mutableStateOf(false) }
+    var showNotesSearchBar by remember { mutableStateOf(false) }
+    var notesSearchQuery by remember { mutableStateOf("") }
+    var scrollToTopNonce by remember { mutableIntStateOf(0) }
 
     val activeCourseList = courseList
     val activeSlideVault = slideVault
@@ -285,12 +295,56 @@ fun MainStudyAiScreen(
                         )
                     }
                 }
+                val startM = (slide.startTimeSec / 60).toInt()
+                val startS = (slide.startTimeSec % 60).toInt()
+                val endM = (slide.endTimeSec / 60).toInt()
+                val endS = (slide.endTimeSec % 60).toInt()
+                val timeRange = if (slide.endTimeSec > 0f || slide.startTimeSec > 0f) {
+                    val sLabel = "%02d:%02d".format(startM, startS)
+                    val eLabel = "%02d:%02d".format(endM, endS)
+                    if (slide.endTimeSec > slide.startTimeSec && sLabel != eLabel) "$sLabel – $eLabel" else sLabel
+                } else ""
+
                 AnnotatedSlidePageUi(
                     pageNumber = slide.slideNumber,
                     slideTitle = lines.firstOrNull() ?: "Trang ${slide.slideNumber}",
+                    timeRangeLabel = timeRange,
                     blocks = blocks
                 )
             }
+        }
+    }
+
+    val filteredAnnotatedPages = remember(annotatedSlidePages, notesSearchQuery) {
+        val query = notesSearchQuery.trim()
+        if (query.isEmpty()) {
+            annotatedSlidePages
+        } else {
+            annotatedSlidePages.filter { page ->
+                page.slideTitle.contains(query, ignoreCase = true) ||
+                    "Slide ${page.pageNumber}".contains(query, ignoreCase = true) ||
+                    "Slide %02d".format(page.pageNumber).contains(query, ignoreCase = true) ||
+                    page.blocks.any { b ->
+                        b.originalSlideText.contains(query, ignoreCase = true) ||
+                            b.inlineNotes.any { n ->
+                                n.explanationText.contains(query, ignoreCase = true) ||
+                                    n.evidenceQuote.contains(query, ignoreCase = true)
+                            } ||
+                            b.highlights.any { h -> h.term.contains(query, ignoreCase = true) }
+                    }
+            }
+        }
+    }
+
+    val lectureSubtitleForNotes = remember(currentLectureId, currentLectureTitle, chapters, inlinePages, currentCourse.meta) {
+        if (chapters.isNotEmpty() || inlinePages.isNotEmpty() || sampleSlides.isNotEmpty()) {
+            val cleanTitle = currentLectureTitle
+                .replace(Regex("^Bài\\s*#?\\d+\\s*[•:\\-–]\\s*", RegexOption.IGNORE_CASE), "")
+                .trim()
+                .ifBlank { currentCourse.name }
+            "Bài #%02d • %s".format(currentLectureId, cleanTitle)
+        } else {
+            currentCourse.meta
         }
     }
 
@@ -307,15 +361,111 @@ fun MainStudyAiScreen(
     Scaffold(
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
-            StudyAiTopHeader(
-                course = currentCourse,
-                onOpenCourseManager = { showCourseManagerSheet = true },
-                selectedLanguageMode = selectedLanguageMode,
-                onLanguageModeChange = onLanguageModeChange,
-                isDarkTheme = isDarkTheme,
-                onToggleDarkTheme = onToggleDarkTheme,
-                onOpenServerSettings = { showServerConfigDialog = true },
-            )
+            Column(modifier = Modifier.fillMaxWidth()) {
+                StudyAiTopHeader(
+                    courseName = currentCourse.name,
+                    subtitleText = if (selectedTab == StudyAiTab.NOTES) lectureSubtitleForNotes else currentCourse.meta,
+                    isNotesTab = selectedTab == StudyAiTab.NOTES,
+                    isDarkTheme = isDarkTheme,
+                    showSearchBar = showNotesSearchBar,
+                    onToggleSearchBar = {
+                        showNotesSearchBar = !showNotesSearchBar
+                        if (!showNotesSearchBar) {
+                            notesSearchQuery = ""
+                        }
+                    },
+                    onExportMarkdown = onExportMarkdown,
+                    onOpenCourseManager = { showCourseManagerSheet = true },
+                    selectedLanguageMode = selectedLanguageMode,
+                    onLanguageModeChange = onLanguageModeChange,
+                    onToggleDarkTheme = onToggleDarkTheme,
+                    onOpenServerSettings = { showServerConfigDialog = true },
+                )
+
+                // Hàng 2 (Tab Ghi chú): Thanh tìm kiếm (khi bật) + duy nhất 1 chip "Tất cả (N slide)"
+                if (selectedTab == StudyAiTab.NOTES) {
+                    Surface(
+                        color = MaterialTheme.colorScheme.surface,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            AnimatedVisibility(visible = showNotesSearchBar) {
+                                OutlinedTextField(
+                                    value = notesSearchQuery,
+                                    onValueChange = { notesSearchQuery = it },
+                                    placeholder = {
+                                        Text(
+                                            text = "Tìm slide, từ khóa, ghi chú AI...",
+                                            style = MaterialTheme.typography.bodySmall,
+                                        )
+                                    },
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = Icons.Default.Search,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(18.dp),
+                                        )
+                                    },
+                                    trailingIcon = {
+                                        IconButton(
+                                            onClick = {
+                                                if (notesSearchQuery.isNotEmpty()) {
+                                                    notesSearchQuery = ""
+                                                } else {
+                                                    showNotesSearchBar = false
+                                                }
+                                            },
+                                            modifier = Modifier.size(32.dp),
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.Close,
+                                                contentDescription = "Đóng tìm kiếm",
+                                                modifier = Modifier.size(16.dp),
+                                            )
+                                        }
+                                    },
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(14.dp),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 4.dp),
+                                )
+                            }
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp, vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.Start,
+                            ) {
+                                Surface(
+                                    onClick = {
+                                        notesSearchQuery = ""
+                                        showNotesSearchBar = false
+                                        scrollToTopNonce += 1
+                                    },
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = StudyAiPalette.PrimaryCobalt,
+                                ) {
+                                    Text(
+                                        text = "Tất cả (${annotatedSlidePages.size} slide)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = Color.White,
+                                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp),
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(
+                                thickness = 1.dp,
+                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.7f),
+                            )
+                        }
+                    }
+                }
+            }
         },
         bottomBar = {
             Column(modifier = Modifier.fillMaxWidth()) {
@@ -348,8 +498,8 @@ fun MainStudyAiScreen(
             if (activeCourseList.isEmpty() && !isOfflineCache) {
                 Surface(
                     shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
+                    color = MaterialTheme.colorScheme.primaryContainer,
+                    border = BorderStroke(1.dp, StudyAiPalette.PrimaryCobalt.copy(alpha = 0.3f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 6.dp),
@@ -374,6 +524,10 @@ fun MainStudyAiScreen(
                         Spacer(Modifier.width(8.dp))
                         Button(
                             onClick = { showCourseManagerSheet = true },
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = StudyAiPalette.PrimaryCobalt,
+                                contentColor = Color.White,
+                            ),
                             shape = RoundedCornerShape(10.dp),
                             contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
                         ) {
@@ -391,36 +545,28 @@ fun MainStudyAiScreen(
                 ) { tab ->
                     when (tab) {
                         StudyAiTab.NOTES -> {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                LectureSelectorBar(
-                                    lectureTitle = currentLectureTitle,
-                                    slideCount = annotatedSlidePages.size,
-                                    chaptersCount = chapters.size,
-                                    onOpenLecturePicker = { showLecturePickerSheet = true },
-                                    onExportMarkdown = onExportMarkdown,
-                                )
-                                InlineSlideNoteDocumentScreen(
-                                    pages = annotatedSlidePages,
-                                    activeSpokenBlockId = activeSpokenBlockId,
-                                    targetSlidePage = targetSlidePage,
-                                    onClearTargetSlidePage = onClearTargetSlidePage,
-                                    isOfflineCache = isOfflineCache,
-                                    onToggleConfusedBlock = { bId ->
-                                        onToggleConfusedBlock(bId)
-                                        confusedBlocksState = if (confusedBlocksState.contains(bId)) {
-                                            confusedBlocksState - bId
-                                        } else {
-                                            confusedBlocksState + bId
-                                        }
-                                    },
-                                    onPlayTimestamp = { sec ->
-                                        audioPlayer.loadAndSeek(buildLectureAudioUrl(currentLectureId), sec)
-                                    },
-                                    onUpdateNote = onUpdateInlineNote,
-                                    onDeleteNote = onDeleteInlineNote,
-                                    onExportMarkdown = null,
-                                )
-                            }
+                            InlineSlideNoteDocumentScreen(
+                                pages = filteredAnnotatedPages,
+                                activeSpokenBlockId = activeSpokenBlockId,
+                                targetSlidePage = targetSlidePage,
+                                onClearTargetSlidePage = onClearTargetSlidePage,
+                                scrollToTopNonce = scrollToTopNonce,
+                                isOfflineCache = isOfflineCache,
+                                onToggleConfusedBlock = { bId ->
+                                    onToggleConfusedBlock(bId)
+                                    confusedBlocksState = if (confusedBlocksState.contains(bId)) {
+                                        confusedBlocksState - bId
+                                    } else {
+                                        confusedBlocksState + bId
+                                    }
+                                },
+                                onPlayTimestamp = { sec ->
+                                    audioPlayer.loadAndSeek(buildLectureAudioUrl(currentLectureId), sec)
+                                },
+                                onUpdateNote = onUpdateInlineNote,
+                                onDeleteNote = onDeleteInlineNote,
+                                onExportMarkdown = null,
+                            )
                         }
 
                         StudyAiTab.CAPTURE -> {
@@ -494,15 +640,37 @@ fun MainStudyAiScreen(
                 if (showCourseManagerSheet) {
                     CourseManagerBottomSheet(
                         courses = activeCourseList,
-                        selectedCourseId = selectedCourseId,
-                        onSelectCourse = { selected ->
-                            onSelectCourse(selected.id)
+                        activeCourseId = selectedCourseId,
+                        onDismiss = { showCourseManagerSheet = false },
+                        onSelectCourse = { cId ->
+                            onSelectCourse(cId)
                             showCourseManagerSheet = false
                         },
                         onAddCourse = onAddCourse,
-                        onUpdateCourse = onUpdateCourse,
-                        onDeleteCourse = onDeleteCourse,
-                        onDismiss = { showCourseManagerSheet = false }
+                        onUpdateCourse = { id, name, code, lecturer ->
+                            val existing = activeCourseList.find { it.id == id }
+                            onUpdateCourse(
+                                (existing ?: CourseUiItem(id = id, name = name)).copy(
+                                    name = name,
+                                    code = code,
+                                    lecturer = lecturer,
+                                )
+                            )
+                        },
+                        onDeleteCourse = { id ->
+                            activeCourseList.find { it.id == id }?.let(onDeleteCourse)
+                        },
+                        chaptersCount = chapters.size,
+                        onOpenLecturePicker = {
+                            showCourseManagerSheet = false
+                            showLecturePickerSheet = true
+                        },
+                        isDark = isDarkTheme,
+                        onToggleDarkTheme = onToggleDarkTheme,
+                        onOpenServerSettings = {
+                            showCourseManagerSheet = false
+                            showServerConfigDialog = true
+                        },
                     )
                 }
 
@@ -535,100 +703,6 @@ fun MainStudyAiScreen(
     }
 }
 
-@Composable
-private fun LectureSelectorBar(
-    lectureTitle: String,
-    slideCount: Int,
-    chaptersCount: Int,
-    onOpenLecturePicker: () -> Unit,
-    onExportMarkdown: (() -> Unit)? = null,
-) {
-    Surface(
-        color = MaterialTheme.colorScheme.background,
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween,
-            ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    modifier = Modifier
-                        .weight(1f)
-                        .clip(RoundedCornerShape(10.dp))
-                        .clickable(enabled = chaptersCount > 0) { onOpenLecturePicker() }
-                        .padding(end = 8.dp),
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = lectureTitle,
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                        Text(
-                            text = buildString {
-                                append("$slideCount trang slide")
-                                if (chaptersCount > 1) append(" • Bấm để đổi trong $chaptersCount bài giảng")
-                            },
-                            style = MaterialTheme.typography.labelSmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                        )
-                    }
-                    if (chaptersCount > 0) {
-                        Spacer(Modifier.width(4.dp))
-                        Icon(
-                            imageVector = Icons.Default.UnfoldMore,
-                            contentDescription = "Chọn bài giảng",
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(18.dp),
-                        )
-                    }
-                }
-
-                if (onExportMarkdown != null) {
-                    Surface(
-                        onClick = onExportMarkdown,
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(5.dp),
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.IosShare,
-                                contentDescription = "Xuất vở Markdown",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(15.dp),
-                            )
-                            Text(
-                                text = "Xuất .md",
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Bold,
-                            )
-                        }
-                    }
-                }
-            }
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-            )
-        }
-    }
-}
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun LecturePickerBottomSheet(
@@ -640,6 +714,7 @@ private fun LecturePickerBottomSheet(
 ) {
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         Column(
@@ -667,16 +742,16 @@ private fun LecturePickerBottomSheet(
                         onClick = { onSelectLecture(ch) },
                         shape = RoundedCornerShape(14.dp),
                         color = if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.7f)
+                            MaterialTheme.colorScheme.primaryContainer
                         } else {
                             MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
                         },
                         border = BorderStroke(
                             width = if (isSelected) 1.5.dp else 1.dp,
                             color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
+                                StudyAiPalette.PrimaryCobalt
                             } else {
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
                             },
                         ),
                     ) {
@@ -706,7 +781,7 @@ private fun LecturePickerBottomSheet(
                                 Icon(
                                     imageVector = Icons.Default.Check,
                                     contentDescription = "Đang xem",
-                                    tint = MaterialTheme.colorScheme.primary,
+                                    tint = StudyAiPalette.PrimaryCobalt,
                                     modifier = Modifier.size(20.dp),
                                 )
                             }
@@ -736,7 +811,7 @@ private fun ServerUrlConfigDialog(
             Icon(
                 imageVector = Icons.Default.Dns,
                 contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
+                tint = StudyAiPalette.PrimaryCobalt,
             )
         },
         title = {
@@ -847,15 +922,22 @@ private fun ServerUrlConfigDialog(
 
 @Composable
 private fun StudyAiTopHeader(
-    course: CourseChoice,
+    courseName: String,
+    subtitleText: String,
+    isNotesTab: Boolean,
+    isDarkTheme: Boolean,
+    showSearchBar: Boolean,
+    onToggleSearchBar: () -> Unit,
+    onExportMarkdown: (() -> Unit)?,
     onOpenCourseManager: () -> Unit,
     selectedLanguageMode: LectureLanguageMode,
     onLanguageModeChange: (LectureLanguageMode) -> Unit,
-    isDarkTheme: Boolean,
     onToggleDarkTheme: () -> Unit,
     onOpenServerSettings: () -> Unit,
 ) {
     var langMenuExpanded by remember { mutableStateOf(false) }
+    val primarySoft = if (isDarkTheme) StudyAiPalette.PrimarySoftDark else StudyAiPalette.PrimarySoftLight
+    val primaryText = if (isDarkTheme) StudyAiPalette.PrimaryTextDark else StudyAiPalette.PrimaryTextLight
 
     Surface(
         color = MaterialTheme.colorScheme.surface,
@@ -868,7 +950,7 @@ private fun StudyAiTopHeader(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
@@ -878,22 +960,25 @@ private fun StudyAiTopHeader(
                         .weight(1f)
                         .clip(RoundedCornerShape(12.dp))
                         .clickable { onOpenCourseManager() }
-                        .padding(end = 6.dp)
+                        .padding(end = 8.dp)
                 ) {
-                    Surface(
-                        shape = RoundedCornerShape(10.dp),
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)),
-                        modifier = Modifier.size(38.dp),
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(
+                                Brush.linearGradient(
+                                    colors = listOf(StudyAiPalette.PrimaryCobalt, StudyAiPalette.Teal)
+                                )
+                            ),
+                        contentAlignment = Alignment.Center,
                     ) {
-                        Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                                contentDescription = "StudyAI",
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(20.dp),
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = "StudyAI",
+                            tint = Color.White,
+                            modifier = Modifier.size(19.dp),
+                        )
                     }
 
                     Spacer(modifier = Modifier.width(10.dp))
@@ -901,8 +986,9 @@ private fun StudyAiTopHeader(
                     Column(modifier = Modifier.weight(1f)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = course.name,
-                                style = MaterialTheme.typography.titleSmall,
+                                text = courseName,
+                                fontSize = 14.sp,
+                                lineHeight = 18.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface,
                                 maxLines = 1,
@@ -917,8 +1003,9 @@ private fun StudyAiTopHeader(
                             )
                         }
                         Text(
-                            text = course.meta,
-                            style = MaterialTheme.typography.labelSmall,
+                            text = subtitleText,
+                            fontSize = 11.sp,
+                            lineHeight = 14.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -926,97 +1013,153 @@ private fun StudyAiTopHeader(
                     }
                 }
 
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box {
+                if (isNotesTab) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
                         Surface(
-                            onClick = { langMenuExpanded = true },
-                            shape = RoundedCornerShape(10.dp),
-                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            onClick = onToggleSearchBar,
+                            shape = CircleShape,
+                            color = if (showSearchBar) primarySoft else MaterialTheme.colorScheme.surfaceVariant,
                             border = BorderStroke(
-                                width = 1.dp,
-                                color = MaterialTheme.colorScheme.secondary.copy(alpha = 0.3f),
+                                1.dp,
+                                if (showSearchBar) StudyAiPalette.PrimaryCobalt else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
                             ),
+                            modifier = Modifier.size(34.dp),
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                            ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Icon(
-                                    imageVector = Icons.Default.Translate,
-                                    contentDescription = "Ngôn ngữ bài giảng",
-                                    tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                    modifier = Modifier.size(14.dp),
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = selectedLanguageMode.shortLabel,
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Tìm kiếm nhanh",
+                                    tint = if (showSearchBar) primaryText else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(17.dp),
                                 )
                             }
                         }
 
-                        DropdownMenu(
-                            expanded = langMenuExpanded,
-                            onDismissRequest = { langMenuExpanded = false },
-                        ) {
-                            LectureLanguageMode.values().forEach { mode ->
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = mode.fullLabel,
-                                            fontWeight = if (mode == selectedLanguageMode) FontWeight.SemiBold else FontWeight.Normal,
-                                        )
-                                    },
-                                    trailingIcon = if (mode == selectedLanguageMode) {
-                                        {
-                                            Icon(
-                                                imageVector = Icons.Default.Check,
-                                                contentDescription = null,
-                                                tint = MaterialTheme.colorScheme.primary,
-                                                modifier = Modifier.size(18.dp),
+                        if (onExportMarkdown != null) {
+                            Surface(
+                                onClick = onExportMarkdown,
+                                shape = RoundedCornerShape(999.dp),
+                                color = primarySoft,
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 7.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.IosShare,
+                                        contentDescription = "Xuất Markdown",
+                                        tint = primaryText,
+                                        modifier = Modifier.size(13.dp),
+                                    )
+                                    Text(
+                                        text = "Xuất",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = primaryText,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box {
+                            Surface(
+                                onClick = { langMenuExpanded = true },
+                                shape = RoundedCornerShape(10.dp),
+                                color = MaterialTheme.colorScheme.secondaryContainer,
+                                border = BorderStroke(
+                                    width = 1.dp,
+                                    color = StudyAiPalette.Teal.copy(alpha = 0.35f),
+                                ),
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 6.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Translate,
+                                        contentDescription = "Ngôn ngữ bài giảng",
+                                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                                        modifier = Modifier.size(14.dp),
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = selectedLanguageMode.shortLabel,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                    )
+                                }
+                            }
+
+                            DropdownMenu(
+                                expanded = langMenuExpanded,
+                                onDismissRequest = { langMenuExpanded = false },
+                            ) {
+                                LectureLanguageMode.values().forEach { mode ->
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = mode.fullLabel,
+                                                fontWeight = if (mode == selectedLanguageMode) FontWeight.SemiBold else FontWeight.Normal,
                                             )
-                                        }
-                                    } else null,
-                                    onClick = {
-                                        langMenuExpanded = false
-                                        onLanguageModeChange(mode)
-                                    },
-                                )
+                                        },
+                                        trailingIcon = if (mode == selectedLanguageMode) {
+                                            {
+                                                Icon(
+                                                    imageVector = Icons.Default.Check,
+                                                    contentDescription = null,
+                                                    tint = StudyAiPalette.PrimaryCobalt,
+                                                    modifier = Modifier.size(18.dp),
+                                                )
+                                            }
+                                        } else null,
+                                        onClick = {
+                                            langMenuExpanded = false
+                                            onLanguageModeChange(mode)
+                                        },
+                                    )
+                                }
                             }
                         }
-                    }
 
-                    IconButton(
-                        onClick = onOpenServerSettings,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Dns,
-                            contentDescription = "Cấu hình Server URL",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp),
-                        )
-                    }
+                        IconButton(
+                            onClick = onOpenServerSettings,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Dns,
+                                contentDescription = "Cấu hình Server URL",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
 
-                    IconButton(
-                        onClick = onToggleDarkTheme,
-                        modifier = Modifier.size(40.dp),
-                    ) {
-                        Icon(
-                            imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                            contentDescription = if (isDarkTheme) "Chuyển giao diện sáng" else "Chuyển giao diện tối",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(19.dp),
-                        )
+                        IconButton(
+                            onClick = onToggleDarkTheme,
+                            modifier = Modifier.size(40.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = if (isDarkTheme) "Chuyển giao diện sáng" else "Chuyển giao diện tối",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(19.dp),
+                            )
+                        }
                     }
                 }
             }
 
-            HorizontalDivider(
-                thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-            )
+            if (!isNotesTab) {
+                HorizontalDivider(
+                    thickness = 1.dp,
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                )
+            }
         }
     }
 }
@@ -1037,7 +1180,7 @@ private fun EditorialBottomNavBar(
         ) {
             HorizontalDivider(
                 thickness = 1.dp,
-                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
+                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.65f),
             )
             Row(
                 modifier = Modifier
@@ -1099,7 +1242,7 @@ private fun ErrorStatusBanner(
     Surface(
         color = MaterialTheme.colorScheme.errorContainer,
         shape = RoundedCornerShape(12.dp),
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
+        border = BorderStroke(1.dp, StudyAiPalette.Rose.copy(alpha = 0.35f)),
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 6.dp),

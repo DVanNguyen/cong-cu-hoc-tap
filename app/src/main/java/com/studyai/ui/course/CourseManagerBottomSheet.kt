@@ -1,13 +1,16 @@
 package com.studyai.ui.course
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
-import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -15,18 +18,22 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.DarkMode
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material3.AlertDialog
+import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -38,10 +45,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.studyai.ui.theme.StudyAiExtras
+import com.studyai.ui.theme.StudyAiPalette
 
 data class CourseUiItem(
     val id: Long,
@@ -52,309 +61,374 @@ data class CourseUiItem(
 )
 
 /**
- * BottomSheet quản lý & chọn môn học theo phong cách Editorial Academic Notebook.
+ * BottomSheet quản lý & chọn môn học trong 1 Sheet duy nhất (không lồng Dialog thứ 2).
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CourseManagerBottomSheet(
     courses: List<CourseUiItem>,
-    selectedCourseId: Long,
-    onSelectCourse: (CourseUiItem) -> Unit,
-    onAddCourse: (name: String, code: String, lecturer: String) -> Unit,
-    onUpdateCourse: (CourseUiItem) -> Unit,
-    onDeleteCourse: (CourseUiItem) -> Unit,
+    activeCourseId: Long?,
     onDismiss: () -> Unit,
+    onSelectCourse: (Long) -> Unit,
+    onAddCourse: (name: String, code: String, lecturer: String) -> Unit,
+    onUpdateCourse: (id: Long, name: String, code: String, lecturer: String) -> Unit,
+    onDeleteCourse: (Long) -> Unit,
+    chaptersCount: Int = 0,
+    onOpenLecturePicker: (() -> Unit)? = null,
+    isDark: Boolean = StudyAiExtras.isDark,
+    onToggleDarkTheme: (() -> Unit)? = null,
+    onOpenServerSettings: (() -> Unit)? = null,
 ) {
+    var showForm by remember { mutableStateOf(false) }
     var editingCourse by remember { mutableStateOf<CourseUiItem?>(null) }
-    var showCreateDialog by remember { mutableStateOf(false) }
-    var deletingCourse by remember { mutableStateOf<CourseUiItem?>(null) }
+    var confirmDeleteId by remember { mutableStateOf<Long?>(null) }
+
+    var nameInput by remember { mutableStateOf("") }
+    var codeInput by remember { mutableStateOf("") }
+    var lecturerInput by remember { mutableStateOf("") }
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
         containerColor = MaterialTheme.colorScheme.surface,
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 20.dp)
-                .padding(bottom = 28.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp)
         ) {
+            // Header + nút "+ Thêm môn"
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+                verticalAlignment = Alignment.CenterVertically
             ) {
                 Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Môn học của bạn",
-                        style = MaterialTheme.typography.titleLarge,
+                        text = "Quản lý môn học",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
                     )
                     Text(
-                        text = "Chạm để chuyển vở ghi chép, kho slide và từ điển riêng",
+                        text = "Chọn, thêm mới, chỉnh sửa hoặc xóa môn",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
                 Spacer(Modifier.width(8.dp))
-                FilledTonalButton(
-                    onClick = { showCreateDialog = true },
+                Button(
+                    onClick = {
+                        editingCourse = null
+                        nameInput = ""
+                        codeInput = ""
+                        lecturerInput = ""
+                        confirmDeleteId = null
+                        showForm = true
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StudyAiPalette.PrimaryCobalt,
+                        contentColor = Color.White,
+                    ),
                     shape = RoundedCornerShape(12.dp),
+                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp)
                 ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(16.dp))
                     Spacer(Modifier.width(4.dp))
-                    Text("Thêm môn", style = MaterialTheme.typography.labelLarge)
+                    Text("Thêm môn", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold)
                 }
             }
 
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                modifier = Modifier.fillMaxWidth(),
-            ) {
-                items(courses, key = { it.id }) { course ->
-                    val isSelected = course.id == selectedCourseId
-                    val badgeText = remember(course.code, course.name) {
-                        val raw = course.code.ifBlank { course.name }.trim()
-                        raw.take(4).uppercase().ifBlank { "MON" }
-                    }
-
-                    Surface(
-                        onClick = {
-                            onSelectCourse(course)
-                            onDismiss()
-                        },
-                        shape = RoundedCornerShape(14.dp),
-                        color = if (isSelected) {
-                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-                        } else {
-                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
-                        },
-                        border = BorderStroke(
-                            width = if (isSelected) 1.5.dp else 1.dp,
-                            color = if (isSelected) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)
-                            },
-                        ),
+            // Form Thêm / Sửa nội tuyến
+            AnimatedVisibility(visible = showForm) {
+                Surface(
+                    shape = RoundedCornerShape(16.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                ) {
+                    Column(
+                        modifier = Modifier.padding(12.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
+                        Text(
+                            text = if (editingCourse == null) "Thêm môn học mới" else "Chỉnh sửa môn học",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        OutlinedTextField(
+                            value = nameInput,
+                            onValueChange = { nameInput = it },
+                            label = { Text("Tên môn học") },
+                            singleLine = true,
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            OutlinedTextField(
+                                value = codeInput,
+                                onValueChange = { codeInput = it },
+                                label = { Text("Mã môn") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedTextField(
+                                value = lecturerInput,
+                                onValueChange = { lecturerInput = it },
+                                label = { Text("Giảng viên") },
+                                singleLine = true,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
                         Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 12.dp, vertical = 12.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End,
                             verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Box(
-                                modifier = Modifier
-                                    .size(42.dp)
-                                    .clip(RoundedCornerShape(11.dp))
-                                    .background(
-                                        if (isSelected) {
-                                            MaterialTheme.colorScheme.primary
+                            TextButton(onClick = { showForm = false; editingCourse = null }) {
+                                Text("Hủy")
+                            }
+                            Spacer(Modifier.width(4.dp))
+                            Button(
+                                onClick = {
+                                    val cleanName = nameInput.trim()
+                                    if (cleanName.isNotEmpty()) {
+                                        val cleanCode = codeInput.trim().ifEmpty { "NEW-101" }
+                                        val cleanLec = lecturerInput.trim().ifEmpty { "Giảng viên VKU" }
+                                        val editTarget = editingCourse
+                                        if (editTarget != null) {
+                                            onUpdateCourse(editTarget.id, cleanName, cleanCode, cleanLec)
                                         } else {
-                                            MaterialTheme.colorScheme.primaryContainer
+                                            onAddCourse(cleanName, cleanCode, cleanLec)
                                         }
-                                    ),
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(
-                                    text = badgeText,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) {
-                                        MaterialTheme.colorScheme.onPrimary
-                                    } else {
-                                        MaterialTheme.colorScheme.onPrimaryContainer
-                                    },
-                                    maxLines = 1,
-                                )
-                            }
-
-                            Spacer(Modifier.width(12.dp))
-
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                                ) {
-                                    Text(
-                                        text = course.name,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface,
-                                        maxLines = 1,
-                                        overflow = TextOverflow.Ellipsis,
-                                        modifier = Modifier.weight(1f, fill = false),
-                                    )
-                                    if (isSelected) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = "Đang chọn",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(16.dp),
-                                        )
+                                        showForm = false
+                                        editingCourse = null
                                     }
-                                }
-                                val subtitle = buildString {
-                                    if (course.lecturer.isNotBlank()) append("${course.lecturer} • ")
-                                    append("${course.slideCount} slide")
-                                }
-                                Text(
-                                    text = subtitle,
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-
-                            IconButton(
-                                onClick = { editingCourse = course },
-                                modifier = Modifier.size(40.dp),
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = StudyAiPalette.PrimaryCobalt,
+                                    contentColor = Color.White,
+                                ),
+                                shape = RoundedCornerShape(12.dp)
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Edit,
-                                    contentDescription = "Sửa môn học",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(18.dp),
-                                )
-                            }
-                            IconButton(
-                                onClick = { deletingCourse = course },
-                                enabled = courses.size > 1,
-                                modifier = Modifier.size(40.dp),
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.DeleteOutline,
-                                    contentDescription = "Xóa môn học",
-                                    tint = if (courses.size > 1) {
-                                        MaterialTheme.colorScheme.error
-                                    } else {
-                                        MaterialTheme.colorScheme.outline
-                                    },
-                                    modifier = Modifier.size(18.dp),
-                                )
+                                Text("Lưu môn học")
                             }
                         }
                     }
                 }
             }
+
+            Spacer(Modifier.height(12.dp))
+
+            // Danh sách môn học kèm nút Sửa (bút chì) + Xóa (xác nhận ngay trong thẻ)
+            LazyColumn(
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 340.dp)
+            ) {
+                items(courses, key = { it.id }) { course ->
+                    val isActive = course.id == activeCourseId
+                    val isConfirmDel = confirmDeleteId == course.id
+                    Surface(
+                        shape = RoundedCornerShape(16.dp),
+                        color = if (isActive) {
+                            if (isDark) StudyAiPalette.PrimarySoftDark else StudyAiPalette.PrimarySoftLight
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                        },
+                        border = BorderStroke(
+                            1.dp,
+                            if (isActive) StudyAiPalette.PrimaryCobalt else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                        )
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(12.dp)
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .clickable {
+                                            onSelectCourse(course.id)
+                                            onDismiss()
+                                        }
+                                ) {
+                                    Text(
+                                        text = course.name,
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    val metaText = buildString {
+                                        if (course.code.isNotBlank()) append(course.code)
+                                        if (course.lecturer.isNotBlank()) {
+                                            if (isNotEmpty()) append(" • ")
+                                            append(course.lecturer)
+                                        }
+                                        if (isEmpty()) append("${course.slideCount} slide")
+                                    }
+                                    Text(
+                                        text = metaText,
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                                IconButton(
+                                    onClick = {
+                                        editingCourse = course
+                                        nameInput = course.name
+                                        codeInput = course.code
+                                        lecturerInput = course.lecturer
+                                        confirmDeleteId = null
+                                        showForm = true
+                                    },
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Edit,
+                                        contentDescription = "Sửa",
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                                IconButton(
+                                    onClick = { confirmDeleteId = if (isConfirmDel) null else course.id },
+                                    modifier = Modifier.size(36.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Xóa",
+                                        tint = StudyAiPalette.Rose,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                }
+                            }
+                            if (isConfirmDel) {
+                                HorizontalDivider(
+                                    modifier = Modifier.padding(vertical = 8.dp),
+                                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                )
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Text(
+                                        text = "Xác nhận xóa môn này?",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = StudyAiPalette.Rose,
+                                        fontWeight = FontWeight.SemiBold,
+                                    )
+                                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                        TextButton(onClick = { confirmDeleteId = null }) {
+                                            Text("Hủy")
+                                        }
+                                        Button(
+                                            onClick = {
+                                                onDeleteCourse(course.id)
+                                                confirmDeleteId = null
+                                            },
+                                            colors = ButtonDefaults.buttonColors(
+                                                containerColor = StudyAiPalette.Rose,
+                                                contentColor = Color.White,
+                                            ),
+                                            shape = RoundedCornerShape(10.dp),
+                                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 6.dp),
+                                        ) {
+                                            Text("Xóa luôn", style = MaterialTheme.typography.labelSmall)
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (onOpenLecturePicker != null || onToggleDarkTheme != null || onOpenServerSettings != null) {
+                HorizontalDivider(
+                    modifier = Modifier.padding(top = 12.dp, bottom = 10.dp),
+                    color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                )
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    if (onOpenLecturePicker != null) {
+                        OutlinedButton(
+                            onClick = onOpenLecturePicker,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Icon(
+                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                contentDescription = null,
+                                modifier = Modifier.size(15.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = if (chaptersCount > 0) "Bài giảng ($chaptersCount)" else "Bài giảng",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                    if (onToggleDarkTheme != null) {
+                        OutlinedButton(
+                            onClick = onToggleDarkTheme,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = if (isDark) Icons.Default.LightMode else Icons.Default.DarkMode,
+                                contentDescription = if (isDark) "Chuyển Sáng" else "Chuyển Tối",
+                                modifier = Modifier.size(15.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = if (isDark) "Sáng" else "Tối",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                    if (onOpenServerSettings != null) {
+                        OutlinedButton(
+                            onClick = onOpenServerSettings,
+                            shape = RoundedCornerShape(12.dp),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Dns,
+                                contentDescription = "Cấu hình Server URL",
+                                modifier = Modifier.size(15.dp),
+                            )
+                            Spacer(Modifier.width(4.dp))
+                            Text(
+                                text = "Server",
+                                style = MaterialTheme.typography.labelSmall,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            } else {
+                Spacer(Modifier.height(16.dp))
+            }
         }
     }
-
-    if (showCreateDialog) {
-        CourseEditDialog(
-            title = "Thêm môn học mới",
-            initialName = "",
-            initialCode = "",
-            initialLecturer = "",
-            confirmLabel = "Tạo môn",
-            onConfirm = { name, code, lecturer ->
-                onAddCourse(name, code, lecturer)
-                showCreateDialog = false
-            },
-            onDismiss = { showCreateDialog = false },
-        )
-    }
-
-    editingCourse?.let { target ->
-        CourseEditDialog(
-            title = "Chỉnh sửa môn học",
-            initialName = target.name,
-            initialCode = target.code,
-            initialLecturer = target.lecturer,
-            confirmLabel = "Lưu thay đổi",
-            onConfirm = { name, code, lecturer ->
-                onUpdateCourse(target.copy(name = name, code = code, lecturer = lecturer))
-                editingCourse = null
-            },
-            onDismiss = { editingCourse = null },
-        )
-    }
-
-    deletingCourse?.let { target ->
-        AlertDialog(
-            onDismissRequest = { deletingCourse = null },
-            title = { Text("Xóa môn học?", style = MaterialTheme.typography.titleLarge) },
-            text = {
-                Text(
-                    text = "Bạn có chắc muốn xóa môn \"${target.name}\"? Các slide và ghi chú gắn với môn này sẽ bị ẩn khỏi danh sách.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                Button(onClick = {
-                    onDeleteCourse(target)
-                    deletingCourse = null
-                }) {
-                    Text("Xóa")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { deletingCourse = null }) {
-                    Text("Hủy")
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun CourseEditDialog(
-    title: String,
-    initialName: String,
-    initialCode: String,
-    initialLecturer: String,
-    confirmLabel: String,
-    onConfirm: (name: String, code: String, lecturer: String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var name by remember { mutableStateOf(initialName) }
-    var code by remember { mutableStateOf(initialCode) }
-    var lecturer by remember { mutableStateOf(initialLecturer) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title, style = MaterialTheme.typography.titleLarge) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text("Tên môn học *") },
-                    placeholder = { Text("VD: Đồ họa máy tính") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = code,
-                    onValueChange = { code = it },
-                    label = { Text("Mã học phần") },
-                    placeholder = { Text("VD: IT3020") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                OutlinedTextField(
-                    value = lecturer,
-                    onValueChange = { lecturer = it },
-                    label = { Text("Giảng viên") },
-                    placeholder = { Text("VD: TS. Trần Uyên Trang") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = { onConfirm(name.trim(), code.trim(), lecturer.trim()) },
-                enabled = name.isNotBlank(),
-            ) {
-                Text(confirmLabel)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) { Text("Hủy") }
-        },
-    )
 }
