@@ -1,5 +1,8 @@
 package com.studyai.ui.course
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
@@ -25,8 +28,11 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Dns
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.LightMode
+import androidx.compose.material.icons.filled.RecordVoiceOver
+import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -49,6 +55,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.studyai.data.model.VoiceprintStatusResponse
 import com.studyai.ui.theme.StudyAiExtras
 import com.studyai.ui.theme.StudyAiPalette
 
@@ -78,7 +85,17 @@ fun CourseManagerBottomSheet(
     isDark: Boolean = StudyAiExtras.isDark,
     onToggleDarkTheme: (() -> Unit)? = null,
     onOpenServerSettings: (() -> Unit)? = null,
+    voiceprintStatus: VoiceprintStatusResponse? = null,
+    isEnrollingVoice: Boolean = false,
+    onEnrollVoiceprint: ((Uri) -> Unit)? = null,
 ) {
+    val voiceSamplePicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            onEnrollVoiceprint?.invoke(uri)
+        }
+    }
     var showForm by remember { mutableStateOf(false) }
     var editingCourse by remember { mutableStateOf<CourseUiItem?>(null) }
     var confirmDeleteId by remember { mutableStateOf<Long?>(null) }
@@ -354,11 +371,93 @@ fun CourseManagerBottomSheet(
                 }
             }
 
-            if (onOpenLecturePicker != null || onToggleDarkTheme != null || onOpenServerSettings != null) {
+            if (onEnrollVoiceprint != null || onOpenLecturePicker != null || onToggleDarkTheme != null || onOpenServerSettings != null) {
                 HorizontalDivider(
                     modifier = Modifier.padding(top = 12.dp, bottom = 10.dp),
                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                 )
+
+                if (onEnrollVoiceprint != null) {
+                    val hasVp = voiceprintStatus?.hasVoiceprint == true
+                    val vpBg = if (hasVp) {
+                        if (isDark) StudyAiPalette.TealSoftDark else StudyAiPalette.TealSoftLight
+                    } else {
+                        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                    }
+                    val vpFg = if (hasVp) {
+                        if (isDark) StudyAiPalette.TealTextDark else StudyAiPalette.TealTextLight
+                    } else {
+                        StudyAiPalette.PrimaryCobalt
+                    }
+                    Surface(
+                        shape = RoundedCornerShape(14.dp),
+                        color = vpBg,
+                        border = BorderStroke(
+                            1.dp,
+                            if (hasVp) StudyAiPalette.Teal.copy(alpha = 0.45f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 10.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 9.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                        ) {
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Icon(
+                                    imageVector = if (hasVp) Icons.Default.VerifiedUser else Icons.Default.RecordVoiceOver,
+                                    contentDescription = null,
+                                    tint = vpFg,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Column {
+                                    Text(
+                                        text = if (hasVp) "Mẫu giọng giảng viên (Đã lưu)" else "Mẫu giọng giảng viên (ECAPA 192-d)",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (hasVp) vpFg else MaterialTheme.colorScheme.onSurface,
+                                    )
+                                    Text(
+                                        text = if (hasVp) {
+                                            "Sẵn sàng lọc tiếng sinh viên (ngưỡng ${voiceprintStatus?.cosineThreshold ?: 0.38f})"
+                                        } else {
+                                            "Tải 15–30s giọng thầy để lọc tạp âm lớp học"
+                                        },
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = if (hasVp) vpFg.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                }
+                            }
+                            TextButton(
+                                enabled = !isEnrollingVoice,
+                                onClick = { voiceSamplePicker.launch(arrayOf("audio/*")) },
+                                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                            ) {
+                                if (isEnrollingVoice) {
+                                    CircularProgressIndicator(modifier = Modifier.size(15.dp), strokeWidth = 2.dp)
+                                } else {
+                                    Text(
+                                        text = if (hasVp) "Cập nhật" else "Đăng ký",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        fontWeight = FontWeight.Bold,
+                                        color = vpFg,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()

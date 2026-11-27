@@ -85,6 +85,15 @@ class ChunkedAudioRecorder(
         currentFile = null
     }
 
+    fun getNormalizedAmplitude(): Float {
+        return try {
+            val maxAmp = mediaRecorder?.maxAmplitude ?: 0
+            (maxAmp / 32767f).coerceIn(0.06f, 1.0f)
+        } catch (_: Exception) {
+            0.06f
+        }
+    }
+
     private fun startRecorder(outputFile: File): Boolean {
         return try {
             val recorder = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

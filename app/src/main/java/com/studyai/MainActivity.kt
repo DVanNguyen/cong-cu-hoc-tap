@@ -95,6 +95,9 @@ class MainActivity : ComponentActivity() {
                     val activeSpokenBlockId by viewModel.activeSpokenBlockId.collectAsState()
                     val isRecording by viewModel.isRecording.collectAsState()
                     val recordingElapsedSec by viewModel.recordingElapsedSec.collectAsState()
+                    val liveAmplitude by viewModel.liveAmplitude.collectAsState()
+                    val liveSessionState by viewModel.liveSessionState.collectAsState()
+                    val liveFeedItems by viewModel.liveFeedItems.collectAsState()
                     val isProcessingQueue by viewModel.isProcessingQueue.collectAsState()
                     val uploadProgress by viewModel.uploadProgress.collectAsState()
                     val uploadStatusText by viewModel.uploadStatusText.collectAsState()
@@ -150,6 +153,7 @@ class MainActivity : ComponentActivity() {
                             selectedLanguageMode = selectedLanguageMode,
                             onLanguageModeChange = { mode ->
                                 selectedLanguageMode = mode
+                                viewModel.setLanguageMode(mode)
                             },
                             errorMessage = errorMessage,
                             onRetryLoad = {
@@ -167,8 +171,11 @@ class MainActivity : ComponentActivity() {
                             onToggleConfusedBlock = { blockId -> viewModel.toggleConfusedBlock(blockId) },
                             isRecording = isRecording,
                             recordingElapsedSec = recordingElapsedSec,
+                            liveAmplitude = liveAmplitude,
+                            liveSessionState = liveSessionState,
+                            liveFeedItems = liveFeedItems,
                             onStartLiveFollow = { slide -> viewModel.startLiveFollowRecording(this@MainActivity, slide) },
-                            onStopLiveFollow = { viewModel.stopLiveFollowRecording() },
+                            onStopLiveFollow = { refineFull -> viewModel.stopLiveFollowRecording(refineFull) },
                             onMarkCurrentBlockConfused = { viewModel.markCurrentBlockConfused() },
                             isProcessingQueue = isProcessingQueue,
                             uploadProgress = uploadProgress,

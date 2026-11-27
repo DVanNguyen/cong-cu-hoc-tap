@@ -1,17 +1,18 @@
 package com.studyai.ui.capture
 
 import android.Manifest
+import android.content.Context
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.animation.core.LinearEasing
-import androidx.compose.animation.core.RepeatMode
-import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,16 +26,18 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.AudioFile
 import androidx.compose.material.icons.filled.Bolt
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.ContentCopy
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Flag
@@ -42,22 +45,22 @@ import androidx.compose.material.icons.filled.GraphicEq
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Mic
 import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Stop
 import androidx.compose.material.icons.filled.Summarize
-import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.VerifiedUser
 import androidx.compose.material.icons.filled.WarningAmber
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
@@ -66,6 +69,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -73,22 +77,25 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.studyai.audio.AudioLectureRecorder
 import com.studyai.data.model.VoiceNotesTestResponse
-import com.studyai.data.model.VoiceprintStatusResponse
 import com.studyai.ui.notes.AnnotatedSlidePageUi
-import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
 import com.studyai.ui.theme.StudyAiExtras
-import com.studyai.ui.theme.StudyAiTimestampTextStyle
+import com.studyai.ui.theme.StudyAiPalette
 import kotlinx.coroutines.delay
 import java.io.File
+import kotlin.math.abs
+import kotlin.math.sin
 
 data class VaultSlideFileUi(
     val id: String,
@@ -102,33 +109,75 @@ enum class CaptureTabMode {
     BATCH_UPLOAD_PAIR,
 }
 
+enum class LiveFeedKind {
+    LECTURER_NOTE,
+    BLOCKED_NON_TEACHER,
+    CONFUSED_PIN,
+}
+
+data class LiveFeedItemUi(
+    val id: String,
+    val kind: LiveFeedKind,
+    val slideNumber: Int = 1,
+    val timestampLabel: String = "00:00",
+    val text: String = "",
+)
+
+private fun resolveDisplayFileName(context: Context, uri: Uri?): String? {
+    if (uri == null) return null
+    try {
+        context.contentResolver.query(uri, null, null, null, null)?.use { cursor ->
+            if (cursor.moveToFirst()) {
+                val idx = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (idx != -1) {
+                    val name = cursor.getString(idx)
+                    if (!name.isNullOrBlank()) return name
+                }
+            }
+        }
+    } catch (_: Exception) {
+    }
+    return uri.lastPathSegment?.substringAfterLast('/')
+}
+
+/**
+ * Màn hình 2: Thu Âm & Bám Slide theo đặc tả screen2_compose_design_spec.md.
+ */
 @Composable
 fun SlideVaultAndCaptureScreen(
-    courseName: String,
+    @Suppress("UNUSED_PARAMETER") courseName: String = "",
     slideVault: List<VaultSlideFileUi>,
     liveAnnotatedPages: List<AnnotatedSlidePageUi>,
-    activeSpokenBlockId: String? = null,
+    @Suppress("UNUSED_PARAMETER") activeSpokenBlockId: String? = null,
     isRecording: Boolean,
     recordingElapsedLabel: String = "00:00",
+    liveAmplitude: Float = 0.06f,
+    liveSessionState: String = "ready",
+    liveFeedItems: List<LiveFeedItemUi> = emptyList(),
     isProcessingQueue: Boolean = false,
     uploadProgress: Int = 0,
     uploadStatusText: String = "",
     onUploadSlideToVault: (Uri) -> Unit,
     onStartLiveFollow: (VaultSlideFileUi) -> Unit,
-    onStopLiveFollow: () -> Unit,
+    onStopLiveFollow: (refineFullLecture: Boolean) -> Unit,
     onMarkCurrentBlockConfused: () -> Unit,
-    onToggleConfusedBlock: (String) -> Unit,
+    @Suppress("UNUSED_PARAMETER") onToggleConfusedBlock: (String) -> Unit = {},
     onAnalyzeUploadedPair: (slideUri: Uri, audioUri: Uri) -> Unit,
+    onOpenGeneratedNotes: () -> Unit = {},
     voiceTestResult: VoiceNotesTestResponse? = null,
     isVoiceTesting: Boolean = false,
     onTestVoiceNotes: ((Uri) -> Unit)? = null,
     onDismissVoiceTestResult: (() -> Unit)? = null,
-    voiceprintStatus: VoiceprintStatusResponse? = null,
-    isEnrollingVoice: Boolean = false,
-    onEnrollVoiceprint: ((Uri) -> Unit)? = null,
 ) {
     val context = LocalContext.current
-    val extras = StudyAiExtras.colors
+    val isDark = StudyAiExtras.isDark
+    val surfaceSubtle = MaterialTheme.colorScheme.surfaceVariant
+    val primarySoft = if (isDark) StudyAiPalette.PrimarySoftDark else StudyAiPalette.PrimarySoftLight
+    val primaryText = if (isDark) StudyAiPalette.PrimaryTextDark else StudyAiPalette.PrimaryTextLight
+    val tealSoft = if (isDark) StudyAiPalette.TealSoftDark else StudyAiPalette.TealSoftLight
+    val tealText = if (isDark) StudyAiPalette.TealTextDark else StudyAiPalette.TealTextLight
+    val roseSoft = if (isDark) StudyAiPalette.RoseSoftDark else StudyAiPalette.RoseSoftLight
+    val roseText = if (isDark) StudyAiPalette.RoseTextDark else StudyAiPalette.RoseTextLight
 
     var mode by remember { mutableStateOf(CaptureTabMode.LIVE_FOLLOW_SLIDE) }
     var selectedVaultSlideId by remember { mutableStateOf(slideVault.firstOrNull()?.id) }
@@ -138,15 +187,26 @@ fun SlideVaultAndCaptureScreen(
         }
     }
 
+    var showFinishLiveSheet by remember { mutableStateOf(false) }
+    var pendingSlideToRecord by remember { mutableStateOf<VaultSlideFileUi?>(null) }
+
     var batchSlideUri by remember { mutableStateOf<Uri?>(null) }
     var batchAudioUri by remember { mutableStateOf<Uri?>(null) }
-
     var isDirectMicRecording by remember { mutableStateOf(false) }
-    var directMicElapsedSec by remember { mutableStateOf(0) }
+    var directMicElapsedSec by remember { mutableIntStateOf(0) }
     var directAudioFile by remember { mutableStateOf<File?>(null) }
     val directRecorder = remember { AudioLectureRecorder(context) }
 
-    val permissionLauncher = rememberLauncherForActivityResult(
+    val liveMicPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) {
+            pendingSlideToRecord?.let(onStartLiveFollow)
+        }
+        pendingSlideToRecord = null
+    }
+
+    val batchMicPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
     ) { granted ->
         if (granted) {
@@ -162,7 +222,7 @@ fun SlideVaultAndCaptureScreen(
     LaunchedEffect(isDirectMicRecording) {
         if (isDirectMicRecording) {
             while (isDirectMicRecording) {
-                delay(1000)
+                delay(1000L)
                 directMicElapsedSec++
             }
         }
@@ -189,11 +249,42 @@ fun SlideVaultAndCaptureScreen(
         }
     }
 
-    val voiceSamplePicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.OpenDocument()
-    ) { uri ->
-        if (uri != null) {
-            onEnrollVoiceprint?.invoke(uri)
+    val derivedPreviewFeed = remember(liveAnnotatedPages) {
+        buildList {
+            liveAnnotatedPages.forEach { page ->
+                page.blocks.forEach { block ->
+                    if (block.isMarkedConfused) {
+                        add(
+                            LiveFeedItemUi(
+                                id = "preview_pin_${block.blockId}",
+                                kind = LiveFeedKind.CONFUSED_PIN,
+                                slideNumber = page.pageNumber,
+                                timestampLabel = page.timeRangeLabel.ifBlank { "--:--" },
+                                text = block.originalSlideText,
+                            )
+                        )
+                    }
+                    block.inlineNotes.forEach { note ->
+                        add(
+                            LiveFeedItemUi(
+                                id = "preview_note_${note.id}",
+                                kind = LiveFeedKind.LECTURER_NOTE,
+                                slideNumber = page.pageNumber,
+                                timestampLabel = note.timestampLabel,
+                                text = note.explanationText,
+                            )
+                        )
+                    }
+                }
+            }
+        }.take(6)
+    }
+
+    val activeFeedItems = remember(liveFeedItems, derivedPreviewFeed, isRecording, liveSessionState) {
+        if (isRecording || liveSessionState == "finished" || liveFeedItems.isNotEmpty()) {
+            liveFeedItems
+        } else {
+            derivedPreviewFeed
         }
     }
 
@@ -202,713 +293,1016 @@ fun SlideVaultAndCaptureScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        if (mode == CaptureTabMode.LIVE_FOLLOW_SLIDE && isRecording) {
-            LiveRecordingControlBar(
-                elapsedLabel = recordingElapsedLabel,
-                onMarkConfused = onMarkCurrentBlockConfused,
-                onStop = onStopLiveFollow,
-            )
-            Box(modifier = Modifier.weight(1f)) {
-                InlineSlideNoteDocumentScreen(
-                    pages = liveAnnotatedPages,
-                    activeSpokenBlockId = activeSpokenBlockId,
-                    onToggleConfusedBlock = onToggleConfusedBlock,
-                )
-            }
-            return@Column
-        }
-
-        // Bộ chuyển 2 chế độ: Bám Slide trực tiếp / Tải Slide + Audio
+        // Hàng 2: Segmented Control 2 chế độ
         Surface(
-            shape = RoundedCornerShape(14.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+            shape = RoundedCornerShape(16.dp),
+            color = surfaceSubtle,
             modifier = Modifier
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp, vertical = 10.dp),
         ) {
-            Row(modifier = Modifier.padding(4.dp)) {
+            Row(
+                modifier = Modifier.padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
                 ModeSegmentButton(
                     text = "Bám Slide trực tiếp",
                     selected = mode == CaptureTabMode.LIVE_FOLLOW_SLIDE,
+                    primaryTextColor = primaryText,
                     onClick = { mode = CaptureTabMode.LIVE_FOLLOW_SLIDE },
                     modifier = Modifier.weight(1f),
                 )
                 ModeSegmentButton(
                     text = "Tải Slide + Audio",
                     selected = mode == CaptureTabMode.BATCH_UPLOAD_PAIR,
+                    primaryTextColor = primaryText,
                     onClick = { mode = CaptureTabMode.BATCH_UPLOAD_PAIR },
                     modifier = Modifier.weight(1f),
                 )
             }
         }
 
-        // Tiến trình xử lý Queue AI bất đồng bộ
-        if (isProcessingQueue) {
-            Surface(
-                shape = RoundedCornerShape(14.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-            ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "Đang xử lý bài giảng qua AI...",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer
-                        )
-                        Text(
-                            text = "$uploadProgress%",
-                            style = StudyAiTimestampTextStyle,
-                            color = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                    Spacer(Modifier.height(8.dp))
-                    LinearProgressIndicator(
-                        progress = { uploadProgress / 100f },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(6.dp)
-                            .clip(RoundedCornerShape(3.dp)),
-                    )
-                    Spacer(Modifier.height(8.dp))
-                    Text(
-                        text = uploadStatusText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.85f)
-                    )
+        if (mode == CaptureTabMode.LIVE_FOLLOW_SLIDE) {
+            val activeVaultSlide = slideVault.find { it.id == selectedVaultSlideId }
+            val startLiveWithPermission = { slide: VaultSlideFileUi ->
+                val granted = ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.RECORD_AUDIO
+                ) == PackageManager.PERMISSION_GRANTED
+                if (granted) {
+                    onStartLiveFollow(slide)
+                } else {
+                    pendingSlideToRecord = slide
+                    liveMicPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
                 }
             }
-        }
 
-        if (mode == CaptureTabMode.LIVE_FOLLOW_SLIDE) {
-            Column(
+            LazyColumn(
                 modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 16.dp),
+                    .weight(1f)
+                    .fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
+                // 2.1. Kho Slide nạp trước
+                item(key = "vault_slide_picker") {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "1. Chọn Slide đã nạp trước",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                TextButton(
+                                    onClick = {
+                                        vaultSlidePicker.launch(
+                                            arrayOf(
+                                                "application/pdf",
+                                                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                            )
+                                        )
+                                    },
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 2.dp),
+                                ) {
+                                    Text(
+                                        text = "+ Thêm slide",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = primaryText,
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(6.dp))
+
+                            if (slideVault.isEmpty()) {
+                                Surface(
+                                    shape = RoundedCornerShape(16.dp),
+                                    color = surfaceSubtle,
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text(
+                                        text = "Kho Slide chưa có tài liệu nào. Bấm \"+ Thêm slide\" để nạp PDF hoặc PPTX trước buổi học.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.padding(12.dp),
+                                    )
+                                }
+                            } else {
+                                LazyRow(
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    items(slideVault, key = { it.id }) { file ->
+                                        val isSelected = file.id == selectedVaultSlideId
+                                        Surface(
+                                            onClick = {
+                                                if (!isRecording) {
+                                                    selectedVaultSlideId = file.id
+                                                }
+                                            },
+                                            shape = RoundedCornerShape(16.dp),
+                                            color = if (isSelected) primarySoft else surfaceSubtle,
+                                            border = BorderStroke(
+                                                width = 1.dp,
+                                                color = if (isSelected) {
+                                                    StudyAiPalette.PrimaryCobalt
+                                                } else {
+                                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
+                                                },
+                                            ),
+                                            modifier = Modifier.widthIn(min = 148.dp, max = 216.dp),
+                                        ) {
+                                            Column(
+                                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 10.dp),
+                                                verticalArrangement = Arrangement.spacedBy(3.dp),
+                                            ) {
+                                                Row(
+                                                    verticalAlignment = Alignment.CenterVertically,
+                                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                                ) {
+                                                    Icon(
+                                                        imageVector = Icons.Default.Description,
+                                                        contentDescription = null,
+                                                        tint = if (isSelected) primaryText else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                        modifier = Modifier.size(16.dp),
+                                                    )
+                                                    Text(
+                                                        text = file.fileName,
+                                                        fontSize = 12.5.sp,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        color = MaterialTheme.colorScheme.onSurface,
+                                                        maxLines = 1,
+                                                        overflow = TextOverflow.Ellipsis,
+                                                    )
+                                                }
+                                                Text(
+                                                    text = "${file.pageCount} trang slide",
+                                                    fontSize = 11.sp,
+                                                    color = if (isSelected) primaryText else MaterialTheme.colorScheme.onSurfaceVariant,
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 2.2. Trình thu âm Live
+                item(key = "live_recorder_card") {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (isRecording) StudyAiPalette.Rose.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline,
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(16.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    text = "2. Ghi âm bám Slide",
+                                    fontSize = 12.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                )
+                                val (pillBg, pillFg, pillLabel) = when {
+                                    isRecording -> Triple(roseSoft, roseText, "Đang lọc giọng thầy")
+                                    liveSessionState == "finished" -> Triple(tealSoft, tealText, "Đã chốt & lưu")
+                                    else -> Triple(surfaceSubtle, MaterialTheme.colorScheme.onSurfaceVariant, "Sẵn sàng")
+                                }
+                                Surface(
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = pillBg,
+                                ) {
+                                    Text(
+                                        text = pillLabel,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = pillFg,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.height(14.dp))
+
+                            Text(
+                                text = recordingElapsedLabel,
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 36.sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                color = if (isRecording) StudyAiPalette.Rose else MaterialTheme.colorScheme.onSurface,
+                            )
+
+                            Spacer(Modifier.height(12.dp))
+
+                            Live16BarWaveform(
+                                isRecording = isRecording,
+                                amplitude = liveAmplitude,
+                            )
+
+                            Spacer(Modifier.height(16.dp))
+
+                            Button(
+                                onClick = {
+                                    if (isRecording) {
+                                        showFinishLiveSheet = true
+                                    } else {
+                                        activeVaultSlide?.let(startLiveWithPermission)
+                                    }
+                                },
+                                enabled = isRecording || (activeVaultSlide != null && !isProcessingQueue),
+                                shape = RoundedCornerShape(16.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isRecording) StudyAiPalette.Rose else StudyAiPalette.PrimaryCobalt,
+                                    contentColor = Color.White,
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(48.dp),
+                            ) {
+                                Icon(
+                                    imageVector = if (isRecording) Icons.Default.Stop else Icons.Default.Mic,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    text = if (isRecording) "Dừng & Chốt buổi học" else "Bắt đầu bám Slide trực tiếp",
+                                    fontWeight = FontWeight.Bold,
+                                )
+                            }
+
+                            AnimatedVisibility(visible = isRecording) {
+                                OutlinedButton(
+                                    onClick = onMarkCurrentBlockConfused,
+                                    shape = RoundedCornerShape(16.dp),
+                                    border = BorderStroke(1.dp, StudyAiPalette.Rose),
+                                    colors = ButtonDefaults.outlinedButtonColors(
+                                        containerColor = roseSoft,
+                                        contentColor = roseText,
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 8.dp)
+                                        .height(44.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Flag,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(16.dp),
+                                    )
+                                    Spacer(Modifier.width(6.dp))
+                                    Text(
+                                        text = "Chưa hiểu đoạn này • Ghim mốc ngay",
+                                        fontWeight = FontWeight.SemiBold,
+                                        fontSize = 12.5.sp,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Hiển thị tiến trình tinh chỉnh toàn bài bằng AI nếu sinh viên chọn Refine sau khi chốt Live
+                if (isProcessingQueue || (liveSessionState == "finished" && uploadProgress >= 100)) {
+                    item(key = "live_refinement_progress") {
+                        QueueProgressCard(
+                            isProcessingQueue = isProcessingQueue,
+                            uploadProgress = uploadProgress,
+                            uploadStatusText = uploadStatusText,
+                            onOpenGeneratedNotes = onOpenGeneratedNotes,
+                        )
+                    }
+                }
+
+                // 2.3. Luồng bám Slide thời gian thực (LiveFeedList)
+                item(key = "live_feed_header") {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 2.dp),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
                         Text(
-                            text = "Kho Slide • $courseName",
-                            style = MaterialTheme.typography.titleLarge,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
+                            text = "Luồng bám Slide thời gian thực",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                         Text(
-                            text = "Chọn tài liệu trên lớp và bấm Thu âm để bám slide theo thời gian thực",
-                            style = MaterialTheme.typography.labelSmall,
+                            text = "${activeFeedItems.size} mục",
+                            fontSize = 11.sp,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
-                    Spacer(Modifier.width(8.dp))
-                    FilledTonalButton(
-                        onClick = {
-                            vaultSlidePicker.launch(
-                                arrayOf(
-                                    "application/pdf",
-                                    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                                )
-                            )
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                    ) {
-                        Icon(Icons.Default.UploadFile, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Thêm Slide")
-                    }
                 }
 
-                // Thẻ trạng thái & đăng ký mẫu giọng giảng viên đồng bộ Light & Dark Mode
-                val hasVp = voiceprintStatus?.hasVoiceprint == true
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (hasVp) extras.successBg else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (hasVp) extras.successBorder else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
-                    ),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 14.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
+                if (activeFeedItems.isEmpty()) {
+                    item(key = "live_feed_empty") {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = MaterialTheme.colorScheme.surface,
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                            modifier = Modifier.fillMaxWidth(),
                         ) {
-                            Icon(
-                                imageVector = if (hasVp) Icons.Default.VerifiedUser else Icons.Default.RecordVoiceOver,
-                                contentDescription = null,
-                                tint = if (hasVp) extras.successFg else MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(22.dp)
-                            )
-                            Spacer(Modifier.width(10.dp))
-                            Column {
-                                Text(
-                                    text = if (hasVp) "Đã lưu giọng giảng viên (Sẵn sàng lọc nhiễu)" else "Chưa đăng ký giọng giảng viên",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = if (hasVp) extras.successFg else MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = if (hasVp) {
-                                        "ECAPA 192-d • Ngưỡng lọc ${voiceprintStatus?.cosineThreshold ?: 0.35f}"
-                                    } else {
-                                        "Tải 15–30s mẫu giọng sạch để chặn tiếng sinh viên bàn tán"
-                                    },
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = if (hasVp) extras.successFg.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-                        FilledTonalButton(
-                            onClick = { voiceSamplePicker.launch(arrayOf("audio/*")) },
-                            enabled = !isEnrollingVoice,
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.padding(start = 8.dp)
-                        ) {
-                            if (isEnrollingVoice) {
-                                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                            } else {
-                                Text(if (hasVp) "Cập nhật" else "Đăng ký", style = MaterialTheme.typography.labelSmall)
-                            }
-                        }
-                    }
-                }
-
-                if (slideVault.isEmpty()) {
-                    Surface(
-                        shape = RoundedCornerShape(14.dp),
-                        color = MaterialTheme.colorScheme.surface,
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                        modifier = Modifier
-                            .weight(1f)
-                            .fillMaxWidth(),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Icon(
-                                imageVector = Icons.Default.Description,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(30.dp),
-                            )
-                            Spacer(Modifier.height(8.dp))
                             Text(
-                                text = "Kho Slide chưa có tệp nào",
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = "Bấm \"Thêm Slide\" ở góc trên để nạp PDF hoặc PPTX trước giờ học.",
+                                text = "Khi thu âm trực tiếp, từng ý giảng viên nói khớp với Slide, đoạn sinh viên bị chặn và các mốc ghim chưa hiểu sẽ xuất hiện liên tục tại đây.",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.padding(16.dp),
                             )
                         }
                     }
                 } else {
-                    LazyColumn(
-                        modifier = Modifier.weight(1f),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(slideVault, key = { it.id }) { file ->
-                            val selected = file.id == selectedVaultSlideId
-                            Surface(
-                                onClick = { selectedVaultSlideId = file.id },
-                                shape = RoundedCornerShape(14.dp),
-                                color = if (selected) {
-                                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f)
-                                } else {
-                                    MaterialTheme.colorScheme.surface
-                                },
-                                border = BorderStroke(
-                                    width = if (selected) 1.5.dp else 1.dp,
-                                    color = if (selected) {
-                                        MaterialTheme.colorScheme.primary
-                                    } else {
-                                        MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)
-                                    },
-                                ),
-                            ) {
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Description,
-                                        contentDescription = null,
-                                        tint = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                    )
-                                    Spacer(Modifier.width(10.dp))
-                                    Column(modifier = Modifier.weight(1f)) {
-                                        Text(
-                                            text = file.fileName,
-                                            style = MaterialTheme.typography.titleMedium,
-                                            color = MaterialTheme.colorScheme.onSurface,
-                                            maxLines = 1,
-                                            overflow = TextOverflow.Ellipsis,
-                                        )
-                                        Text(
-                                            text = "${file.pageCount} trang slide • Sẵn sàng bám theo lời giảng",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                        )
-                                    }
-                                    if (selected) {
-                                        Icon(
-                                            imageVector = Icons.Default.CheckCircle,
-                                            contentDescription = "Đã chọn",
-                                            tint = MaterialTheme.colorScheme.primary,
-                                            modifier = Modifier.size(18.dp),
-                                        )
-                                    }
-                                }
-                            }
-                        }
+                    items(activeFeedItems, key = { it.id }) { feedItem ->
+                        LiveFeedEventCard(
+                            item = feedItem,
+                            primarySoft = primarySoft,
+                            primaryText = primaryText,
+                            roseSoft = roseSoft,
+                            roseText = roseText,
+                            surfaceSubtle = surfaceSubtle,
+                        )
                     }
                 }
 
-                val activeFile = slideVault.find { it.id == selectedVaultSlideId }
-                Button(
-                    onClick = { activeFile?.let(onStartLiveFollow) },
-                    enabled = activeFile != null && !isProcessingQueue,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 14.dp)
-                        .height(50.dp),
-                ) {
-                    Icon(Icons.Default.Mic, contentDescription = null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Bắt đầu thu âm bám theo Slide đã chọn", style = MaterialTheme.typography.labelLarge)
+                item(key = "live_bottom_spacer") {
+                    Spacer(Modifier.height(10.dp))
                 }
             }
         } else {
+            // Chế độ B: Tải Slide + Audio & Tiến độ Queue (BatchUploadTab)
+            val resolvedSlideName = resolveDisplayFileName(context, batchSlideUri) ?: "Chưa chọn file Slide"
+            val resolvedAudioName = resolveDisplayFileName(context, batchAudioUri)
+                ?: directAudioFile?.name
+                ?: "Chưa chọn file Audio"
+            val isReadyToUpload = (batchSlideUri != null) && (batchAudioUri != null) && !isProcessingQueue && !isDirectMicRecording
+
             Column(
                 modifier = Modifier
-                    .fillMaxSize()
+                    .weight(1f)
+                    .fillMaxWidth()
                     .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 16.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(
-                    text = "Phân tích bộ Slide & File ghi âm",
-                    style = MaterialTheme.typography.titleLarge,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = "Chọn tệp PDF/PPTX và tệp ghi âm (hoặc thu âm trực tiếp bằng micro) để AI căn gióng từng block và tổng hợp vở ghi chép.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-
-                FilePickerCard(
-                    title = "1. Chọn file Slide (.pdf / .pptx)",
-                    selectedLabel = batchSlideUri?.lastPathSegment ?: "Chưa chọn file slide",
-                    icon = Icons.Default.Description,
-                    onClick = {
-                        batchSlidePicker.launch(
-                            arrayOf(
-                                "application/pdf",
-                                "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                            )
-                        )
-                    },
-                )
-
-                FilePickerCard(
-                    title = "2. Chọn file Ghi âm (.mp3, .m4a, .wav)",
-                    selectedLabel = if (batchAudioUri != null) {
-                        batchAudioUri?.lastPathSegment ?: "Đã chọn file audio"
-                    } else if (directAudioFile != null) {
-                        "Đã thu từ Micro: ${directAudioFile?.name}"
-                    } else {
-                        "Chưa có tệp âm thanh"
-                    },
-                    icon = Icons.Default.AudioFile,
-                    onClick = { batchAudioPicker.launch(arrayOf("audio/*", "video/mp4")) },
-                )
-
                 Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = if (isDirectMicRecording) MaterialTheme.colorScheme.errorContainer else MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(
-                        width = 1.dp,
-                        color = if (isDirectMicRecording) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.outline.copy(alpha = 0.4f),
-                    ),
-                    modifier = Modifier.fillMaxWidth()
+                    shape = RoundedCornerShape(24.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                    modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Row(
-                        modifier = Modifier
-                            .padding(14.dp)
-                            .fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
+                        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                             Text(
-                                text = if (isDirectMicRecording) {
-                                    "Đang ghi âm Micro: %02d:%02d".format(directMicElapsedSec / 60, directMicElapsedSec % 60)
-                                } else {
-                                    "Hoặc thu trực tiếp bằng Micro"
-                                },
-                                style = MaterialTheme.typography.titleSmall,
-                                color = if (isDirectMicRecording) MaterialTheme.colorScheme.onErrorContainer else MaterialTheme.colorScheme.onSurface
+                                text = "Tải Slide & Ghi âm để xử lý Queue",
+                                fontSize = 14.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface,
                             )
                             Text(
-                                text = "Chuẩn 16kHz Mono AAC 64kbps cho Whisper ASR",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isDirectMicRecording) MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.85f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                text = "Chọn tài liệu PDF/PPTX và tệp âm thanh bài giảng để AI căn gióng và tổng hợp ghi chú 3 lớp",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
 
-                        if (!isDirectMicRecording) {
-                            FilledTonalButton(
-                                onClick = { permissionLauncher.launch(Manifest.permission.RECORD_AUDIO) },
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(Icons.Default.Mic, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Ghi âm")
-                            }
-                        } else {
-                            Button(
-                                onClick = {
-                                    val f = directRecorder.stop()
-                                    isDirectMicRecording = false
-                                    if (f != null) {
-                                        directAudioFile = f
-                                        batchAudioUri = Uri.fromFile(f)
-                                    }
-                                },
-                                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                                shape = RoundedCornerShape(10.dp)
-                            ) {
-                                Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text("Dừng")
-                            }
+                        BatchFilePickerSlot(
+                            icon = Icons.Default.Description,
+                            iconBg = primarySoft,
+                            iconTint = StudyAiPalette.PrimaryCobalt,
+                            title = "Tài liệu Slide (.pdf / .pptx)",
+                            fileName = resolvedSlideName,
+                            hasFile = batchSlideUri != null,
+                            actionColor = primaryText,
+                            surfaceSubtle = surfaceSubtle,
+                            onClick = {
+                                batchSlidePicker.launch(
+                                    arrayOf(
+                                        "application/pdf",
+                                        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+                                    )
+                                )
+                            },
+                        )
+
+                        BatchFilePickerSlot(
+                            icon = Icons.Default.AudioFile,
+                            iconBg = tealSoft,
+                            iconTint = StudyAiPalette.Teal,
+                            title = "Tệp Ghi âm (.m4a / .mp3 / .wav)",
+                            fileName = resolvedAudioName,
+                            hasFile = batchAudioUri != null || directAudioFile != null,
+                            actionColor = tealText,
+                            surfaceSubtle = surfaceSubtle,
+                            onClick = { batchAudioPicker.launch(arrayOf("audio/*", "video/mp4")) },
+                        )
+
+                        Button(
+                            onClick = {
+                                val s = batchSlideUri
+                                val a = batchAudioUri
+                                if (s != null && a != null) {
+                                    onAnalyzeUploadedPair(s, a)
+                                }
+                            },
+                            enabled = isReadyToUpload,
+                            shape = RoundedCornerShape(16.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = StudyAiPalette.PrimaryCobalt,
+                                contentColor = Color.White,
+                            ),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .height(48.dp),
+                        ) {
+                            Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(6.dp))
+                            Text(
+                                text = if (isProcessingQueue) "Đang xử lý Queue..." else "Tải lên & Xử lý AI (Queue)",
+                                fontWeight = FontWeight.Bold,
+                            )
                         }
                     }
                 }
 
-                OutlinedButton(
-                    onClick = { batchAudioUri?.let { onTestVoiceNotes?.invoke(it) } },
-                    enabled = batchAudioUri != null && !isVoiceTesting && !isProcessingQueue && !isDirectMicRecording,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(48.dp),
-                ) {
-                    if (isVoiceTesting) {
-                        CircularProgressIndicator(modifier = Modifier.size(18.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(8.dp))
-                        Text("AI đang nghe và tổng hợp ghi chú...")
-                    } else {
-                        Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Spacer(Modifier.width(6.dp))
-                        Text("Thử nhanh: Tạo ghi chú từ Voice (Không cần Slide)")
-                    }
-                }
-
-                val isReadyToProcess = (batchSlideUri != null) && (batchAudioUri != null) && !isProcessingQueue && !isDirectMicRecording
-
-                Button(
-                    onClick = {
-                        val s = batchSlideUri
-                        val a = batchAudioUri
-                        if (s != null && a != null) {
-                            onAnalyzeUploadedPair(s, a)
-                        }
-                    },
-                    enabled = isReadyToProcess,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 4.dp, bottom = 18.dp)
-                        .height(50.dp),
-                ) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text(
-                        text = if (isProcessingQueue) "Đang phân tích qua hàng đợi..." else "Tải lên & Phân tích bài giảng",
-                        style = MaterialTheme.typography.labelLarge,
+                if (isProcessingQueue || uploadProgress >= 100) {
+                    QueueProgressCard(
+                        isProcessingQueue = isProcessingQueue,
+                        uploadProgress = uploadProgress,
+                        uploadStatusText = uploadStatusText,
+                        onOpenGeneratedNotes = onOpenGeneratedNotes,
                     )
                 }
+
+                // Tùy chọn thu nhanh Micro hoặc thử nhanh ghi chú từ Voice
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            if (!isDirectMicRecording) {
+                                val granted = ContextCompat.checkSelfPermission(
+                                    context,
+                                    Manifest.permission.RECORD_AUDIO
+                                ) == PackageManager.PERMISSION_GRANTED
+                                if (granted) {
+                                    try {
+                                        directRecorder.start("lecture_mic")
+                                        isDirectMicRecording = true
+                                        directMicElapsedSec = 0
+                                    } catch (_: Exception) {
+                                    }
+                                } else {
+                                    batchMicPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+                                }
+                            } else {
+                                val recorded = directRecorder.stop()
+                                isDirectMicRecording = false
+                                if (recorded != null) {
+                                    directAudioFile = recorded
+                                    batchAudioUri = Uri.fromFile(recorded)
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(
+                            1.dp,
+                            if (isDirectMicRecording) StudyAiPalette.Rose else MaterialTheme.colorScheme.outline,
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = if (isDirectMicRecording) roseSoft else Color.Transparent,
+                            contentColor = if (isDirectMicRecording) roseText else MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = if (isDirectMicRecording) Icons.Default.Stop else Icons.Default.Mic,
+                            contentDescription = null,
+                            modifier = Modifier.size(15.dp),
+                        )
+                        Spacer(Modifier.width(4.dp))
+                        Text(
+                            text = if (isDirectMicRecording) {
+                                "Dừng (%02d:%02d)".format(directMicElapsedSec / 60, directMicElapsedSec % 60)
+                            } else {
+                                "Thu từ Micro"
+                            },
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                        )
+                    }
+
+                    if (onTestVoiceNotes != null) {
+                        OutlinedButton(
+                            onClick = { batchAudioUri?.let(onTestVoiceNotes) },
+                            enabled = batchAudioUri != null && !isVoiceTesting && !isProcessingQueue && !isDirectMicRecording,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            if (isVoiceTesting) {
+                                CircularProgressIndicator(modifier = Modifier.size(14.dp), strokeWidth = 2.dp)
+                                Spacer(Modifier.width(6.dp))
+                                Text("Đang thử...", fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.Bolt, contentDescription = null, modifier = Modifier.size(15.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text("Thử nhanh Voice", fontSize = 12.sp, maxLines = 1)
+                            }
+                        }
+                    }
+                }
+
+                Spacer(Modifier.height(10.dp))
             }
         }
     }
 
+    if (showFinishLiveSheet) {
+        FinishLiveBottomSheet(
+            onDismiss = { showFinishLiveSheet = false },
+            onConfirmFinish = { refineFull ->
+                showFinishLiveSheet = false
+                onStopLiveFollow(refineFull)
+            },
+        )
+    }
+
     if (voiceTestResult != null) {
-        val clipboardManager = LocalClipboardManager.current
-        AlertDialog(
-            onDismissRequest = { onDismissVoiceTestResult?.invoke() },
-            title = {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.GraphicEq, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
-                    Spacer(Modifier.width(8.dp))
-                    Text(
-                        text = voiceTestResult.title.ifBlank { "Vở ghi chép từ Voice" },
-                        style = MaterialTheme.typography.titleLarge,
-                        maxLines = 2
-                    )
-                }
-            },
-            text = {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .heightIn(max = 420.dp)
-                        .verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f),
-                        shape = RoundedCornerShape(10.dp)
-                    ) {
-                        Column(modifier = Modifier.padding(10.dp)) {
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                                Icon(
-                                    imageVector = Icons.Default.Summarize,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(16.dp),
-                                )
-                                Text(
-                                    text = "Tóm tắt tổng quan (${voiceTestResult.durationSec.toInt()}s)",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                            Spacer(Modifier.height(4.dp))
-                            Text(
-                                text = voiceTestResult.summary,
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                    }
-
-                    if (voiceTestResult.keyPoints.isNotEmpty()) {
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.Lightbulb,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.secondary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                text = "Ý chính & Nội dung cốt lõi",
-                                style = MaterialTheme.typography.titleSmall,
-                                color = MaterialTheme.colorScheme.onSurface,
-                            )
-                        }
-                        voiceTestResult.keyPoints.forEachIndexed { idx, kp ->
-                            OutlinedCard(
-                                shape = RoundedCornerShape(10.dp),
-                                colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
-                            ) {
-                                Column(modifier = Modifier.padding(10.dp)) {
-                                    Text(
-                                        text = "${idx + 1}. [${kp.timestampLabel}] ${kp.headline}",
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = MaterialTheme.colorScheme.primary
-                                    )
-                                    Spacer(Modifier.height(3.dp))
-                                    Text(text = kp.content, style = MaterialTheme.typography.bodySmall)
-                                    if (kp.evidenceQuote.isNotBlank()) {
-                                        Spacer(Modifier.height(4.dp))
-                                        Text(
-                                            text = "\"${kp.evidenceQuote}\"",
-                                            style = MaterialTheme.typography.labelSmall,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    if (voiceTestResult.technicalTerms.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                text = "Thuật ngữ chuyên ngành",
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                        }
-                        voiceTestResult.technicalTerms.forEach { t ->
-                            Text(
-                                text = "• ${t.term}: ${t.explanation}",
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
-
-                    if (voiceTestResult.actionItemsOrTips.isNotEmpty()) {
-                        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f))
-                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            Icon(
-                                imageVector = Icons.Default.WarningAmber,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.size(16.dp),
-                            )
-                            Text(
-                                text = "Dặn dò & Lưu ý quan trọng",
-                                style = MaterialTheme.typography.titleSmall,
-                            )
-                        }
-                        voiceTestResult.actionItemsOrTips.forEach { a ->
-                            Text(text = "• $a", style = MaterialTheme.typography.bodySmall)
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = { onDismissVoiceTestResult?.invoke() }) {
-                    Text("Đóng")
-                }
-            },
-            dismissButton = {
-                if (voiceTestResult.markdownNotes.isNotBlank()) {
-                    TextButton(onClick = {
-                        clipboardManager.setText(AnnotatedString(voiceTestResult.markdownNotes))
-                    }) {
-                        Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
-                        Spacer(Modifier.width(4.dp))
-                        Text("Sao chép Markdown")
-                    }
-                }
-            }
+        VoiceTestResultDialog(
+            voiceTestResult = voiceTestResult,
+            onDismiss = { onDismissVoiceTestResult?.invoke() },
         )
     }
 }
 
 @Composable
-private fun LiveWaveformBars(
-    color: Color,
-    modifier: Modifier = Modifier,
+private fun Live16BarWaveform(
+    isRecording: Boolean,
+    amplitude: Float,
 ) {
-    val transition = rememberInfiniteTransition(label = "live_wave")
-    val bars = listOf(0, 120, 240, 160, 80)
+    var waveTick by remember { mutableIntStateOf(0) }
+    LaunchedEffect(isRecording) {
+        if (isRecording) {
+            while (true) {
+                delay(130L)
+                waveTick += 1
+            }
+        }
+    }
+
+    val restColor = MaterialTheme.colorScheme.outline
     Row(
-        modifier = modifier,
+        modifier = Modifier.height(36.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        bars.forEachIndexed { idx, delayMs ->
-            val factor by transition.animateFloat(
-                initialValue = 0.35f,
-                targetValue = 1.0f,
-                animationSpec = infiniteRepeatable(
-                    animation = tween(durationMillis = 480 + idx * 60, delayMillis = delayMs, easing = LinearEasing),
-                    repeatMode = RepeatMode.Reverse,
-                ),
+        repeat(16) { idx ->
+            val targetHeight = if (isRecording) {
+                val centerWeight = 1f - (abs(idx - 7.5f) / 9.5f)
+                val ripple = 0.55f + 0.45f * sin(waveTick * 0.55 + idx * 0.72).toFloat()
+                (8f + 26f * amplitude * centerWeight * ripple).coerceIn(8f, 34f).dp
+            } else {
+                8.dp
+            }
+            val barHeight by animateDpAsState(
+                targetValue = targetHeight,
+                animationSpec = tween(durationMillis = 110),
                 label = "wave_bar_$idx",
             )
             Box(
                 modifier = Modifier
-                    .width(3.dp)
-                    .height((18f * factor).dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(color)
+                    .width(4.dp)
+                    .height(barHeight)
+                    .clip(CircleShape)
+                    .background(if (isRecording) StudyAiPalette.Rose else restColor)
             )
         }
     }
 }
 
 @Composable
-private fun LiveRecordingControlBar(
-    elapsedLabel: String,
-    onMarkConfused: () -> Unit,
-    onStop: () -> Unit,
+private fun LiveFeedEventCard(
+    item: LiveFeedItemUi,
+    primarySoft: Color,
+    primaryText: Color,
+    roseSoft: Color,
+    roseText: Color,
+    surfaceSubtle: Color,
+) {
+    when (item.kind) {
+        LiveFeedKind.LECTURER_NOTE -> {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = primarySoft,
+                        ) {
+                            Text(
+                                text = "Slide %02d".format(item.slideNumber),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = primaryText,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                            )
+                        }
+                        Text(
+                            text = item.timestampLabel,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Text(
+                        text = item.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 3,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+
+        LiveFeedKind.BLOCKED_NON_TEACHER -> {
+            Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = surfaceSubtle,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 9.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.weight(1f),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VerifiedUser,
+                            contentDescription = null,
+                            tint = StudyAiPalette.Teal,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = item.text.ifBlank { "Đã chặn tiếng sinh viên bàn tán" },
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text(
+                        text = item.timestampLabel,
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 10.5.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        LiveFeedKind.CONFUSED_PIN -> {
+            Surface(
+                shape = RoundedCornerShape(18.dp),
+                color = roseSoft,
+                border = BorderStroke(1.dp, StudyAiPalette.Rose),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(
+                    modifier = Modifier.padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = StudyAiPalette.Rose,
+                            ) {
+                                Text(
+                                    text = "Ghim chưa hiểu",
+                                    fontSize = 11.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White,
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                )
+                            }
+                            Text(
+                                text = "Slide %02d".format(item.slideNumber),
+                                fontFamily = FontFamily.Monospace,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = roseText,
+                            )
+                        }
+                        Text(
+                            text = item.timestampLabel,
+                            fontFamily = FontFamily.Monospace,
+                            fontSize = 11.sp,
+                            color = roseText,
+                        )
+                    }
+                    Text(
+                        text = item.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = roseText,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BatchFilePickerSlot(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconBg: Color,
+    iconTint: Color,
+    title: String,
+    fileName: String,
+    hasFile: Boolean,
+    actionColor: Color,
+    surfaceSubtle: Color,
+    onClick: () -> Unit,
 ) {
     Surface(
-        color = MaterialTheme.colorScheme.surface,
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = surfaceSubtle,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(modifier = Modifier.fillMaxWidth()) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(iconBg),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(20.dp),
+                )
+            }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Text(
+                    text = fileName,
+                    fontSize = 13.sp,
+                    fontWeight = if (hasFile) FontWeight.SemiBold else FontWeight.Medium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Text(
+                text = if (hasFile) "Đổi" else "Chọn",
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = actionColor,
+            )
+        }
+    }
+}
+
+@Composable
+private fun QueueProgressCard(
+    isProcessingQueue: Boolean,
+    uploadProgress: Int,
+    uploadStatusText: String,
+    onOpenGeneratedNotes: () -> Unit,
+) {
+    val isDark = StudyAiExtras.isDark
+    val primaryText = if (isDark) StudyAiPalette.PrimaryTextDark else StudyAiPalette.PrimaryTextLight
+    val tealText = if (isDark) StudyAiPalette.TealTextDark else StudyAiPalette.TealTextLight
+    val isCompleted = !isProcessingQueue && uploadProgress >= 100
+
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isCompleted) StudyAiPalette.Teal else StudyAiPalette.PrimaryCobalt.copy(alpha = 0.45f),
+        ),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = uploadStatusText.ifBlank {
+                        if (isCompleted) "Hoàn tất xử lý bài giảng (100%)!" else "Đang xử lý bài giảng qua AI..."
+                    },
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.weight(1f),
+                )
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "${uploadProgress.coerceIn(0, 100)}%",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = if (isCompleted) tealText else primaryText,
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { (uploadProgress / 100f).coerceIn(0f, 1f) },
+                color = if (isCompleted) StudyAiPalette.Teal else StudyAiPalette.PrimaryCobalt,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(8.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+            )
+
+            if (isCompleted) {
+                Button(
+                    onClick = onOpenGeneratedNotes,
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StudyAiPalette.Teal,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(46.dp),
+                ) {
+                    Text(
+                        text = "Mở Vở Ghi Chép vừa tạo",
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun FinishLiveBottomSheet(
+    onDismiss: () -> Unit,
+    onConfirmFinish: (refineFullLecture: Boolean) -> Unit,
+) {
+    var refineFull by remember { mutableStateOf(true) }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp, vertical = 10.dp)
+        ) {
+            Text(
+                text = "Chốt buổi học trực tiếp",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+            Text(
+                text = "Hệ thống sẽ ghép các đoạn ghi âm 8 giây thành live_recording.m4a để bạn nghe lại bằng ExoPlayer.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 4.dp),
+            )
+            Spacer(Modifier.height(14.dp))
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { refineFull = !refineFull }
+            ) {
+                Row(
+                    modifier = Modifier.padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Tinh chỉnh lại toàn bài bằng AI",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                        Text(
+                            text = "Chạy pyannote + Viterbi BGE-M3 + Gemini 3 lớp",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Checkbox(
+                        checked = refineFull,
+                        onCheckedChange = { refineFull = it },
+                    )
+                }
+            }
+            Spacer(Modifier.height(16.dp))
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    .padding(bottom = 20.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Surface(
-                    shape = RoundedCornerShape(10.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        LiveWaveformBars(color = MaterialTheme.colorScheme.error)
-                        Text(
-                            text = elapsedLabel,
-                            style = StudyAiTimestampTextStyle,
-                            color = MaterialTheme.colorScheme.onErrorContainer,
-                        )
-                    }
-                }
-
                 OutlinedButton(
-                    onClick = onMarkConfused,
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(14.dp),
                     modifier = Modifier.weight(1f),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
                 ) {
-                    Icon(Icons.Default.Flag, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Chưa hiểu", style = MaterialTheme.typography.labelMedium, maxLines = 1)
+                    Text("Tiếp tục ghi")
                 }
-
                 Button(
-                    onClick = onStop,
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error),
-                    shape = RoundedCornerShape(10.dp),
-                    contentPadding = PaddingValues(horizontal = 12.dp, vertical = 8.dp),
+                    onClick = { onConfirmFinish(refineFull) },
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StudyAiPalette.PrimaryCobalt,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier.weight(1f),
                 ) {
-                    Icon(Icons.Default.Stop, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text("Dừng", style = MaterialTheme.typography.labelMedium)
+                    Text("Chốt & Lưu Audio", fontWeight = FontWeight.Bold)
                 }
             }
-            HorizontalDivider(thickness = 1.dp, color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
         }
     }
 }
@@ -917,82 +1311,181 @@ private fun LiveRecordingControlBar(
 private fun ModeSegmentButton(
     text: String,
     selected: Boolean,
+    primaryTextColor: Color,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
-        shape = RoundedCornerShape(10.dp),
+        shape = RoundedCornerShape(12.dp),
         color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
-        border = if (selected) BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)) else null,
+        shadowElevation = if (selected) 1.dp else 0.dp,
         modifier = modifier.height(38.dp),
     ) {
         Box(contentAlignment = Alignment.Center) {
             Text(
                 text = text,
-                style = MaterialTheme.typography.labelLarge,
+                fontSize = 13.sp,
                 fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                color = if (selected) primaryTextColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
             )
         }
     }
 }
 
 @Composable
-private fun FilePickerCard(
-    title: String,
-    selectedLabel: String,
-    icon: ImageVector,
-    onClick: () -> Unit,
+private fun VoiceTestResultDialog(
+    voiceTestResult: VoiceNotesTestResponse,
+    onDismiss: () -> Unit,
 ) {
-    Surface(
-        onClick = onClick,
-        shape = RoundedCornerShape(14.dp),
-        color = MaterialTheme.colorScheme.surface,
-        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-        modifier = Modifier.fillMaxWidth(),
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = MaterialTheme.colorScheme.primaryContainer,
-                modifier = Modifier.size(38.dp),
+    val clipboardManager = LocalClipboardManager.current
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Icons.Default.GraphicEq, contentDescription = null, tint = StudyAiPalette.PrimaryCobalt)
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = voiceTestResult.title.ifBlank { "Vở ghi chép từ Voice" },
+                    style = MaterialTheme.typography.titleLarge,
+                    maxLines = 2,
+                )
+            }
+        },
+        text = {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 420.dp)
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                Box(contentAlignment = Alignment.Center) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(20.dp),
-                    )
+                Surface(
+                    color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(10.dp),
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            Icon(
+                                imageVector = Icons.Default.Summarize,
+                                contentDescription = null,
+                                tint = StudyAiPalette.PrimaryCobalt,
+                                modifier = Modifier.size(16.dp),
+                            )
+                            Text(
+                                text = "Tóm tắt tổng quan (${voiceTestResult.durationSec.toInt()}s)",
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                            )
+                        }
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            text = voiceTestResult.summary,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                }
+
+                if (voiceTestResult.keyPoints.isNotEmpty()) {
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.Lightbulb,
+                            contentDescription = null,
+                            tint = StudyAiPalette.Teal,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Ý chính & Nội dung cốt lõi",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+                    voiceTestResult.keyPoints.forEachIndexed { idx, kp ->
+                        OutlinedCard(
+                            shape = RoundedCornerShape(10.dp),
+                            colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)),
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "${idx + 1}. [${kp.timestampLabel}] ${kp.headline}",
+                                    style = MaterialTheme.typography.labelLarge,
+                                    color = StudyAiPalette.PrimaryCobalt,
+                                )
+                                Spacer(Modifier.height(3.dp))
+                                Text(text = kp.content, style = MaterialTheme.typography.bodySmall)
+                                if (kp.evidenceQuote.isNotBlank()) {
+                                    Spacer(Modifier.height(4.dp))
+                                    Text(
+                                        text = "\"${kp.evidenceQuote}\"",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (voiceTestResult.technicalTerms.isNotEmpty()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(
+                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                            contentDescription = null,
+                            tint = StudyAiPalette.PrimaryCobalt,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Thuật ngữ chuyên ngành",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                    }
+                    voiceTestResult.technicalTerms.forEach { t ->
+                        Text(
+                            text = "• ${t.term}: ${t.explanation}",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
+
+                if (voiceTestResult.actionItemsOrTips.isNotEmpty()) {
+                    HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Icon(
+                            imageVector = Icons.Default.WarningAmber,
+                            contentDescription = null,
+                            tint = StudyAiPalette.Amber,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Dặn dò & Lưu ý quan trọng",
+                            style = MaterialTheme.typography.titleSmall,
+                        )
+                    }
+                    voiceTestResult.actionItemsOrTips.forEach { a ->
+                        Text(text = "• $a", style = MaterialTheme.typography.bodySmall)
+                    }
                 }
             }
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.titleSmall,
-                    color = MaterialTheme.colorScheme.onSurface,
-                )
-                Text(
-                    text = selectedLabel,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Đóng")
             }
-            Text(
-                text = "Chọn",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.primary,
-                fontWeight = FontWeight.Bold,
-            )
-        }
-    }
+        },
+        dismissButton = {
+            if (voiceTestResult.markdownNotes.isNotBlank()) {
+                TextButton(onClick = {
+                    clipboardManager.setText(AnnotatedString(voiceTestResult.markdownNotes))
+                }) {
+                    Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text("Sao chép Markdown")
+                }
+            }
+        },
+    )
 }

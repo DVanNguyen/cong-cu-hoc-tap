@@ -13,6 +13,8 @@ import com.studyai.audio.ChunkedAudioRecorder
 import com.studyai.data.api.StudyAiApiService
 import com.studyai.data.model.*
 import com.studyai.ui.LectureLanguageMode
+import com.studyai.ui.capture.LiveFeedItemUi
+import com.studyai.ui.capture.LiveFeedKind
 import com.studyai.ui.capture.VaultSlideFileUi
 import com.studyai.ui.course.CourseUiItem
 import com.studyai.ui.dictionary.CourseDictionaryItemUi
@@ -89,6 +91,7 @@ class StudyAiViewModel(
     // Trạng thái Thu âm Microphone
     private var audioRecorder: ChunkedAudioRecorder? = null
     private var timerJob: Job? = null
+    private var amplitudeJob: Job? = null
     private val inFlightLiveChunkJobs = mutableListOf<Job>()
 
     private val _isRecording = MutableStateFlow(false)
@@ -96,6 +99,15 @@ class StudyAiViewModel(
 
     private val _recordingElapsedSec = MutableStateFlow(0)
     val recordingElapsedSec: StateFlow<Int> = _recordingElapsedSec.asStateFlow()
+
+    private val _liveAmplitude = MutableStateFlow(0.06f)
+    val liveAmplitude: StateFlow<Float> = _liveAmplitude.asStateFlow()
+
+    private val _liveSessionState = MutableStateFlow("ready")
+    val liveSessionState: StateFlow<String> = _liveSessionState.asStateFlow()
+
+    private val _liveFeedItems = MutableStateFlow<List<LiveFeedItemUi>>(emptyList())
+    val liveFeedItems: StateFlow<List<LiveFeedItemUi>> = _liveFeedItems.asStateFlow()
 
     // Trạng thái Batch Upload
     private val _isAnalyzingBatch = MutableStateFlow(false)
@@ -246,6 +258,10 @@ class StudyAiViewModel(
 
     fun selectCourse(courseId: Long) {
         _selectedCourseId.value = courseId
+        _liveSessionState.value = "ready"
+        _liveFeedItems.value = emptyList()
+        _uploadProgress.value = 0
+        _uploadStatusText.value = ""
         loadAllData(courseId = courseId, lectureId = null)
     }
 
@@ -587,6 +603,16 @@ class StudyAiViewModel(
         val targetBlockId = _activeSpokenBlockId.value
             ?: _inlinePages.value.firstOrNull()?.blocks?.firstOrNull()?.blockId
         if (targetBlockId != null) {
+            val matchedPage = _inlinePages.value.find { p -> p.blocks.any { it.blockId == targetBlockId } }
+            val matchedBlock = matchedPage?.blocks?.find { it.blockId == targetBlockId }
+            val pinItem = LiveFeedItemUi(
+                id = "pin_${System.currentTimeMillis()}_$targetBlockId",
+                kind = LiveFeedKind.CONFUSED_PIN,
+                slideNumber = matchedPage?.pageNumber ?: 1,
+                timestampLabel = formatSeconds(_recordingElapsedSec.value.toFloat()),
+                text = matchedBlock?.originalSlideText?.takeIf { it.isNotBlank() } ?: "Đoạn đang giảng",
+            )
+            _liveFeedItems.value = listOf(pinItem) + _liveFeedItems.value
             toggleConfusedBlock(targetBlockId)
         }
     }
@@ -597,6 +623,9 @@ class StudyAiViewModel(
         viewModelScope.launch {
             _isRecording.value = true
             _recordingElapsedSec.value = 0
+            _liveSessionState.value = "recording"
+            _liveFeedItems.value = emptyList()
+            _liveAmplitude.value = 0.06f
 
             // 1. Gọi backend khởi tạo bài giảng live và copy blocks
             try {
@@ -618,11 +647,18 @@ class StudyAiViewModel(
                 Log.e(TAG, "Lỗi startLiveLecture: ${e.message}")
             }
 
-            // 2. Chạy Timer hiển thị giây
+            // 2. Chạy Timer hiển thị giây & cập nhật sóng âm thực tế
             timerJob = launch {
                 while (isActive && _isRecording.value) {
                     delay(1000L)
                     _recordingElapsedSec.value += 1
+                }
+            }
+            amplitudeJob?.cancel()
+            amplitudeJob = launch {
+                while (isActive && _isRecording.value) {
+                    _liveAmplitude.value = audioRecorder?.getNormalizedAmplitude() ?: 0.06f
+                    delay(120L)
                 }
             }
 
@@ -665,11 +701,31 @@ class StudyAiViewModel(
                 // Nếu AI xác định đây là giọng sinh viên / tạp âm ngoài lề -> bỏ qua, giữ nguyên block đang sáng
                 if (ev.action == "ignored_non_teacher") {
                     Log.d(TAG, "Chunk tại ${startSec}s bị lọc bỏ (không phải giọng giảng viên).")
+                    val blockedItem = LiveFeedItemUi(
+                        id = "blocked_${System.currentTimeMillis()}_$startSec",
+                        kind = LiveFeedKind.BLOCKED_NON_TEACHER,
+                        slideNumber = ev.matchedSlidePage ?: 1,
+                        timestampLabel = formatSeconds(startSec),
+                        text = "Đã chặn tiếng sinh viên bàn tán",
+                    )
+                    _liveFeedItems.value = listOf(blockedItem) + _liveFeedItems.value
                     return
                 }
 
                 if (!ev.matchedBlockId.isNullOrBlank()) {
                     _activeSpokenBlockId.value = ev.matchedBlockId
+                }
+
+                // Cập nhật luồng Live Feed nếu chunk sinh ra ghi chú giảng viên
+                if (ev.action == "attach_inline_note" && ev.inlineNote != null) {
+                    val feedNote = LiveFeedItemUi(
+                        id = "feed_note_${ev.inlineNote.id ?: System.currentTimeMillis()}",
+                        kind = LiveFeedKind.LECTURER_NOTE,
+                        slideNumber = ev.matchedSlidePage ?: 1,
+                        timestampLabel = formatSeconds(ev.inlineNote.timestampStartSec),
+                        text = ev.inlineNote.explanationText,
+                    )
+                    _liveFeedItems.value = listOf(feedNote) + _liveFeedItems.value
                 }
 
                 // Cập nhật trạng thái đang giảng và thêm note vào đúng block
@@ -729,6 +785,9 @@ class StudyAiViewModel(
         _isRecording.value = false
         timerJob?.cancel()
         timerJob = null
+        amplitudeJob?.cancel()
+        amplitudeJob = null
+        _liveAmplitude.value = 0.06f
 
         var finalChunk: Pair<File, Float>? = null
         audioRecorder?.stopRecording { finalFile, startSec ->
@@ -746,20 +805,38 @@ class StudyAiViewModel(
             }
 
             // 2. Gọi finish-live ghép live_recording.m4a để ExoPlayer phát lại được ngay lập tức
+            var refinedQueued = false
             try {
                 val res = apiService.finishLiveLecture(
                     lectureId = lectureId,
                     request = FinishLiveLectureRequest(refineFullLecture = refineFullLecture)
                 )
                 if (res.isSuccessful) {
-                    Log.i(TAG, "Đã chốt buổi Live #$lectureId: ${res.body()}")
+                    val body = res.body()
+                    _liveSessionState.value = "finished"
+                    refinedQueued = body?.refinedQueued == true
+                    Log.i(TAG, "Đã chốt buổi Live #$lectureId: $body")
                 } else {
                     _errorMessage.value = "Không thể ghép file audio sau buổi Live (${res.code()})."
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Lỗi finishLiveLecture: ${e.message}")
                 _errorMessage.value = "Lỗi kết nối khi chốt buổi Live: ${e.message}"
-            } finally {
+            }
+
+            if (refinedQueued) {
+                _isProcessingQueue.value = true
+                _uploadProgress.value = 5
+                _uploadStatusText.value = "Đang tinh chỉnh toàn bài bằng AI (pyannote + Viterbi + LLM)..."
+                try {
+                    pollLectureQueueUntilDone(
+                        lectureId = lectureId,
+                        lectureTitle = _currentLectureTitle.value,
+                    )
+                } finally {
+                    _isProcessingQueue.value = false
+                }
+            } else {
                 // 3. Tải lại danh sách note & cập nhật cache offline
                 loadLectureInlineNotes(lectureId)
             }
@@ -777,6 +854,46 @@ class StudyAiViewModel(
 
     private val _isProcessingQueue = MutableStateFlow(false)
     val isProcessingQueue: StateFlow<Boolean> = _isProcessingQueue.asStateFlow()
+
+    private suspend fun pollLectureQueueUntilDone(
+        lectureId: Long,
+        lectureTitle: String,
+        onDone: (Long) -> Unit = {},
+    ) {
+        var isDone = false
+        while (!isDone && kotlinx.coroutines.currentCoroutineContext().isActive) {
+            delay(2000)
+            val statusRes = apiService.getLectureStatus(lectureId)
+            if (statusRes.isSuccessful && statusRes.body() != null) {
+                val st = statusRes.body()!!
+                val (mappedPercent, labelText) = when (st.processingStatus) {
+                    "queued" -> 5 to "Đang xếp hàng chờ xử lý..."
+                    "parsing_slides" -> 15 to "Đang phân tích và trích xuất nội dung Slide (15%)..."
+                    "running_asr" -> 45 to "Đang nhận dạng giọng nói ASR & VAD (45%)..."
+                    "filtering_speaker" -> 55 to "Đang lọc tách giọng giảng viên & khử nhiễu (55%)..."
+                    "aligning_slides" -> 75 to "Đang căn gióng lời giảng vào từng trang Slide (75%)..."
+                    "synthesizing_notes" -> 90 to "Đang dùng LLM tổng hợp ghi chú thông minh (90%)..."
+                    "completed" -> 100 to "Hoàn tất xử lý bài giảng (100%)!"
+                    "failed" -> 0 to "Xử lý thất bại: ${st.errorMessage ?: "Lỗi không xác định"}"
+                    else -> st.progressPercent.coerceIn(5, 99) to "Đang xử lý: ${st.processingStatus} (${st.progressPercent}%)"
+                }
+                _uploadProgress.value = if (st.processingStatus == "failed") 0 else mappedPercent.coerceAtLeast(st.progressPercent)
+                _uploadStatusText.value = labelText
+
+                if (st.processingStatus == "completed") {
+                    isDone = true
+                    _uploadProgress.value = 100
+                    _currentLectureId.value = lectureId
+                    _currentLectureTitle.value = lectureTitle
+                    loadAllData(_selectedCourseId.value, lectureId)
+                    onDone(lectureId)
+                } else if (st.processingStatus == "failed") {
+                    isDone = true
+                    _errorMessage.value = st.errorMessage ?: "Xử lý bài giảng thất bại."
+                }
+            }
+        }
+    }
 
     fun uploadAndTrackLecture(
         context: Context,
@@ -807,45 +924,19 @@ class StudyAiViewModel(
 
                 if (res.isSuccessful && res.body() != null) {
                     val lectureId = res.body()!!.lectureId
-                    _uploadProgress.value = res.body()!!.progressPercent
+                    _uploadProgress.value = res.body()!!.progressPercent.coerceAtLeast(5)
                     _uploadStatusText.value = "Đã xếp hàng xử lý (ID: $lectureId)..."
-
-                    // Bắt đầu Polling tiến độ mỗi 2 giây
-                    var isDone = false
-                    while (!isDone && isActive) {
-                        delay(2000)
-                        val statusRes = apiService.getLectureStatus(lectureId)
-                        if (statusRes.isSuccessful && statusRes.body() != null) {
-                            val st = statusRes.body()!!
-                            _uploadProgress.value = st.progressPercent
-                            _uploadStatusText.value = when (st.processingStatus) {
-                                "queued" -> "Đang xếp hàng chờ xử lý..."
-                                "parsing_slides" -> "Đang phân tích và trích xuất nội dung Slide (15%)..."
-                                "running_asr" -> "Đang nhận dạng giọng nói ASR & VAD (45%)..."
-                                "aligning_slides" -> "Đang căn gióng lời giảng vào từng trang Slide (75%)..."
-                                "synthesizing_notes" -> "Đang dùng LLM tổng hợp ghi chú thông minh (90%)..."
-                                "completed" -> "Hoàn tất xử lý bài giảng (100%)!"
-                                "failed" -> "Xử lý thất bại: ${st.errorMessage ?: "Lỗi không xác định"}"
-                                else -> "Đang xử lý: ${st.processingStatus} (${st.progressPercent}%)"
-                            }
-
-                            if (st.processingStatus == "completed") {
-                                isDone = true
-                                _currentLectureId.value = lectureId
-                                _currentLectureTitle.value = lectureTitle
-                                // Tải lại toàn bộ dữ liệu bài giảng
-                                loadAllData(_selectedCourseId.value, lectureId)
-                                onDone(lectureId)
-                            } else if (st.processingStatus == "failed") {
-                                isDone = true
-                                _errorMessage.value = st.errorMessage ?: "Xử lý bài giảng thất bại."
-                            }
-                        }
-                    }
+                    pollLectureQueueUntilDone(
+                        lectureId = lectureId,
+                        lectureTitle = lectureTitle,
+                        onDone = onDone,
+                    )
                 } else {
+                    _uploadProgress.value = 0
                     _errorMessage.value = "Tải bài giảng lên server thất bại."
                 }
             } catch (e: Exception) {
+                _uploadProgress.value = 0
                 _errorMessage.value = "Lỗi upload bài giảng: ${e.message}"
             } finally {
                 _isProcessingQueue.value = false
