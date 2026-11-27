@@ -68,4 +68,12 @@ Route::prefix('v1')->group(function () {
     Route::get('concepts/{conceptId}/dictionary', [StudyAiUnifiedController::class, 'getConceptDictionary']);
     Route::get('courses/{courseId}/dictionary', [StudyAiUnifiedController::class, 'getCourseDictionary']);
     Route::get('courses/{courseId}/tasks-dashboard', [StudyAiUnifiedController::class, 'getTasksDashboard']);
+
+    // =========================================================================
+    // 6. Mindmap tri thức 3 cấp & tự động bổ sung nhánh khi nạp Slide mới
+    // =========================================================================
+    Route::get('courses/{courseId}/mindmap', [StudyAiUnifiedController::class, 'getCourseMindmap']);
+    Route::post('courses/{courseId}/mindmap/append-slide', [StudyAiUnifiedController::class, 'appendSlideToMindmap']);
+    Route::patch('mindmap/branches/{branchId}/seen', [StudyAiUnifiedController::class, 'markMindmapBranchSeen']);
+    Route::patch('mindmap/leaves/{leafId}/toggle-mastery', [StudyAiUnifiedController::class, 'toggleMindmapLeafMastery']);
 });

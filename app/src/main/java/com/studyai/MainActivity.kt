@@ -84,6 +84,7 @@ class MainActivity : ComponentActivity() {
                     val targetSlidePage by viewModel.targetSlidePage.collectAsState()
                     val nodes by viewModel.nodes.collectAsState()
                     val edges by viewModel.edges.collectAsState()
+                    val mindmapState by viewModel.mindmapState.collectAsState()
                     val dictionaryEntries by viewModel.dictionaryEntries.collectAsState()
                     val selectedConceptDetail by viewModel.selectedConceptDetail.collectAsState()
                     val isLoading by viewModel.isLoading.collectAsState()
@@ -128,6 +129,12 @@ class MainActivity : ComponentActivity() {
                             onClearTargetSlidePage = { viewModel.clearTargetSlidePage() },
                             sampleNodes = nodes,
                             sampleEdges = edges,
+                            mindmapState = mindmapState,
+                            onMindmapZoomChange = { viewModel.setMindmapZoom(it) },
+                            onMindmapFilterChange = { viewModel.setMindmapFilter(it) },
+                            onMindmapSearchQueryChange = { viewModel.setMindmapSearchQuery(it) },
+                            onToggleMindmapLeafMastery = { viewModel.toggleMindmapLeafMastery(it) },
+                            onMarkMindmapBranchSeen = { viewModel.markMindmapBranchSeen(it) },
                             dictionaryEntries = dictionaryEntries,
                             selectedConceptDetail = selectedConceptDetail,
                             onJumpToSlide = { lectureId, slideNo ->

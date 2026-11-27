@@ -100,13 +100,15 @@ import com.studyai.ui.notes.InlineLecturerNote
 import com.studyai.ui.notes.InlineSlideNoteDocumentScreen
 import com.studyai.ui.notes.SlideDocumentBlockUi
 import com.studyai.ui.notes.SlideUi
+import com.studyai.ui.roadmap.CourseMindmapUiState
+import com.studyai.ui.roadmap.MasteryFilter
 import com.studyai.ui.theme.StudyAiPalette
 import kotlinx.coroutines.launch
 
 enum class StudyAiTab(val title: String, val shortTitle: String, val icon: ImageVector) {
     NOTES("Ghi chú", "Ghi chú", Icons.AutoMirrored.Filled.MenuBook),
     CAPTURE("Thu âm", "Thu âm", Icons.Default.Mic),
-    ROADMAP("Hệ thống", "Lộ trình", Icons.Default.AccountTree),
+    ROADMAP("Hệ thống", "Đồ thị", Icons.Default.AccountTree),
     DICTIONARY("Từ điển", "Từ điển", Icons.Default.AutoStories),
 }
 
@@ -139,11 +141,17 @@ fun MainStudyAiScreen(
     onClearTargetAudio: () -> Unit = {},
     targetSlidePage: Int? = null,
     onClearTargetSlidePage: () -> Unit = {},
-    sampleNodes: List<ConceptNodeUi> = emptyList(),
-    sampleEdges: List<ConceptEdgeUi> = emptyList(),
+    @Suppress("UNUSED_PARAMETER") sampleNodes: List<ConceptNodeUi> = emptyList(),
+    @Suppress("UNUSED_PARAMETER") sampleEdges: List<ConceptEdgeUi> = emptyList(),
+    mindmapState: CourseMindmapUiState = CourseMindmapUiState(courseId = 1L, courseName = "Môn học"),
+    onMindmapZoomChange: (Float) -> Unit = {},
+    onMindmapFilterChange: (MasteryFilter) -> Unit = {},
+    onMindmapSearchQueryChange: (String) -> Unit = {},
+    onToggleMindmapLeafMastery: (String) -> Unit = {},
+    onMarkMindmapBranchSeen: (String) -> Unit = {},
     dictionaryEntries: List<CourseDictionaryItemUi> = emptyList(),
     selectedConceptDetail: LivingDictionaryUiModel? = null,
-    onJumpToSlide: (Int, Int) -> Unit = { _, _ -> },
+    @Suppress("UNUSED_PARAMETER") onJumpToSlide: (Int, Int) -> Unit = { _, _ -> },
     onSelectConcept: (Long) -> Unit = {},
     onSelectTerm: (String) -> Unit = {},
     onDismissConceptDetail: () -> Unit = {},
@@ -216,6 +224,7 @@ fun MainStudyAiScreen(
     var showServerConfigDialog by remember { mutableStateOf(false) }
     var showNotesSearchBar by remember { mutableStateOf(false) }
     var notesSearchQuery by remember { mutableStateOf("") }
+    var showRoadmapSearchBar by remember { mutableStateOf(false) }
     var scrollToTopNonce by remember { mutableIntStateOf(0) }
 
     val activeCourseList = courseList
@@ -352,14 +361,13 @@ fun MainStudyAiScreen(
         }
     }
 
+    val totalMindmapConcepts = remember(mindmapState.branches) {
+        mindmapState.branches.sumOf { it.leaves.size }
+    }
+
     val handleNavigateToChapterSlide: (Int, Int, Float) -> Unit = { lecId, slideNo, sec ->
         selectedTab = StudyAiTab.NOTES
         onNavigateToChapterSlide(lecId, slideNo, sec)
-    }
-
-    val handleJumpToSlide: (Int, Int) -> Unit = { lecId, slideNo ->
-        selectedTab = StudyAiTab.NOTES
-        onJumpToSlide(lecId, slideNo)
     }
 
     Scaffold(
@@ -371,15 +379,23 @@ fun MainStudyAiScreen(
                     subtitleText = when (selectedTab) {
                         StudyAiTab.NOTES -> lectureSubtitleForNotes
                         StudyAiTab.CAPTURE -> "Thu âm & Xử lý bài giảng"
+                        StudyAiTab.ROADMAP -> "${mindmapState.branches.size} nhánh bài giảng • $totalMindmapConcepts khái niệm"
                         else -> currentCourse.meta
                     },
                     activeTab = selectedTab,
                     isDarkTheme = isDarkTheme,
-                    showSearchBar = showNotesSearchBar,
+                    showSearchBar = if (selectedTab == StudyAiTab.ROADMAP) showRoadmapSearchBar else showNotesSearchBar,
                     onToggleSearchBar = {
-                        showNotesSearchBar = !showNotesSearchBar
-                        if (!showNotesSearchBar) {
-                            notesSearchQuery = ""
+                        if (selectedTab == StudyAiTab.ROADMAP) {
+                            showRoadmapSearchBar = !showRoadmapSearchBar
+                            if (!showRoadmapSearchBar) {
+                                onMindmapSearchQueryChange("")
+                            }
+                        } else {
+                            showNotesSearchBar = !showNotesSearchBar
+                            if (!showNotesSearchBar) {
+                                notesSearchQuery = ""
+                            }
                         }
                     },
                     onExportMarkdown = onExportMarkdown,
@@ -621,9 +637,32 @@ fun MainStudyAiScreen(
                         StudyAiTab.ROADMAP -> {
                             KnowledgeRoadmapScreen(
                                 courseTitle = currentCourse.name,
-                                conceptNodes = sampleNodes,
-                                conceptEdges = sampleEdges,
-                                onJumpToSlide = handleJumpToSlide,
+                                mindmapState = mindmapState.copy(
+                                    courseId = selectedCourseId,
+                                    courseName = mindmapState.courseName.ifBlank { currentCourse.name },
+                                ),
+                                showSearchBar = showRoadmapSearchBar,
+                                onCloseSearchBar = {
+                                    showRoadmapSearchBar = false
+                                    onMindmapSearchQueryChange("")
+                                },
+                                onSearchQueryChange = onMindmapSearchQueryChange,
+                                onFilterChange = onMindmapFilterChange,
+                                onZoomChange = onMindmapZoomChange,
+                                onToggleLeafMastery = onToggleMindmapLeafMastery,
+                                onMarkBranchSeen = onMarkMindmapBranchSeen,
+                                onNavigateToLectureSlide = { lecId, slideNo, tsSec ->
+                                    if (lecId > 0) {
+                                        handleNavigateToChapterSlide(lecId, slideNo, tsSec)
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "Slide mới nạp chưa có bản ghi âm — chuyển sang tab Thu âm để ghi bài.",
+                                            android.widget.Toast.LENGTH_SHORT
+                                        ).show()
+                                        selectedTab = StudyAiTab.CAPTURE
+                                    }
+                                },
                             )
                         }
 
@@ -1160,6 +1199,28 @@ private fun StudyAiTopHeader(
                                         modifier = Modifier.size(17.dp),
                                     )
                                 }
+                            }
+                        }
+                    }
+
+                    StudyAiTab.ROADMAP -> {
+                        Surface(
+                            onClick = onToggleSearchBar,
+                            shape = CircleShape,
+                            color = if (showSearchBar) primarySoft else MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(
+                                1.dp,
+                                if (showSearchBar) StudyAiPalette.PrimaryCobalt else MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                            ),
+                            modifier = Modifier.size(32.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = "Tìm nhánh hoặc khái niệm",
+                                    tint = if (showSearchBar) primaryText else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(16.dp),
+                                )
                             }
                         }
                     }

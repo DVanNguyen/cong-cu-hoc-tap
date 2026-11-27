@@ -8,6 +8,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 class StudyAiUnifiedController extends Controller
 {
@@ -187,6 +188,20 @@ class StudyAiUnifiedController extends Controller
             'created_at' => now(),
             'updated_at' => now(),
         ]);
+
+        try {
+            $cleanBranchTitle = preg_replace('/\.(pdf|pptx?|PDF|PPTX?)$/u', '', (string) $origName) ?: (string) $origName;
+            $this->upsertMindmapBranchFromBlocks(
+                $courseId,
+                null,
+                $vaultId,
+                $cleanBranchTitle,
+                is_array($parsedBlocks) ? $parsedBlocks : [],
+                true
+            );
+        } catch (\Throwable $e) {
+            Log::warning("Mindmap auto-append failed for vault #{$vaultId}: " . $e->getMessage());
+        }
 
         return response()->json([
             'id' => (string) $vaultId,
@@ -1486,6 +1501,618 @@ class StudyAiUnifiedController extends Controller
             'course_id' => $courseId,
             'summary'   => ['critical_count' => 0, 'high_count' => 0, 'total_active' => 0],
             'tasks'     => [],
+        ]);
+    }
+
+    /**
+     * =========================================================================
+     * 5. MINDMAP TRI THỨC 3 CẤP & ĐỒNG BỘ TỰ MỌC NHÁNH KHI THÊM SLIDE
+     * =========================================================================
+     */
+    private function normalizeMindmapBranchBase(string $raw): string
+    {
+        $clean = preg_replace('/\.(pdf|pptx?)$/iu', '', trim($raw));
+        $clean = preg_replace('/^Bài\s*#?\d+\s*[•:\-–]\s*/iu', '', (string) $clean);
+        return mb_strtolower(trim((string) $clean));
+    }
+
+    private function extractMindmapConceptsFromBlocks(array $blocks, array $slideTimestamps = []): array
+    {
+        $byPage = [];
+        foreach ($blocks as $b) {
+            if (!is_array($b)) {
+                continue;
+            }
+            $pNum = max(1, (int) ($b['slide_page'] ?? 1));
+            $txt = trim((string) ($b['text'] ?? $b['original_slide_text'] ?? ''));
+            if ($txt === '') {
+                continue;
+            }
+            $byPage[$pNum][] = [
+                'kind' => (string) ($b['kind'] ?? 'bullet'),
+                'text' => $txt,
+            ];
+        }
+        ksort($byPage);
+        if (empty($byPage)) {
+            return [];
+        }
+
+        $skipExactOrPrefix = [
+            'nội dung', 'mục lục', 'agenda', 'today', 'topics', 'outline',
+            'contents', 'table of contents', 'thank you', 'cảm ơn', 'q&a', 'hỏi đáp',
+        ];
+
+        $pageEntries = [];
+        foreach ($byPage as $pageNum => $items) {
+            $heading = null;
+            foreach ($items as $it) {
+                if ($it['kind'] === 'heading') {
+                    $heading = $it['text'];
+                    break;
+                }
+            }
+            if ($heading === null) {
+                $heading = $items[0]['text'];
+            }
+            $headingClean = trim((string) preg_replace('/^(?:Slide|Trang)\s+\d+\s*[:\-–]\s*/iu', '', $heading));
+            if ($headingClean === '') {
+                $headingClean = "Trang {$pageNum}";
+            }
+
+            $headingLower = mb_strtolower($headingClean);
+            $isOverviewOrEnding = false;
+            foreach ($skipExactOrPrefix as $kw) {
+                if ($headingLower === $kw || str_starts_with($headingLower, $kw . ':') || str_starts_with($headingLower, $kw . ' ')) {
+                    $isOverviewOrEnding = true;
+                    break;
+                }
+            }
+            // Bỏ qua trang bìa (Slide 1 nếu toàn thông tin môn học / giảng viên và có từ >= 3 trang)
+            if ($pageNum === 1 && count($byPage) >= 3 && (str_contains($headingLower, 'bài giảng') || str_contains($headingLower, 'giảng viên') || count($items) <= 2)) {
+                $isOverviewOrEnding = true;
+            }
+
+            $bullets = [];
+            foreach ($items as $it) {
+                $line = trim((string) $it['text']);
+                if ($line === '' || $line === $heading) {
+                    continue;
+                }
+                $bullets[] = mb_substr($line, 0, 120);
+                if (count($bullets) >= 2) {
+                    break;
+                }
+            }
+            $summary = !empty($bullets) ? implode(' • ', $bullets) : $headingClean;
+            $mergeKey = mb_strtolower(trim((string) preg_replace('/\s*\(\d+\)\s*$/u', '', $headingClean)));
+
+            $pageEntries[] = [
+                'page' => $pageNum,
+                'title' => mb_substr($headingClean, 0, 120),
+                'merge_key' => $mergeKey ?: "page_{$pageNum}",
+                'summary' => mb_substr($summary, 0, 220),
+                'timestamp_sec' => (int) round((float) ($slideTimestamps[$pageNum] ?? 0)),
+                'skip' => $isOverviewOrEnding,
+            ];
+        }
+
+        $filtered = array_values(array_filter($pageEntries, fn ($e) => !$e['skip']));
+        if (empty($filtered)) {
+            $filtered = $pageEntries;
+        }
+
+        // Gộp các trang liên tiếp trùng chủ đề (VD: Slide 3–4)
+        $merged = [];
+        foreach ($filtered as $entry) {
+            $lastIdx = count($merged) - 1;
+            if ($lastIdx >= 0 && $merged[$lastIdx]['merge_key'] === $entry['merge_key']) {
+                $prev = $merged[$lastIdx];
+                $prev['end_page'] = $entry['page'];
+                $prev['slide_ref'] = ($prev['start_page'] === $entry['page'])
+                    ? "Slide {$prev['start_page']}"
+                    : "Slide {$prev['start_page']}–{$entry['page']}";
+                if ($prev['timestamp_sec'] === 0 && $entry['timestamp_sec'] > 0) {
+                    $prev['timestamp_sec'] = $entry['timestamp_sec'];
+                }
+                if (mb_strlen($prev['summary']) < 120 && $entry['summary'] !== $prev['title']) {
+                    $prev['summary'] = mb_substr($prev['summary'] . ' • ' . $entry['summary'], 0, 220);
+                }
+                $merged[$lastIdx] = $prev;
+            } else {
+                $merged[] = [
+                    'title' => $entry['title'],
+                    'start_page' => $entry['page'],
+                    'end_page' => $entry['page'],
+                    'slide_ref' => "Slide {$entry['page']}",
+                    'slide_number' => $entry['page'],
+                    'timestamp_sec' => $entry['timestamp_sec'],
+                    'summary' => $entry['summary'],
+                    'merge_key' => $entry['merge_key'],
+                ];
+            }
+        }
+
+        // Giới hạn tối đa 8 khái niệm đại diện mỗi nhánh để Mindmap rõ thoáng
+        if (count($merged) > 8) {
+            $merged = array_slice($merged, 0, 8);
+        }
+        return $merged;
+    }
+
+    public function upsertMindmapBranchFromBlocks(
+        int $courseId,
+        ?int $lectureId,
+        ?int $vaultSlideId,
+        string $title,
+        array $blocks,
+        bool $isNewlyAdded = true,
+        array $slideTimestamps = []
+    ): ?int {
+        if (!Schema::hasTable('course_mindmap_branches') || !Schema::hasTable('course_mindmap_leaves')) {
+            return null;
+        }
+
+        $concepts = $this->extractMindmapConceptsFromBlocks($blocks, $slideTimestamps);
+        if (empty($concepts)) {
+            $concepts = [[
+                'title' => mb_substr(trim($title) ?: 'Nội dung chính', 0, 120),
+                'slide_ref' => 'Slide 1',
+                'slide_number' => 1,
+                'timestamp_sec' => (int) round((float) ($slideTimestamps[1] ?? 0)),
+                'summary' => trim($title) ?: 'Tài liệu mới nạp cho môn học',
+            ]];
+        }
+
+        return $this->upsertMindmapBranchConcepts(
+            $courseId,
+            $lectureId,
+            $vaultSlideId,
+            $title,
+            $concepts,
+            $isNewlyAdded
+        );
+    }
+
+    private function upsertMindmapBranchConcepts(
+        int $courseId,
+        ?int $lectureId,
+        ?int $vaultSlideId,
+        string $title,
+        array $concepts,
+        bool $isNewlyAdded
+    ): ?int {
+        if (!Schema::hasTable('course_mindmap_branches') || !Schema::hasTable('course_mindmap_leaves')) {
+            return null;
+        }
+
+        $tones = ['TEAL', 'COBALT', 'AMBER', 'VIOLET', 'ROSE'];
+        $branchKey = $lectureId !== null
+            ? "lecture_{$lectureId}"
+            : ($vaultSlideId !== null ? "vault_{$vaultSlideId}" : 'custom_' . substr(md5($title), 0, 10));
+
+        $existingBranch = DB::table('course_mindmap_branches')
+            ->where('course_id', $courseId)
+            ->where('branch_key', $branchKey)
+            ->first();
+
+        // Nếu bài giảng vừa tạo khớp tên với nhánh vault cũ chưa gắn lecture -> nâng cấp nhánh vault lên lecture
+        if (!$existingBranch && $lectureId !== null) {
+            $normTarget = $this->normalizeMindmapBranchBase($title);
+            $vaultCandidates = DB::table('course_mindmap_branches')
+                ->where('course_id', $courseId)
+                ->whereNull('lecture_id')
+                ->get();
+            foreach ($vaultCandidates as $vc) {
+                if ($normTarget !== '' && $this->normalizeMindmapBranchBase((string) $vc->title) === $normTarget) {
+                    $existingBranch = $vc;
+                    break;
+                }
+            }
+        }
+
+        $cleanTitle = mb_substr(trim($title), 0, 220);
+        if ($existingBranch) {
+            $branchId = (int) $existingBranch->id;
+            DB::table('course_mindmap_branches')
+                ->where('id', $branchId)
+                ->update([
+                    'lecture_id' => $lectureId ?? $existingBranch->lecture_id,
+                    'vault_slide_id' => $vaultSlideId ?? $existingBranch->vault_slide_id,
+                    'branch_key' => $branchKey,
+                    'title' => $cleanTitle,
+                    'is_newly_added' => $isNewlyAdded ? true : (bool) $existingBranch->is_newly_added,
+                    'updated_at' => now(),
+                ]);
+        } else {
+            $existingCount = DB::table('course_mindmap_branches')
+                ->where('course_id', $courseId)
+                ->count();
+            $tone = $tones[$existingCount % count($tones)];
+            $branchId = (int) DB::table('course_mindmap_branches')->insertGetId([
+                'course_id' => $courseId,
+                'lecture_id' => $lectureId,
+                'vault_slide_id' => $vaultSlideId,
+                'branch_key' => $branchKey,
+                'title' => $cleanTitle,
+                'tone' => $tone,
+                'is_newly_added' => $isNewlyAdded,
+                'sort_order' => $existingCount + 1,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        }
+
+        $existingLeaves = DB::table('course_mindmap_leaves')
+            ->where('branch_id', $branchId)
+            ->get()
+            ->keyBy('slug');
+
+        $seenSlugs = [];
+        foreach ($concepts as $idx => $c) {
+            $cTitle = trim((string) ($c['title'] ?? ''));
+            if ($cTitle === '') {
+                continue;
+            }
+            $sNum = max(1, (int) ($c['slide_number'] ?? 1));
+            $sRef = trim((string) ($c['slide_ref'] ?? "Slide {$sNum}"));
+            $tsSec = max(0, (int) ($c['timestamp_sec'] ?? 0));
+            $summary = trim((string) ($c['summary'] ?? $cTitle));
+            $slugBase = substr(preg_replace('/[^a-z0-9]+/', '-', mb_strtolower($cTitle)) ?: 'concept', 0, 80);
+            $slug = trim("{$slugBase}-s{$sNum}-{$idx}", '-');
+            if ($slug === '') {
+                $slug = "concept-{$sNum}-{$idx}";
+            }
+            $seenSlugs[] = $slug;
+
+            $prevLeaf = $existingLeaves->get($slug);
+            $isMastered = $prevLeaf ? (bool) $prevLeaf->is_mastered : false;
+
+            DB::table('course_mindmap_leaves')->updateOrInsert(
+                ['branch_id' => $branchId, 'slug' => $slug],
+                [
+                    'course_id' => $courseId,
+                    'lecture_id' => $lectureId,
+                    'title' => mb_substr($cTitle, 0, 220),
+                    'slide_ref' => mb_substr($sRef, 0, 64),
+                    'slide_number' => $sNum,
+                    'timestamp_sec' => $tsSec,
+                    'summary' => $summary,
+                    'is_mastered' => $isMastered,
+                    'sort_order' => $idx + 1,
+                    'updated_at' => now(),
+                    'created_at' => $prevLeaf ? $prevLeaf->created_at : now(),
+                ]
+            );
+        }
+
+        if (!empty($seenSlugs)) {
+            DB::table('course_mindmap_leaves')
+                ->where('branch_id', $branchId)
+                ->whereNotIn('slug', $seenSlugs)
+                ->delete();
+        }
+
+        return $branchId;
+    }
+
+    public function syncLectureToMindmap(int $courseId, int $lectureId, bool $isNewlyAdded = false): ?int
+    {
+        if (!Schema::hasTable('course_mindmap_branches') || !Schema::hasTable('course_mindmap_leaves')) {
+            return null;
+        }
+        $lecture = DB::table('lectures')->where('id', $lectureId)->first();
+        if (!$lecture) {
+            return null;
+        }
+
+        $blocksRows = DB::table('lecture_slide_blocks')
+            ->where('lecture_id', $lectureId)
+            ->orderBy('slide_page')
+            ->orderBy('block_index')
+            ->get();
+
+        $blocks = [];
+        foreach ($blocksRows as $b) {
+            $blocks[] = [
+                'slide_page' => (int) $b->slide_page,
+                'kind' => (string) $b->kind,
+                'text' => (string) $b->original_slide_text,
+            ];
+        }
+
+        $slidesRows = DB::table('slides')
+            ->where('lecture_id', $lectureId)
+            ->orderBy('slide_number')
+            ->get();
+
+        if (empty($blocks) && $slidesRows->isNotEmpty()) {
+            foreach ($slidesRows as $sr) {
+                $sNum = max(1, (int) ($sr->slide_number ?? $sr->page_number ?? 1));
+                $raw = (string) ($sr->raw_text ?? $sr->slide_text ?? $sr->title ?? '');
+                $lines = array_values(array_filter(array_map('trim', explode("\n", $raw))));
+                if (empty($lines) && !empty($sr->title)) {
+                    $lines[] = trim((string) $sr->title);
+                }
+                foreach ($lines as $lIdx => $lTxt) {
+                    $blocks[] = [
+                        'slide_page' => $sNum,
+                        'kind' => ($lIdx === 0 && mb_strlen($lTxt) < 90) ? 'heading' : 'bullet',
+                        'text' => $lTxt,
+                    ];
+                }
+            }
+        }
+
+        // Thu thập mốc giây phát audio cho từng trang Slide
+        $slideTimestamps = [];
+        $blockPageMap = $blocksRows->pluck('slide_page', 'block_id');
+        $inlineNoteRows = DB::table('inline_block_notes')
+            ->where('lecture_id', $lectureId)
+            ->where('timestamp_start_sec', '>', 0)
+            ->get();
+        foreach ($inlineNoteRows as $in) {
+            $p = (int) ($blockPageMap[$in->block_id] ?? 0);
+            if ($p <= 0 && preg_match('/(?:slide_|s)(\d+)/i', (string) $in->block_id, $m)) {
+                $p = (int) $m[1];
+            }
+            if ($p > 0) {
+                $sec = (int) floor((float) $in->timestamp_start_sec);
+                $slideTimestamps[$p] = isset($slideTimestamps[$p]) ? min($slideTimestamps[$p], $sec) : $sec;
+            }
+        }
+
+        if ($slidesRows->isNotEmpty()) {
+            $slideNumMap = $slidesRows->pluck('slide_number', 'id');
+            $alignRows = DB::table('slide_alignments')
+                ->where('lecture_id', $lectureId)
+                ->where('start_time_sec', '>', 0)
+                ->get();
+            foreach ($alignRows as $ar) {
+                $p = (int) ($slideNumMap[$ar->slide_id] ?? 0);
+                if ($p > 0 && !isset($slideTimestamps[$p])) {
+                    $slideTimestamps[$p] = (int) floor((float) $ar->start_time_sec);
+                }
+            }
+            if (empty($slideTimestamps)) {
+                $segRows = DB::table('transcript_segments')
+                    ->where('lecture_id', $lectureId)
+                    ->whereNotNull('aligned_slide_id')
+                    ->where('start_time_sec', '>', 0)
+                    ->get();
+                foreach ($segRows as $sg) {
+                    $p = (int) ($slideNumMap[$sg->aligned_slide_id] ?? 0);
+                    if ($p > 0) {
+                        $sec = (int) floor((float) $sg->start_time_sec);
+                        $slideTimestamps[$p] = isset($slideTimestamps[$p]) ? min($slideTimestamps[$p], $sec) : $sec;
+                    }
+                }
+            }
+        }
+
+        $rawTitle = trim((string) ($lecture->title ?: "Bài giảng #{$lectureId}"));
+        $rawTitle = preg_replace('/\.(pdf|pptx?)$/iu', '', $rawTitle) ?: $rawTitle;
+        $branchTitle = preg_match('/^Bài\s*#?\d+/iu', $rawTitle)
+            ? $rawTitle
+            : "Bài #{$lectureId} • {$rawTitle}";
+
+        return $this->upsertMindmapBranchFromBlocks(
+            $courseId,
+            $lectureId,
+            null,
+            $branchTitle,
+            $blocks,
+            $isNewlyAdded,
+            $slideTimestamps
+        );
+    }
+
+    public function getCourseMindmap(int $courseId)
+    {
+        $course = DB::table('courses')->where('id', $courseId)->first();
+        if (!$course) {
+            return response()->json(['error' => 'Course not found'], 404);
+        }
+
+        if (!Schema::hasTable('course_mindmap_branches') || !Schema::hasTable('course_mindmap_leaves')) {
+            return response()->json([
+                'course_id' => $courseId,
+                'course_name' => (string) $course->name,
+                'branches' => [],
+            ]);
+        }
+
+        // Đồng bộ lần đầu mọi bài giảng / kho slide chưa có nhánh trong Mindmap (không bật cờ MỚI cho dữ liệu cũ)
+        $existingKeys = DB::table('course_mindmap_branches')
+            ->where('course_id', $courseId)
+            ->pluck('branch_key')
+            ->flip();
+
+        $lectures = DB::table('lectures')
+            ->where('course_id', $courseId)
+            ->where('status', '!=', 'failed')
+            ->orderBy('id')
+            ->get();
+
+        $syncedNormTitles = [];
+        foreach ($lectures as $lec) {
+            $syncedNormTitles[$this->normalizeMindmapBranchBase((string) $lec->title)] = true;
+            if (!$existingKeys->has("lecture_{$lec->id}")) {
+                $this->syncLectureToMindmap($courseId, (int) $lec->id, false);
+            }
+        }
+
+        $vaults = DB::table('course_slide_vaults')
+            ->where('course_id', $courseId)
+            ->orderBy('id')
+            ->get();
+        foreach ($vaults as $v) {
+            $baseTitle = preg_replace('/\.(pdf|pptx?)$/iu', '', (string) $v->file_name) ?: (string) $v->file_name;
+            $normVault = $this->normalizeMindmapBranchBase($baseTitle);
+            if (isset($syncedNormTitles[$normVault])) {
+                continue;
+            }
+            if (!$existingKeys->has("vault_{$v->id}")) {
+                $blocks = json_decode($v->parsed_blocks_json ?? '[]', true);
+                $this->upsertMindmapBranchFromBlocks(
+                    $courseId,
+                    null,
+                    (int) $v->id,
+                    $baseTitle,
+                    is_array($blocks) ? $blocks : [],
+                    false
+                );
+            }
+        }
+
+        $branches = DB::table('course_mindmap_branches')
+            ->where('course_id', $courseId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get();
+
+        $leavesByBranch = DB::table('course_mindmap_leaves')
+            ->where('course_id', $courseId)
+            ->orderBy('sort_order')
+            ->orderBy('id')
+            ->get()
+            ->groupBy('branch_id');
+
+        $payloadBranches = $branches->map(function ($br) use ($leavesByBranch) {
+            $leaves = ($leavesByBranch->get($br->id) ?? collect())->map(function ($lf) use ($br) {
+                return [
+                    'id' => (string) $lf->id,
+                    'title' => (string) $lf->title,
+                    'slide_ref' => (string) $lf->slide_ref,
+                    'lecture_id' => (int) ($lf->lecture_id ?? $br->lecture_id ?? 0),
+                    'slide_number' => (int) $lf->slide_number,
+                    'timestamp_sec' => (int) $lf->timestamp_sec,
+                    'summary' => (string) ($lf->summary ?? ''),
+                    'is_mastered' => (bool) $lf->is_mastered,
+                ];
+            })->values();
+
+            return [
+                'id' => (string) $br->id,
+                'lecture_id' => (int) ($br->lecture_id ?? 0),
+                'vault_slide_id' => $br->vault_slide_id ? (int) $br->vault_slide_id : null,
+                'title' => (string) $br->title,
+                'tone' => (string) ($br->tone ?: 'TEAL'),
+                'is_newly_added' => (bool) $br->is_newly_added,
+                'leaves' => $leaves,
+            ];
+        })->values();
+
+        return response()->json([
+            'course_id' => $courseId,
+            'course_name' => (string) $course->name,
+            'branches' => $payloadBranches,
+        ]);
+    }
+
+    public function appendSlideToMindmap(Request $request, int $courseId)
+    {
+        $course = DB::table('courses')->where('id', $courseId)->first();
+        if (!$course) {
+            return response()->json(['error' => 'Course not found'], 404);
+        }
+
+        $validated = $request->validate([
+            'lecture_id' => 'nullable|integer',
+            'vault_slide_id' => 'nullable|integer',
+            'branch_title' => 'required|string|max:220',
+            'concepts' => 'nullable|array',
+            'blocks' => 'nullable|array',
+        ]);
+
+        $lectureId = isset($validated['lecture_id']) ? (int) $validated['lecture_id'] : null;
+        $vaultId = isset($validated['vault_slide_id']) ? (int) $validated['vault_slide_id'] : null;
+
+        if (!empty($validated['concepts'])) {
+            $concepts = [];
+            foreach ($validated['concepts'] as $c) {
+                if (!is_array($c)) {
+                    continue;
+                }
+                $sNum = max(1, (int) ($c['slide_number'] ?? 1));
+                $concepts[] = [
+                    'title' => (string) ($c['title'] ?? "Slide {$sNum}"),
+                    'slide_number' => $sNum,
+                    'slide_ref' => (string) ($c['slide_ref'] ?? "Slide {$sNum}"),
+                    'timestamp_sec' => max(0, (int) ($c['timestamp_sec'] ?? 0)),
+                    'summary' => (string) ($c['summary'] ?? ''),
+                ];
+            }
+            $branchId = $this->upsertMindmapBranchConcepts(
+                $courseId,
+                $lectureId,
+                $vaultId,
+                (string) $validated['branch_title'],
+                $concepts,
+                true
+            );
+        } else {
+            $branchId = $this->upsertMindmapBranchFromBlocks(
+                $courseId,
+                $lectureId,
+                $vaultId,
+                (string) $validated['branch_title'],
+                $validated['blocks'] ?? [],
+                true
+            );
+        }
+
+        return response()->json([
+            'status' => 'appended',
+            'course_id' => $courseId,
+            'branch_id' => $branchId ? (string) $branchId : null,
+        ], 201);
+    }
+
+    public function markMindmapBranchSeen(int $branchId)
+    {
+        if (!Schema::hasTable('course_mindmap_branches')) {
+            return response()->json(['error' => 'Mindmap table missing'], 404);
+        }
+        $branch = DB::table('course_mindmap_branches')->where('id', $branchId)->first();
+        if (!$branch) {
+            return response()->json(['error' => 'Branch not found'], 404);
+        }
+
+        DB::table('course_mindmap_branches')
+            ->where('id', $branchId)
+            ->update([
+                'is_newly_added' => false,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'id' => (string) $branchId,
+            'is_newly_added' => false,
+        ]);
+    }
+
+    public function toggleMindmapLeafMastery(int $leafId)
+    {
+        if (!Schema::hasTable('course_mindmap_leaves')) {
+            return response()->json(['error' => 'Mindmap table missing'], 404);
+        }
+        $leaf = DB::table('course_mindmap_leaves')->where('id', $leafId)->first();
+        if (!$leaf) {
+            return response()->json(['error' => 'Leaf not found'], 404);
+        }
+
+        $nextMastered = !((bool) $leaf->is_mastered);
+        DB::table('course_mindmap_leaves')
+            ->where('id', $leafId)
+            ->update([
+                'is_mastered' => $nextMastered,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'id' => (string) $leafId,
+            'is_mastered' => $nextMastered,
         ]);
     }
 }

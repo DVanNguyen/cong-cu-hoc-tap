@@ -60,6 +60,12 @@ object StudyAiPalette {
     val AmberTextLight = Color(0xFFB45309)
     val AmberTextDark = Color(0xFFFCD34D)
 
+    val Violet = Color(0xFF7C3AED)        // Nhánh Mindmap thứ 4
+    val VioletSoftLight = Color(0xFFEDE9FE)
+    val VioletSoftDark = Color(0x2E8B5CF6)
+    val VioletTextLight = Color(0xFF6D28D9)
+    val VioletTextDark = Color(0xFFC4B5FD)
+
     val Rose = Color(0xFFE11D48)          // Cờ Chưa hiểu / Xóa
     val RoseSoftLight = Color(0xFFFFE4E6)
     val RoseSoftDark = Color(0x2EF43F5E)

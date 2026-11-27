@@ -41,12 +41,19 @@ data class VaultSlideItemDto(
     @SerializedName("created_at") val createdAt: String? = null
 )
 
+data class VaultParsedBlockDto(
+    @SerializedName("slide_page") val slidePage: Int = 1,
+    val kind: String = "bullet",
+    val text: String = ""
+)
+
 data class VaultUploadResponse(
     val id: String,
     @SerializedName("course_id") val courseId: Long,
     val fileName: String,
     val pageCount: Int,
-    @SerializedName("file_path") val filePath: String? = null
+    @SerializedName("file_path") val filePath: String? = null,
+    val blocks: List<VaultParsedBlockDto>? = null
 )
 
 // ============================================================================
@@ -414,5 +421,45 @@ data class UpdateInlineNoteResponse(
 data class DeleteInlineNoteResponse(
     val deleted: Boolean = true,
     val id: String = ""
+)
+
+// ============================================================================
+// 6. DTO CHO MINDMAP TRI THỨC 3 CẤP (MÀN HÌNH 3)
+// ============================================================================
+data class CourseMindmapResponse(
+    @SerializedName("course_id") val courseId: Long = 0L,
+    @SerializedName("course_name") val courseName: String = "",
+    val branches: List<MindmapBranchDto> = emptyList()
+)
+
+data class MindmapBranchDto(
+    val id: String = "",
+    @SerializedName("lecture_id") val lectureId: Long = 0L,
+    @SerializedName("vault_slide_id") val vaultSlideId: Long? = null,
+    val title: String = "",
+    val tone: String = "TEAL",
+    @SerializedName("is_newly_added") val isNewlyAdded: Boolean = false,
+    val leaves: List<MindmapLeafDto> = emptyList()
+)
+
+data class MindmapLeafDto(
+    val id: String = "",
+    val title: String = "",
+    @SerializedName("slide_ref") val slideRef: String = "Slide 1",
+    @SerializedName("lecture_id") val lectureId: Long = 0L,
+    @SerializedName("slide_number") val slideNumber: Int = 1,
+    @SerializedName("timestamp_sec") val timestampSec: Int = 0,
+    val summary: String = "",
+    @SerializedName("is_mastered") val isMastered: Boolean = false
+)
+
+data class MindmapSeenResponse(
+    val id: String = "",
+    @SerializedName("is_newly_added") val isNewlyAdded: Boolean = false
+)
+
+data class MindmapMasteryResponse(
+    val id: String = "",
+    @SerializedName("is_mastered") val isMastered: Boolean = false
 )
 

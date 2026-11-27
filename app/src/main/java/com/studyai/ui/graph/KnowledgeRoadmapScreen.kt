@@ -1,8 +1,8 @@
 package com.studyai.ui.graph
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
-import androidx.compose.foundation.gestures.detectTransformGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -16,547 +16,671 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountTree
-import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.RestartAlt
-import androidx.compose.material.icons.filled.WarningAmber
-import androidx.compose.material3.CardDefaults
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedCard
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.studyai.ui.roadmap.CourseMindmapCard
+import com.studyai.ui.roadmap.CourseMindmapUiState
+import com.studyai.ui.roadmap.MasteryFilter
+import com.studyai.ui.roadmap.MindmapBranch
+import com.studyai.ui.roadmap.MindmapLeafNode
+import com.studyai.ui.roadmap.branchAccentColor
+import com.studyai.ui.roadmap.branchSoftColor
+import com.studyai.ui.roadmap.branchTextColor
+import com.studyai.ui.theme.StudyAiExtras
+import com.studyai.ui.theme.StudyAiPalette
 
 enum class RoadmapViewMode {
+    MINDMAP,
     LAYERED,
-    GRAPH
 }
 
-data class RoadmapItemUi(
-    val id: String,
-    val shortCode: String,
-    val title: String,
-    val location: String,
-    val lectureId: Int,
-    val slideNumber: Int,
-    val mastered: Boolean,
-    val isWarning: Boolean = false,
-    val prerequisites: List<String> = emptyList()
-)
-
-data class RoadmapTierUi(
-    val levelName: String,
-    val progressPercent: Int,
-    val items: List<RoadmapItemUi>
-)
-
+/**
+ * Màn hình 3: Lộ Trình & Mindmap Kiến Thức (StudyAI) theo đặc tả screen3_compose_design_spec.md.
+ */
 @Composable
 fun KnowledgeRoadmapScreen(
     courseTitle: String = "Môn học",
-    conceptNodes: List<ConceptNodeUi> = emptyList(),
-    conceptEdges: List<ConceptEdgeUi> = emptyList(),
-    onJumpToSlide: (lectureId: Int, slideNo: Int) -> Unit = { _, _ -> }
+    mindmapState: CourseMindmapUiState = CourseMindmapUiState(courseId = 1L, courseName = courseTitle),
+    showSearchBar: Boolean = false,
+    onCloseSearchBar: () -> Unit = {},
+    onSearchQueryChange: (String) -> Unit = {},
+    onFilterChange: (MasteryFilter) -> Unit = {},
+    onZoomChange: (Float) -> Unit = {},
+    onToggleLeafMastery: (String) -> Unit = {},
+    onMarkBranchSeen: (String) -> Unit = {},
+    onNavigateToLectureSlide: (lectureId: Int, slideNo: Int, timestampSec: Float) -> Unit = { _, _, _ -> },
 ) {
-    var viewMode by remember { mutableStateOf(RoadmapViewMode.LAYERED) }
+    val isDark = StudyAiExtras.isDark
+    val primaryText = if (isDark) StudyAiPalette.PrimaryTextDark else StudyAiPalette.PrimaryTextLight
+    val surfaceSubtle = MaterialTheme.colorScheme.surfaceVariant
 
-    val tiers = remember(conceptNodes) {
-        if (conceptNodes.isNotEmpty()) {
-            val tier1Nodes = conceptNodes.filter { it.firstIntroducedLectureId <= 1 }
-            val tier2Nodes = conceptNodes.filter { it.firstIntroducedLectureId in 2..3 }
-            val tier3Nodes = conceptNodes.filter { it.firstIntroducedLectureId >= 4 }
+    var viewMode by remember { mutableStateOf(RoadmapViewMode.MINDMAP) }
+    var selectedLeafRef by remember { mutableStateOf<Pair<String, String>?>(null) }
 
-            listOf(
-                RoadmapTierUi(
-                    levelName = "Tầng 1 • Nền tảng cơ sở",
-                    progressPercent = 100,
-                    items = tier1Nodes.map { n ->
-                        RoadmapItemUi(
-                            id = n.id.toString(),
-                            shortCode = n.canonicalNameEn.take(4).uppercase().ifBlank { "KN" },
-                            title = n.canonicalNameVi,
-                            location = "Bài ${n.firstIntroducedLectureId} • Slide ${n.firstIntroducedSlideNo}",
-                            lectureId = n.firstIntroducedLectureId,
-                            slideNumber = n.firstIntroducedSlideNo,
-                            mastered = true,
-                            isWarning = n.hasViolation,
-                            prerequisites = emptyList()
-                        )
-                    }
-                ),
-                RoadmapTierUi(
-                    levelName = "Tầng 2 • Khái niệm cốt lõi",
-                    progressPercent = 65,
-                    items = tier2Nodes.map { n ->
-                        RoadmapItemUi(
-                            id = n.id.toString(),
-                            shortCode = if (n.canonicalNameEn.contains("A*")) "A*" else n.canonicalNameEn.take(4).uppercase().ifBlank { "KN" },
-                            title = n.canonicalNameVi,
-                            location = "Bài ${n.firstIntroducedLectureId} • Slide ${n.firstIntroducedSlideNo}",
-                            lectureId = n.firstIntroducedLectureId,
-                            slideNumber = n.firstIntroducedSlideNo,
-                            mastered = !n.hasViolation,
-                            isWarning = n.hasViolation,
-                            prerequisites = if (n.canonicalNameEn.contains("A*")) listOf("BFS", "Heuristic") else listOf("Nền tảng")
-                        )
-                    }
-                ),
-                RoadmapTierUi(
-                    levelName = "Tầng 3 • Mở rộng & Ứng dụng",
-                    progressPercent = 30,
-                    items = tier3Nodes.map { n ->
-                        RoadmapItemUi(
-                            id = n.id.toString(),
-                            shortCode = if (n.canonicalNameEn.contains("GAN")) "GAN" else n.canonicalNameEn.take(4).uppercase().ifBlank { "KN" },
-                            title = n.canonicalNameVi,
-                            location = "Bài ${n.firstIntroducedLectureId} • Slide ${n.firstIntroducedSlideNo}",
-                            lectureId = n.firstIntroducedLectureId,
-                            slideNumber = n.firstIntroducedSlideNo,
-                            mastered = false,
-                            isWarning = n.hasViolation,
-                            prerequisites = emptyList()
-                        )
-                    }
-                )
-            ).filter { it.items.isNotEmpty() }
-        } else {
-            emptyList()
+    val filteredBranches = remember(
+        mindmapState.branches,
+        mindmapState.selectedFilter,
+        mindmapState.searchQuery,
+    ) {
+        val query = mindmapState.searchQuery.trim()
+        mindmapState.branches.mapNotNull { branch ->
+            val branchMatches = query.isNotBlank() && branch.title.contains(query, ignoreCase = true)
+            val matchedLeaves = branch.leaves.filter { leaf ->
+                val masteryMatches = when (mindmapState.selectedFilter) {
+                    MasteryFilter.ALL -> true
+                    MasteryFilter.MASTERED -> leaf.isMastered
+                    MasteryFilter.REVIEW -> !leaf.isMastered
+                }
+                val textMatches = query.isBlank() ||
+                    branchMatches ||
+                    leaf.title.contains(query, ignoreCase = true) ||
+                    leaf.summary.contains(query, ignoreCase = true) ||
+                    leaf.slideRef.contains(query, ignoreCase = true)
+                masteryMatches && textMatches
+            }
+            if (matchedLeaves.isEmpty()) null else branch.copy(leaves = matchedLeaves)
         }
     }
 
-    val violationItems = remember(tiers) {
-        tiers.flatMap { it.items }.filter { it.isWarning }
+    val openLeafDetail: (MindmapBranch, MindmapLeafNode) -> Unit = { branch, leaf ->
+        if (branch.isNewlyAdded) {
+            onMarkBranchSeen(branch.id)
+        }
+        selectedLeafRef = branch.id to leaf.id
     }
 
-    LazyColumn(
+    Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(14.dp)
+            .background(MaterialTheme.colorScheme.background)
     ) {
-        // Header: Tiêu đề + Bộ chuyển chế độ Lộ trình / Sơ đồ
-        item {
+        AnimatedVisibility(visible = showSearchBar) {
+            OutlinedTextField(
+                value = mindmapState.searchQuery,
+                onValueChange = onSearchQueryChange,
+                placeholder = {
+                    Text(
+                        text = "Tìm nhánh bài giảng hoặc khái niệm...",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Search,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                },
+                trailingIcon = {
+                    IconButton(
+                        onClick = {
+                            if (mindmapState.searchQuery.isNotEmpty()) {
+                                onSearchQueryChange("")
+                            } else {
+                                onCloseSearchBar()
+                            }
+                        },
+                        modifier = Modifier.size(32.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Close,
+                            contentDescription = "Đóng tìm kiếm",
+                            modifier = Modifier.size(16.dp),
+                        )
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 16.dp, end = 16.dp, top = 8.dp),
+            )
+        }
+
+        // Hàng 2: Segmented Control 2 chế độ (Sơ đồ Mindmap mặc định | Lộ trình phân tầng)
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = surfaceSubtle,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(start = 16.dp, end = 16.dp, top = 10.dp, bottom = 8.dp),
+        ) {
             Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                modifier = Modifier.padding(4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = "Hệ thống hóa kiến thức",
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        text = "$courseTitle • ${conceptNodes.size} khái niệm",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
+                RoadmapModeSegmentButton(
+                    text = "Sơ đồ Mindmap",
+                    selected = viewMode == RoadmapViewMode.MINDMAP,
+                    primaryTextColor = primaryText,
+                    onClick = { viewMode = RoadmapViewMode.MINDMAP },
+                    modifier = Modifier.weight(1f),
+                )
+                RoadmapModeSegmentButton(
+                    text = "Lộ trình phân tầng",
+                    selected = viewMode == RoadmapViewMode.LAYERED,
+                    primaryTextColor = primaryText,
+                    onClick = { viewMode = RoadmapViewMode.LAYERED },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
 
-                Spacer(Modifier.width(8.dp))
-
+        // Hàng 3: 3 chip lọc gọn (KHÔNG hiển thị banner/chip cảnh báo vàng)
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(bottom = 8.dp),
+        ) {
+            val filters = listOf(
+                MasteryFilter.ALL to "Tất cả",
+                MasteryFilter.MASTERED to "Đã vững",
+                MasteryFilter.REVIEW to "Cần ôn",
+            )
+            items(filters, key = { it.first.name }) { (filter, label) ->
+                val isSelected = mindmapState.selectedFilter == filter
                 Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f)),
+                    onClick = { onFilterChange(filter) },
+                    shape = RoundedCornerShape(999.dp),
+                    color = if (isSelected) StudyAiPalette.PrimaryCobalt else MaterialTheme.colorScheme.surface,
+                    border = if (isSelected) null else BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
                 ) {
-                    Row(modifier = Modifier.padding(3.dp)) {
-                        val isLayered = viewMode == RoadmapViewMode.LAYERED
-                        Surface(
-                            onClick = { viewMode = RoadmapViewMode.LAYERED },
-                            shape = RoundedCornerShape(9.dp),
-                            color = if (isLayered) MaterialTheme.colorScheme.surface else Color.Transparent,
-                        ) {
-                            Text(
-                                text = "Lộ trình",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isLayered) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isLayered) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-
-                        val isGraph = viewMode == RoadmapViewMode.GRAPH
-                        Surface(
-                            onClick = { viewMode = RoadmapViewMode.GRAPH },
-                            shape = RoundedCornerShape(9.dp),
-                            color = if (isGraph) MaterialTheme.colorScheme.surface else Color.Transparent,
-                        ) {
-                            Text(
-                                text = "Sơ đồ",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = if (isGraph) FontWeight.Bold else FontWeight.Medium,
-                                color = if (isGraph) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                            )
-                        }
-                    }
+                    Text(
+                        text = label,
+                        fontSize = 12.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                        color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 6.dp),
+                    )
                 }
             }
         }
 
-        // Cảnh báo sư phạm nếu phát hiện khái niệm được nhắc trước khi định nghĩa chính thức
-        if (violationItems.isNotEmpty()) {
-            item {
-                val firstWarn = violationItems.first()
-                Surface(
-                    onClick = { onJumpToSlide(firstWarn.lectureId, firstWarn.slideNumber) },
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.errorContainer,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.35f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Row(
-                        modifier = Modifier.padding(14.dp),
-                        verticalAlignment = Alignment.Top
+        // Nội dung chính theo chế độ đã chọn
+        LazyColumn(
+            modifier = Modifier
+                .weight(1f)
+                .fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            if (filteredBranches.isEmpty()) {
+                item(key = "mindmap_empty") {
+                    Surface(
+                        shape = RoundedCornerShape(24.dp),
+                        color = MaterialTheme.colorScheme.surface,
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                        modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.WarningAmber,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                        Spacer(modifier = Modifier.width(10.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                text = "Lưu ý thứ tự khái niệm (${violationItems.size} vị trí)",
-                                style = MaterialTheme.typography.labelLarge,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Spacer(modifier = Modifier.height(2.dp))
-                            Text(
-                                text = "'${firstWarn.title}' xuất hiện sớm trước khi định nghĩa chính thức tại ${firstWarn.location}. Chạm để mở slide.",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                        }
-                    }
-                }
-            }
-        }
-
-        if (tiers.isEmpty()) {
-            item {
-                Surface(
-                    shape = RoundedCornerShape(16.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.AccountTree,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(32.dp)
-                        )
-                        Text(
-                            text = "Chưa có đồ thị khái niệm cho môn học này",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Text(
-                            text = "Hãy tải bài giảng kèm âm thanh ở tab Thu âm để StudyAI xây dựng cây khái niệm tiên quyết tự động.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
-            }
-        } else if (viewMode == RoadmapViewMode.LAYERED) {
-            items(tiers) { tier ->
-                OutlinedCard(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
+                        Column(
+                            modifier = Modifier.padding(24.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
+                            Icon(
+                                imageVector = Icons.Default.AccountTree,
+                                contentDescription = null,
+                                tint = StudyAiPalette.PrimaryCobalt,
+                                modifier = Modifier.size(32.dp),
+                            )
                             Text(
-                                text = tier.levelName,
+                                text = if (mindmapState.branches.isEmpty()) {
+                                    "Chưa có Mindmap kiến thức cho môn học này"
+                                } else {
+                                    "Không có khái niệm phù hợp bộ lọc"
+                                },
                                 style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                textAlign = TextAlign.Center,
                             )
                             Text(
-                                text = "${tier.items.size} khái niệm",
-                                style = MaterialTheme.typography.labelSmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.secondary
+                                text = if (mindmapState.branches.isEmpty()) {
+                                    "Hãy bấm \"+ Thêm slide\" hoặc phân tích bài giảng ở tab Thu âm để StudyAI tự động dựng cây Mindmap 3 cấp."
+                                } else {
+                                    "Chạm \"Tất cả\" hoặc xóa từ khóa tìm kiếm để xem lại toàn bộ nhánh bài giảng."
+                                },
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center,
                             )
                         }
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        LinearProgressIndicator(
-                            progress = { tier.progressPercent / 100f },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(5.dp)
-                                .clip(RoundedCornerShape(3.dp)),
-                            color = MaterialTheme.colorScheme.secondary,
-                            trackColor = MaterialTheme.colorScheme.surfaceVariant
-                        )
-
-                        Spacer(modifier = Modifier.height(12.dp))
-
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            tier.items.forEach { item ->
-                                Surface(
-                                    onClick = { onJumpToSlide(item.lectureId, item.slideNumber) },
-                                    shape = RoundedCornerShape(12.dp),
-                                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
-                                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)),
-                                    modifier = Modifier.fillMaxWidth()
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically
-                                    ) {
-                                        Box(
-                                            modifier = Modifier
-                                                .size(38.dp)
-                                                .clip(RoundedCornerShape(10.dp))
-                                                .background(
-                                                    when {
-                                                        item.isWarning -> MaterialTheme.colorScheme.errorContainer
-                                                        item.mastered -> MaterialTheme.colorScheme.secondaryContainer
-                                                        else -> MaterialTheme.colorScheme.primaryContainer
-                                                    }
-                                                ),
-                                            contentAlignment = Alignment.Center
-                                        ) {
-                                            Text(
-                                                text = item.shortCode,
-                                                style = MaterialTheme.typography.labelSmall,
-                                                fontWeight = FontWeight.Bold,
-                                                color = when {
-                                                    item.isWarning -> MaterialTheme.colorScheme.onErrorContainer
-                                                    item.mastered -> MaterialTheme.colorScheme.onSecondaryContainer
-                                                    else -> MaterialTheme.colorScheme.onPrimaryContainer
-                                                }
-                                            )
-                                        }
-
-                                        Spacer(modifier = Modifier.width(10.dp))
-
-                                        Column(modifier = Modifier.weight(1f)) {
-                                            Text(
-                                                text = item.title,
-                                                style = MaterialTheme.typography.bodyMedium,
-                                                fontWeight = FontWeight.SemiBold,
-                                                color = MaterialTheme.colorScheme.onSurface,
-                                                maxLines = 1,
-                                                overflow = TextOverflow.Ellipsis
-                                            )
-                                            Row(
-                                                verticalAlignment = Alignment.CenterVertically,
-                                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                            ) {
-                                                Text(
-                                                    text = item.location,
-                                                    style = MaterialTheme.typography.labelSmall,
-                                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                                )
-                                                if (item.prerequisites.isNotEmpty()) {
-                                                    Text(
-                                                        text = "• Tiên quyết: ${item.prerequisites.joinToString(", ")}",
-                                                        style = MaterialTheme.typography.labelSmall,
-                                                        color = MaterialTheme.colorScheme.primary,
-                                                        fontWeight = FontWeight.Medium,
-                                                        maxLines = 1,
-                                                        overflow = TextOverflow.Ellipsis,
-                                                    )
-                                                }
-                                            }
-                                        }
-
-                                        Icon(
-                                            imageVector = Icons.Default.ChevronRight,
-                                            contentDescription = "Mở slide",
-                                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                            modifier = Modifier.size(18.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
                     }
+                }
+            } else if (viewMode == RoadmapViewMode.MINDMAP) {
+                item(key = "mindmap_canvas_card") {
+                    CourseMindmapCard(
+                        courseName = mindmapState.courseName.ifBlank { courseTitle },
+                        branches = filteredBranches,
+                        zoomScale = mindmapState.zoomScale,
+                        onZoomChange = onZoomChange,
+                        onLeafClick = openLeafDetail,
+                    )
+                }
+            } else {
+                items(filteredBranches, key = { it.id }) { branch ->
+                    LayeredBranchCard(
+                        branch = branch,
+                        isDark = isDark,
+                        onLeafClick = { leaf -> openLeafDetail(branch, leaf) },
+                    )
                 }
             }
-        } else {
-            item {
-                var scale by remember { mutableFloatStateOf(1f) }
-                var offset by remember { mutableStateOf(Offset.Zero) }
 
-                OutlinedCard(
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(14.dp)) {
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = "Sơ đồ phụ thuộc (Chạm để mở Slide)",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
-                                Text(
-                                    text = "Chụm hai ngón hoặc kéo để thu phóng bản đồ",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                            IconButton(
-                                onClick = {
-                                    scale = 1f
-                                    offset = Offset.Zero
-                                },
-                                modifier = Modifier.size(40.dp)
-                            ) {
-                                Icon(
-                                    imageVector = Icons.Default.RestartAlt,
-                                    contentDescription = "Đặt lại thu phóng",
-                                    tint = MaterialTheme.colorScheme.primary,
-                                    modifier = Modifier.size(20.dp)
-                                )
-                            }
-                        }
-
-                        Spacer(modifier = Modifier.height(10.dp))
-
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(300.dp)
-                                .clip(RoundedCornerShape(14.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                                .pointerInput(Unit) {
-                                    detectTransformGestures { _, pan, zoom, _ ->
-                                        scale = (scale * zoom).coerceIn(0.75f, 2.2f)
-                                        offset += pan
-                                    }
-                                },
-                            contentAlignment = Alignment.Center
-                        ) {
-                            Column(
-                                verticalArrangement = Arrangement.spacedBy(16.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                modifier = Modifier
-                                    .padding(16.dp)
-                                    .graphicsLayer(
-                                        scaleX = scale,
-                                        scaleY = scale,
-                                        translationX = offset.x,
-                                        translationY = offset.y,
-                                    )
-                            ) {
-                                tiers.forEachIndexed { idx, tier ->
-                                    Row(
-                                        horizontalArrangement = Arrangement.spacedBy(10.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        tier.items.take(3).forEach { node ->
-                                            val bg = when {
-                                                node.isWarning -> MaterialTheme.colorScheme.errorContainer
-                                                node.mastered -> MaterialTheme.colorScheme.secondaryContainer
-                                                else -> MaterialTheme.colorScheme.primaryContainer
-                                            }
-                                            val fg = when {
-                                                node.isWarning -> MaterialTheme.colorScheme.onErrorContainer
-                                                node.mastered -> MaterialTheme.colorScheme.onSecondaryContainer
-                                                else -> MaterialTheme.colorScheme.onPrimaryContainer
-                                            }
-                                            CompactPillNode(
-                                                label = "${node.shortCode}: ${node.title.take(18)}",
-                                                bgColor = bg,
-                                                fgColor = fg,
-                                            ) {
-                                                onJumpToSlide(node.lectureId, node.slideNumber)
-                                            }
-                                        }
-                                    }
-                                    if (idx < tiers.lastIndex) {
-                                        Icon(
-                                            imageVector = Icons.Default.ArrowDownward,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.outline,
-                                            modifier = Modifier.size(16.dp)
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+            item(key = "roadmap_bottom_spacer") {
+                Spacer(Modifier.height(12.dp))
             }
         }
+    }
 
-        item { Spacer(modifier = Modifier.height(16.dp)) }
+    selectedLeafRef?.let { (branchId, leafId) ->
+        val liveBranch = mindmapState.branches.find { it.id == branchId }
+        val liveLeaf = liveBranch?.leaves?.find { it.id == leafId }
+        if (liveBranch != null && liveLeaf != null) {
+            MindmapNodeDetailSheet(
+                branch = liveBranch,
+                leaf = liveLeaf,
+                isDark = isDark,
+                onDismiss = { selectedLeafRef = null },
+                onToggleMastery = { onToggleLeafMastery(liveLeaf.id) },
+                onJumpToSlide = {
+                    selectedLeafRef = null
+                    onNavigateToLectureSlide(
+                        liveLeaf.lectureId.toInt(),
+                        liveLeaf.slideNumber,
+                        liveLeaf.timestampSec.toFloat(),
+                    )
+                },
+            )
+        }
     }
 }
 
 @Composable
-private fun CompactPillNode(
-    label: String,
-    bgColor: Color,
-    fgColor: Color,
-    onClick: () -> Unit
+private fun LayeredBranchCard(
+    branch: MindmapBranch,
+    isDark: Boolean,
+    onLeafClick: (MindmapLeafNode) -> Unit,
+) {
+    val accent = branchAccentColor(branch.tone)
+    val badgeText = branchTextColor(branch.tone, isDark)
+    val softBg = branchSoftColor(branch.tone, isDark)
+    val masteredCount = branch.leaves.count { it.isMastered }
+    val totalCount = branch.leaves.size.coerceAtLeast(1)
+
+    Surface(
+        shape = RoundedCornerShape(24.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = softBg,
+                        border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
+                    ) {
+                        Text(
+                            text = branch.title,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = badgeText,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                    if (branch.isNewlyAdded) {
+                        Text(
+                            text = "MỚI",
+                            fontSize = 9.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(6.dp))
+                                .background(accent)
+                                .padding(horizontal = 5.dp, vertical = 2.dp),
+                        )
+                    }
+                }
+                Spacer(Modifier.width(8.dp))
+                Text(
+                    text = "$masteredCount/$totalCount vững",
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            LinearProgressIndicator(
+                progress = { (masteredCount.toFloat() / totalCount.toFloat()).coerceIn(0f, 1f) },
+                color = accent,
+                trackColor = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(999.dp)),
+            )
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                branch.leaves.forEach { leaf ->
+                    Surface(
+                        onClick = { onLeafClick(leaf) },
+                        shape = RoundedCornerShape(16.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.6f),
+                        border = BorderStroke(
+                            width = 1.dp,
+                            color = if (leaf.isMastered) accent.copy(alpha = 0.65f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.45f),
+                        ),
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(34.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(if (leaf.isMastered) softBg else MaterialTheme.colorScheme.surface),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                if (leaf.isMastered) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Đã vững",
+                                        tint = badgeText,
+                                        modifier = Modifier.size(18.dp),
+                                    )
+                                } else {
+                                    Text(
+                                        text = "S${leaf.slideNumber}",
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = badgeText,
+                                    )
+                                }
+                            }
+
+                            Spacer(Modifier.width(10.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = leaf.title,
+                                    fontSize = 13.5.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Text(
+                                    text = buildString {
+                                        append(leaf.slideRef)
+                                        if (leaf.summary.isNotBlank() && leaf.summary != leaf.title) {
+                                            append(" • ")
+                                            append(leaf.summary)
+                                        }
+                                    },
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                            }
+
+                            Icon(
+                                imageVector = Icons.Default.ChevronRight,
+                                contentDescription = "Chi tiết",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MindmapNodeDetailSheet(
+    branch: MindmapBranch,
+    leaf: MindmapLeafNode,
+    isDark: Boolean,
+    onDismiss: () -> Unit,
+    onToggleMastery: () -> Unit,
+    onJumpToSlide: () -> Unit,
+) {
+    val accent = branchAccentColor(branch.tone)
+    val badgeFg = branchTextColor(branch.tone, isDark)
+    val badgeBg = branchSoftColor(branch.tone, isDark)
+    val tealSoft = if (isDark) StudyAiPalette.TealSoftDark else StudyAiPalette.TealSoftLight
+    val tealText = if (isDark) StudyAiPalette.TealTextDark else StudyAiPalette.TealTextLight
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
+        containerColor = MaterialTheme.colorScheme.surface,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(999.dp),
+                    color = badgeBg,
+                    border = BorderStroke(1.dp, accent.copy(alpha = 0.6f)),
+                ) {
+                    Text(
+                        text = branch.title,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = badgeFg,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                    )
+                }
+
+                if (leaf.isMastered) {
+                    Surface(
+                        shape = RoundedCornerShape(999.dp),
+                        color = tealSoft,
+                    ) {
+                        Text(
+                            text = "Đã vững ✓",
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = tealText,
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+                        )
+                    }
+                }
+            }
+
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(
+                    text = leaf.title,
+                    fontSize = 17.sp,
+                    lineHeight = 23.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                val locationMeta = buildString {
+                    if (leaf.lectureId > 0L) {
+                        append("Bài ${leaf.lectureId} • ")
+                    }
+                    append(leaf.slideRef)
+                    if (leaf.timestampSec > 0) {
+                        val m = leaf.timestampSec / 60
+                        val s = leaf.timestampSec % 60
+                        append(" • ▶ %02d:%02d".format(m, s))
+                    }
+                }
+                Text(
+                    text = locationMeta,
+                    fontFamily = FontFamily.Monospace,
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(
+                    text = leaf.summary.ifBlank { "Khái niệm nằm trong ${leaf.slideRef} thuộc nhánh ${branch.title}." },
+                    style = MaterialTheme.typography.bodySmall,
+                    lineHeight = 20.sp,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(14.dp),
+                )
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                OutlinedButton(
+                    onClick = onToggleMastery,
+                    shape = RoundedCornerShape(14.dp),
+                    border = BorderStroke(
+                        1.dp,
+                        if (leaf.isMastered) StudyAiPalette.Teal else MaterialTheme.colorScheme.outline,
+                    ),
+                    colors = ButtonDefaults.outlinedButtonColors(
+                        containerColor = if (leaf.isMastered) tealSoft else Color.Transparent,
+                        contentColor = if (leaf.isMastered) tealText else MaterialTheme.colorScheme.onSurface,
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                ) {
+                    Text(
+                        text = if (leaf.isMastered) "Đã vững ✓" else "Đánh dấu đã vững",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        maxLines = 1,
+                    )
+                }
+
+                Button(
+                    onClick = onJumpToSlide,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StudyAiPalette.PrimaryCobalt,
+                        contentColor = Color.White,
+                    ),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(46.dp),
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(
+                        text = "Nhảy tới Slide",
+                        fontSize = 12.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun RoadmapModeSegmentButton(
+    text: String,
+    selected: Boolean,
+    primaryTextColor: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     Surface(
         onClick = onClick,
         shape = RoundedCornerShape(12.dp),
-        color = bgColor,
-        border = BorderStroke(1.dp, fgColor.copy(alpha = 0.25f)),
-        shadowElevation = 1.dp
+        color = if (selected) MaterialTheme.colorScheme.surface else Color.Transparent,
+        shadowElevation = if (selected) 1.dp else 0.dp,
+        modifier = modifier.height(38.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelSmall,
-            fontWeight = FontWeight.Bold,
-            color = fgColor,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp)
-        )
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                text = text,
+                fontSize = 13.sp,
+                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                color = if (selected) primaryTextColor else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+        }
     }
 }

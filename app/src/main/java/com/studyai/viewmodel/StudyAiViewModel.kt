@@ -24,6 +24,7 @@ import com.studyai.ui.dictionary.LivingDictionaryUiModel
 import com.studyai.ui.graph.ConceptEdgeUi
 import com.studyai.ui.graph.ConceptNodeUi
 import com.studyai.ui.notes.*
+import com.studyai.ui.roadmap.*
 import com.studyai.ui.tasks.MilestoneUi
 import com.studyai.ui.tasks.TaskItemUi
 import kotlinx.coroutines.Job
@@ -146,6 +147,9 @@ class StudyAiViewModel(
 
     private val _edges = MutableStateFlow<List<ConceptEdgeUi>>(emptyList())
     val edges: StateFlow<List<ConceptEdgeUi>> = _edges.asStateFlow()
+
+    private val _mindmapState = MutableStateFlow(CourseMindmapUiState(courseId = 1L, courseName = "Môn học"))
+    val mindmapState: StateFlow<CourseMindmapUiState> = _mindmapState.asStateFlow()
 
     private val _tasks = MutableStateFlow<List<TaskItemUi>>(emptyList())
     val tasks: StateFlow<List<TaskItemUi>> = _tasks.asStateFlow()
@@ -303,6 +307,10 @@ class StudyAiViewModel(
                         uri = uri,
                     )
                     _slideVault.value = listOf(newItem) + _slideVault.value
+
+                    // Tự động mọc nhánh Mindmap mới cho Slide vừa nạp (Màn hình 3)
+                    appendOptimisticSlideBranchToMindmap(b)
+                    refreshCourseMindmapSuspend(_selectedCourseId.value)
                 }
             } catch (e: Exception) {
                 _errorMessage.value = "Lỗi khi upload slide vào kho: ${e.message}"
@@ -837,8 +845,9 @@ class StudyAiViewModel(
                     _isProcessingQueue.value = false
                 }
             } else {
-                // 3. Tải lại danh sách note & cập nhật cache offline
+                // 3. Tải lại danh sách note & cập nhật cache offline + nhánh Mindmap mới
                 loadLectureInlineNotes(lectureId)
+                refreshCourseMindmapSuspend(_selectedCourseId.value)
             }
         }
     }
@@ -1343,15 +1352,269 @@ class StudyAiViewModel(
                     }
                     _dictionaryEntries.value = entries
                 }
+
+                // 4. Đồng bộ Mindmap tri thức 3 cấp theo môn học
+                refreshCourseMindmapSuspend(courseId)
             } catch (e: Exception) {
                 Log.e(TAG, "loadAllData error", e)
                 if (!applyOfflineCacheIfAvailable(fallbackLectureId)) {
                     _errorMessage.value = "Lỗi kết nối máy chủ StudyAI: ${e.localizedMessage ?: e.message ?: e.javaClass.simpleName}"
                 }
+                val fallbackBranches = buildFallbackMindmapBranches(courseId)
+                if (fallbackBranches.isNotEmpty()) {
+                    val cName = _courses.value.find { it.id == courseId }?.name ?: _mindmapState.value.courseName
+                    _mindmapState.value = _mindmapState.value.copy(
+                        courseId = courseId,
+                        courseName = cName,
+                        branches = fallbackBranches,
+                    )
+                }
             } finally {
                 _isLoading.value = false
             }
         }
+    }
+
+    // =========================================================================
+    // HÀM XỬ LÝ MINDMAP TRI THỨC 3 CẤP (MÀN HÌNH 3)
+    // =========================================================================
+    fun setMindmapZoom(zoom: Float) {
+        _mindmapState.value = _mindmapState.value.copy(zoomScale = zoom.coerceIn(0.75f, 1.75f))
+    }
+
+    fun setMindmapFilter(filter: MasteryFilter) {
+        _mindmapState.value = _mindmapState.value.copy(selectedFilter = filter)
+    }
+
+    fun setMindmapSearchQuery(query: String) {
+        _mindmapState.value = _mindmapState.value.copy(searchQuery = query)
+    }
+
+    fun markMindmapBranchSeen(branchId: String) {
+        _mindmapState.value = _mindmapState.value.copy(
+            branches = _mindmapState.value.branches.map { br ->
+                if (br.id == branchId) br.copy(isNewlyAdded = false) else br
+            }
+        )
+        if (branchId.toLongOrNull() == null) return
+        viewModelScope.launch {
+            try {
+                apiService.markMindmapBranchSeen(branchId)
+            } catch (e: Exception) {
+                Log.w(TAG, "markMindmapBranchSeen failed: ${e.message}")
+            }
+        }
+    }
+
+    fun toggleMindmapLeafMastery(leafId: String) {
+        _mindmapState.value = _mindmapState.value.copy(
+            branches = _mindmapState.value.branches.map { br ->
+                br.copy(
+                    leaves = br.leaves.map { lf ->
+                        if (lf.id == leafId) lf.copy(isMastered = !lf.isMastered) else lf
+                    }
+                )
+            }
+        )
+        if (leafId.toLongOrNull() == null) return
+        viewModelScope.launch {
+            try {
+                val res = apiService.toggleMindmapLeafMastery(leafId)
+                if (res.isSuccessful && res.body() != null) {
+                    val serverMastered = res.body()!!.isMastered
+                    _mindmapState.value = _mindmapState.value.copy(
+                        branches = _mindmapState.value.branches.map { br ->
+                            br.copy(
+                                leaves = br.leaves.map { lf ->
+                                    if (lf.id == leafId) lf.copy(isMastered = serverMastered) else lf
+                                }
+                            )
+                        }
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "toggleMindmapLeafMastery failed: ${e.message}")
+            }
+        }
+    }
+
+    fun refreshCourseMindmap(courseId: Long = _selectedCourseId.value) {
+        viewModelScope.launch {
+            refreshCourseMindmapSuspend(courseId)
+        }
+    }
+
+    private suspend fun refreshCourseMindmapSuspend(courseId: Long) {
+        val localCourseName = _courses.value.find { it.id == courseId }?.name
+            ?: _mindmapState.value.courseName.ifBlank { "Môn học" }
+        try {
+            val res = apiService.getCourseMindmap(courseId)
+            if (res.isSuccessful && res.body() != null) {
+                val body = res.body()!!
+                val mappedBranches = body.branches.mapIndexed { idx, br ->
+                    val parsedTone = runCatching { BranchTone.valueOf(br.tone.uppercase()) }
+                        .getOrDefault(BranchTone.values()[idx % BranchTone.values().size])
+                    MindmapBranch(
+                        id = br.id.ifBlank { "br_$idx" },
+                        lectureId = br.lectureId,
+                        title = br.title,
+                        tone = parsedTone,
+                        isNewlyAdded = br.isNewlyAdded,
+                        leaves = br.leaves.mapIndexed { lIdx, lf ->
+                            MindmapLeafNode(
+                                id = lf.id.ifBlank { "lf_${idx}_$lIdx" },
+                                title = lf.title,
+                                slideRef = lf.slideRef.ifBlank { "Slide ${lf.slideNumber}" },
+                                lectureId = if (lf.lectureId > 0L) lf.lectureId else br.lectureId,
+                                slideNumber = lf.slideNumber.coerceAtLeast(1),
+                                timestampSec = lf.timestampSec.coerceAtLeast(0),
+                                summary = lf.summary,
+                                isMastered = lf.isMastered,
+                            )
+                        },
+                    )
+                }
+                val finalBranches = if (mappedBranches.isNotEmpty()) mappedBranches else buildFallbackMindmapBranches(courseId)
+                _mindmapState.value = _mindmapState.value.copy(
+                    courseId = courseId,
+                    courseName = body.courseName.ifBlank { localCourseName },
+                    branches = finalBranches,
+                )
+                return
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "getCourseMindmap fallback: ${e.message}")
+        }
+
+        val fallback = buildFallbackMindmapBranches(courseId)
+        _mindmapState.value = _mindmapState.value.copy(
+            courseId = courseId,
+            courseName = localCourseName,
+            branches = fallback,
+        )
+    }
+
+    private fun appendOptimisticSlideBranchToMindmap(uploaded: VaultUploadResponse) {
+        val tones = BranchTone.values()
+        val currentBranches = _mindmapState.value.branches
+        val cleanTitle = uploaded.fileName.substringBeforeLast(".").ifBlank { uploaded.fileName }
+        val byPage = (uploaded.blocks ?: emptyList()).groupBy { it.slidePage.coerceAtLeast(1) }
+        val leaves = if (byPage.isNotEmpty()) {
+            byPage.entries.sortedBy { it.key }.take(8).mapIndexed { idx, (pageNum, blocks) ->
+                val head = blocks.firstOrNull { it.kind.equals("heading", true) }?.text
+                    ?: blocks.firstOrNull()?.text
+                    ?: "Slide $pageNum"
+                val detail = blocks.filter { it.text != head }.take(2).joinToString(" • ") { it.text }
+                MindmapLeafNode(
+                    id = "tmp_leaf_${uploaded.id}_$idx",
+                    title = head.take(90),
+                    slideRef = "Slide $pageNum",
+                    lectureId = 0L,
+                    slideNumber = pageNum,
+                    timestampSec = 0,
+                    summary = detail.ifBlank { head },
+                    isMastered = false,
+                )
+            }
+        } else {
+            listOf(
+                MindmapLeafNode(
+                    id = "tmp_leaf_${uploaded.id}_0",
+                    title = cleanTitle,
+                    slideRef = "Slide 1",
+                    lectureId = 0L,
+                    slideNumber = 1,
+                    timestampSec = 0,
+                    summary = "${uploaded.pageCount} trang slide mới nạp vào kho",
+                    isMastered = false,
+                )
+            )
+        }
+        val newBranch = MindmapBranch(
+            id = "tmp_vault_${uploaded.id}",
+            lectureId = 0L,
+            title = cleanTitle,
+            tone = tones[currentBranches.size % tones.size],
+            isNewlyAdded = true,
+            leaves = leaves,
+        )
+        _mindmapState.value = _mindmapState.value.copy(
+            branches = currentBranches.filterNot { it.id == newBranch.id } + newBranch
+        )
+    }
+
+    private fun buildFallbackMindmapBranches(courseId: Long): List<MindmapBranch> {
+        val tones = BranchTone.values()
+        val branches = mutableListOf<MindmapBranch>()
+        if (_chapters.value.isNotEmpty()) {
+            _chapters.value.forEachIndexed { idx, ch ->
+                val chTitleClean = ch.title.substringBeforeLast(".")
+                val branchTitle = if (chTitleClean.startsWith("Bài", ignoreCase = true)) {
+                    chTitleClean
+                } else {
+                    "Bài #${ch.id} • $chTitleClean"
+                }
+                val chLeaves = if (ch.id == _currentLectureId.value && _inlinePages.value.isNotEmpty()) {
+                    _inlinePages.value.take(8).mapIndexed { pIdx, p ->
+                        val head = p.slideTitle.ifBlank { p.blocks.firstOrNull()?.originalSlideText ?: "Slide ${p.pageNumber}" }
+                        val firstTs = p.blocks.flatMap { it.inlineNotes }.firstOrNull()?.timestampSec?.toInt() ?: 0
+                        val summary = p.blocks.filter { it.originalSlideText != head }.take(2)
+                            .joinToString(" • ") { it.originalSlideText }
+                            .ifBlank { head }
+                        MindmapLeafNode(
+                            id = "fb_${ch.id}_${p.pageNumber}_$pIdx",
+                            title = head.take(90),
+                            slideRef = "Slide ${p.pageNumber}",
+                            lectureId = ch.id,
+                            slideNumber = p.pageNumber,
+                            timestampSec = firstTs,
+                            summary = summary,
+                            isMastered = pIdx == 0,
+                        )
+                    }
+                } else {
+                    val matchingNodes = _nodes.value.filter { it.firstIntroducedLectureId.toLong() == ch.id }
+                    if (matchingNodes.isNotEmpty()) {
+                        matchingNodes.take(8).map { n ->
+                            MindmapLeafNode(
+                                id = "fb_node_${n.id}",
+                                title = n.canonicalNameVi,
+                                slideRef = "Slide ${n.firstIntroducedSlideNo}",
+                                lectureId = ch.id,
+                                slideNumber = n.firstIntroducedSlideNo.coerceAtLeast(1),
+                                timestampSec = 0,
+                                summary = n.definitionSummary,
+                                isMastered = !n.hasViolation,
+                            )
+                        }
+                    } else {
+                        listOf(
+                            MindmapLeafNode(
+                                id = "fb_ch_${ch.id}",
+                                title = chTitleClean,
+                                slideRef = if (ch.slideCount > 1) "Slide 1–${ch.slideCount}" else "Slide 1",
+                                lectureId = ch.id,
+                                slideNumber = 1,
+                                timestampSec = 0,
+                                summary = "${ch.slideCount} trang bài giảng thuộc khóa #$courseId",
+                                isMastered = false,
+                            )
+                        )
+                    }
+                }
+                branches.add(
+                    MindmapBranch(
+                        id = "fb_br_${ch.id}",
+                        lectureId = ch.id,
+                        title = branchTitle,
+                        tone = tones[idx % tones.size],
+                        isNewlyAdded = false,
+                        leaves = chLeaves,
+                    )
+                )
+            }
+        }
+        return branches
     }
 
     fun switchCourse(courseId: Long) {

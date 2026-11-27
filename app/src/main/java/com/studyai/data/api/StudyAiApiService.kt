@@ -182,4 +182,22 @@ interface StudyAiApiService {
     suspend fun getCourseDictionary(
         @Path("courseId") courseId: Long
     ): Response<CourseDictionaryListResponse>
+
+    // =========================================================================
+    // 5. Endpoint Mindmap tri thức 3 cấp (Màn hình 3)
+    // =========================================================================
+    @GET("api/v1/courses/{courseId}/mindmap")
+    suspend fun getCourseMindmap(
+        @Path("courseId") courseId: Long
+    ): Response<CourseMindmapResponse>
+
+    @PATCH("api/v1/mindmap/branches/{branchId}/seen")
+    suspend fun markMindmapBranchSeen(
+        @Path("branchId") branchId: String
+    ): Response<MindmapSeenResponse>
+
+    @PATCH("api/v1/mindmap/leaves/{leafId}/toggle-mastery")
+    suspend fun toggleMindmapLeafMastery(
+        @Path("leafId") leafId: String
+    ): Response<MindmapMasteryResponse>
 }

@@ -409,6 +409,18 @@ class ProcessLectureJob implements ShouldQueue
                 ]);
             });
 
+            if ($lecture->course_id) {
+                try {
+                    app(\App\Http\Controllers\Api\StudyAiUnifiedController::class)->syncLectureToMindmap(
+                        (int) $lecture->course_id,
+                        $this->lectureId,
+                        true
+                    );
+                } catch (Throwable $mindmapEx) {
+                    Log::warning("ProcessLectureJob: Mindmap sync skipped for Lecture #{$this->lectureId}: " . $mindmapEx->getMessage());
+                }
+            }
+
             Log::info("ProcessLectureJob: Successfully processed Lecture #{$this->lectureId}");
         } catch (Throwable $e) {
             Log::error("ProcessLectureJob failed for Lecture #{$this->lectureId}: " . $e->getMessage());
