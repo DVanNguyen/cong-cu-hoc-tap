@@ -21,6 +21,10 @@ import com.studyai.ui.dictionary.CourseDictionaryItemUi
 import com.studyai.ui.dictionary.CrossChapterLinkUiModel
 import com.studyai.ui.dictionary.ExternalReferenceUiModel
 import com.studyai.ui.dictionary.LivingDictionaryUiModel
+import com.studyai.ui.dictionary.LivingLookupResult
+import com.studyai.ui.dictionary.LivingVaultFilter
+import com.studyai.ui.dictionary.SavedLivingEntry
+import com.studyai.ui.dictionary.TrustedSourceDoc
 import com.studyai.ui.graph.ConceptEdgeUi
 import com.studyai.ui.graph.ConceptNodeUi
 import com.studyai.ui.notes.*
@@ -45,6 +49,12 @@ private data class LectureOfflineCachePayload(
     val title: String,
     val inlineNotes: LectureInlineNotesResponse? = null,
     val workspace: LectureWorkspaceResponse? = null,
+    val cachedAtMs: Long = System.currentTimeMillis(),
+)
+
+private data class LivingDictionaryCachePayload(
+    val courseId: Long,
+    val entries: List<SavedLivingEntry> = emptyList(),
     val cachedAtMs: Long = System.currentTimeMillis(),
 )
 
@@ -159,6 +169,18 @@ class StudyAiViewModel(
 
     private val _selectedConceptDetail = MutableStateFlow<LivingDictionaryUiModel?>(null)
     val selectedConceptDetail: StateFlow<LivingDictionaryUiModel?> = _selectedConceptDetail.asStateFlow()
+
+    private val _savedLivingEntries = MutableStateFlow<List<SavedLivingEntry>>(emptyList())
+    val savedLivingEntries: StateFlow<List<SavedLivingEntry>> = _savedLivingEntries.asStateFlow()
+
+    private val _livingVaultFilter = MutableStateFlow(LivingVaultFilter.ALL)
+    val livingVaultFilter: StateFlow<LivingVaultFilter> = _livingVaultFilter.asStateFlow()
+
+    private val _activeLivingLookup = MutableStateFlow<LivingLookupResult?>(null)
+    val activeLivingLookup: StateFlow<LivingLookupResult?> = _activeLivingLookup.asStateFlow()
+
+    private val _isLookingUpLivingTerm = MutableStateFlow(false)
+    val isLookingUpLivingTerm: StateFlow<Boolean> = _isLookingUpLivingTerm.asStateFlow()
 
     private val _isLoading = MutableStateFlow(false)
     val isLoading: StateFlow<Boolean> = _isLoading.asStateFlow()
@@ -1355,6 +1377,9 @@ class StudyAiViewModel(
 
                 // 4. Đồng bộ Mindmap tri thức 3 cấp theo môn học
                 refreshCourseMindmapSuspend(courseId)
+
+                // 5. Đồng bộ Kho Từ điển sống theo môn học
+                loadSavedLivingEntriesSuspend(courseId)
             } catch (e: Exception) {
                 Log.e(TAG, "loadAllData error", e)
                 if (!applyOfflineCacheIfAvailable(fallbackLectureId)) {
@@ -1368,6 +1393,10 @@ class StudyAiViewModel(
                         courseName = cName,
                         branches = fallbackBranches,
                     )
+                }
+                val cachedLiving = loadLivingDictionaryCache(courseId)
+                if (cachedLiving.isNotEmpty()) {
+                    _savedLivingEntries.value = cachedLiving
                 }
             } finally {
                 _isLoading.value = false
@@ -1746,6 +1775,356 @@ class StudyAiViewModel(
             loadConceptDetail(matched.id)
         } else if (_dictionaryEntries.value.isNotEmpty()) {
             loadConceptDetail(_dictionaryEntries.value.first().id)
+        }
+    }
+
+    // =========================================================================
+    // HÀM XỬ LÝ TỪ ĐIỂN SỐNG TOÀN HỆ THỐNG (MÀN HÌNH 4)
+    // =========================================================================
+    private fun TrustedSourceDocDto.toUiModel(): TrustedSourceDoc {
+        return TrustedSourceDoc(
+            domain = domain,
+            badge = badge,
+            title = title,
+            excerpt = excerpt,
+            url = url,
+        )
+    }
+
+    private fun TrustedSourceDoc.toDto(): TrustedSourceDocDto {
+        return TrustedSourceDocDto(
+            domain = domain,
+            badge = badge,
+            title = title,
+            excerpt = excerpt,
+            url = url,
+        )
+    }
+
+    private fun SavedLivingEntryDto.toUiModel(): SavedLivingEntry {
+        return SavedLivingEntry(
+            id = id,
+            term = term,
+            originLabel = originLabel.ifBlank { "Từ điển sống" },
+            lectureId = lectureId,
+            slideNumber = slideNumber,
+            contextQuote = contextQuote,
+            summary = aiExplanation,
+            isMastered = isMastered,
+            isNew = isNew,
+            codeExample = codeExample,
+            simpleFollowup = simpleFollowup,
+            pitfallFollowup = pitfallFollowup,
+            trustedSources = trustedSources.map { it.toUiModel() },
+        )
+    }
+
+    private fun livingDictCacheFile(courseId: Long): File? {
+        val ctx = appContext ?: return null
+        return File(ctx.filesDir, "cache_living_dict_${courseId}.json")
+    }
+
+    private fun saveLivingDictionaryCache(courseId: Long, entries: List<SavedLivingEntry>) {
+        val file = livingDictCacheFile(courseId) ?: return
+        try {
+            val payload = LivingDictionaryCachePayload(
+                courseId = courseId,
+                entries = entries,
+                cachedAtMs = System.currentTimeMillis(),
+            )
+            file.writeText(gson.toJson(payload))
+        } catch (e: Exception) {
+            Log.w(TAG, "Không thể ghi cache Từ điển sống cho môn $courseId: ${e.message}")
+        }
+    }
+
+    private fun loadLivingDictionaryCache(courseId: Long): List<SavedLivingEntry> {
+        val file = livingDictCacheFile(courseId) ?: return emptyList()
+        if (!file.exists()) return emptyList()
+        return try {
+            gson.fromJson(file.readText(), LivingDictionaryCachePayload::class.java)?.entries ?: emptyList()
+        } catch (e: Exception) {
+            Log.w(TAG, "Không thể đọc cache Từ điển sống cho môn $courseId: ${e.message}")
+            emptyList()
+        }
+    }
+
+    private suspend fun loadSavedLivingEntriesSuspend(courseId: Long) {
+        try {
+            val res = apiService.getSavedLivingEntries(courseId)
+            if (res.isSuccessful && res.body() != null) {
+                val mapped = res.body()!!.entries.map { it.toUiModel() }
+                _savedLivingEntries.value = mapped
+                saveLivingDictionaryCache(courseId, mapped)
+                return
+            }
+        } catch (e: Exception) {
+            Log.w(TAG, "loadSavedLivingEntriesSuspend error: ${e.message}")
+        }
+        val cached = loadLivingDictionaryCache(courseId)
+        if (cached.isNotEmpty()) {
+            _savedLivingEntries.value = cached
+        }
+    }
+
+    fun loadSavedLivingEntries(courseId: Long = _selectedCourseId.value) {
+        viewModelScope.launch {
+            loadSavedLivingEntriesSuspend(courseId)
+        }
+    }
+
+    fun setLivingVaultFilter(filter: LivingVaultFilter) {
+        _livingVaultFilter.value = filter
+    }
+
+    fun openSavedLivingEntry(entry: SavedLivingEntry) {
+        _activeLivingLookup.value = LivingLookupResult(
+            id = entry.id,
+            term = entry.term,
+            originLabel = entry.originLabel,
+            lectureId = entry.lectureId,
+            slideNumber = entry.slideNumber,
+            contextQuote = entry.contextQuote,
+            aiExplanation = entry.summary,
+            codeExample = entry.codeExample,
+            simpleFollowup = entry.simpleFollowup,
+            pitfallFollowup = entry.pitfallFollowup,
+            trustedSources = entry.trustedSources,
+        )
+    }
+
+    fun dismissLivingLookup() {
+        _activeLivingLookup.value = null
+        _isLookingUpLivingTerm.value = false
+    }
+
+    fun lookupLivingTerm(
+        selectedText: String,
+        surroundingSentence: String = selectedText,
+        courseId: Long? = _selectedCourseId.value,
+        lectureId: Long? = _currentLectureId.value,
+        slideNumber: Int? = null,
+        originLabel: String? = null,
+    ) {
+        val cleanTerm = selectedText.trim()
+        if (cleanTerm.isEmpty()) return
+
+        val resolvedOrigin = originLabel?.takeIf { it.isNotBlank() }
+            ?: if (slideNumber != null) {
+                val cleanLec = _currentLectureTitle.value
+                    .replace(Regex("^Bài\\s*#?\\d+\\s*[•:\\-–]\\s*", RegexOption.IGNORE_CASE), "")
+                    .trim()
+                if (cleanLec.isNotBlank()) "Slide $slideNumber • $cleanLec" else "Slide $slideNumber"
+            } else {
+                "Từ điển sống"
+            }
+
+        val resolvedQuote = surroundingSentence.trim().ifBlank { cleanTerm }
+        val existingSaved = _savedLivingEntries.value.find {
+            it.term.equals(cleanTerm, ignoreCase = true)
+        }
+
+        _isLookingUpLivingTerm.value = true
+        _activeLivingLookup.value = LivingLookupResult(
+            id = existingSaved?.id,
+            term = cleanTerm,
+            originLabel = resolvedOrigin,
+            lectureId = lectureId,
+            slideNumber = slideNumber,
+            contextQuote = resolvedQuote,
+            aiExplanation = existingSaved?.summary?.takeIf { it.isNotBlank() }
+                ?: "Đang phân tích ngữ cảnh và tổng hợp ví dụ thực tế cho \"$cleanTerm\"...",
+            codeExample = existingSaved?.codeExample,
+            simpleFollowup = existingSaved?.simpleFollowup,
+            pitfallFollowup = existingSaved?.pitfallFollowup,
+            trustedSources = existingSaved?.trustedSources ?: emptyList(),
+        )
+
+        viewModelScope.launch {
+            try {
+                val req = LivingLookupRequestDto(
+                    courseId = courseId?.takeIf { it > 0L },
+                    lectureId = lectureId?.takeIf { it > 0L },
+                    slideNumber = slideNumber,
+                    selectedText = cleanTerm,
+                    surroundingSentence = resolvedQuote,
+                    originLabel = resolvedOrigin,
+                )
+                val res = apiService.lookupLivingTerm(req)
+                if (res.isSuccessful && res.body() != null) {
+                    val body = res.body()!!
+                    val matchedSaved = _savedLivingEntries.value.find {
+                        it.term.equals(body.term.ifBlank { cleanTerm }, ignoreCase = true)
+                    }
+                    _activeLivingLookup.value = LivingLookupResult(
+                        id = matchedSaved?.id,
+                        term = body.term.ifBlank { cleanTerm },
+                        originLabel = body.originLabel.ifBlank { resolvedOrigin },
+                        lectureId = body.lectureId ?: lectureId,
+                        slideNumber = body.slideNumber ?: slideNumber,
+                        contextQuote = body.contextQuote.ifBlank { resolvedQuote },
+                        aiExplanation = body.aiExplanation.ifBlank {
+                            matchedSaved?.summary
+                                ?: "Thuật ngữ \"$cleanTerm\" được sử dụng trong ngữ cảnh: $resolvedQuote."
+                        },
+                        codeExample = body.codeExample,
+                        simpleFollowup = body.simpleFollowup,
+                        pitfallFollowup = body.pitfallFollowup,
+                        trustedSources = body.trustedSources.map { it.toUiModel() },
+                    )
+                } else {
+                    val matchedCourseEntry = _dictionaryEntries.value.find {
+                        it.canonicalNameEn.equals(cleanTerm, ignoreCase = true) ||
+                            it.canonicalNameVi.equals(cleanTerm, ignoreCase = true)
+                    }
+                    val fallbackText = existingSaved?.summary
+                        ?: matchedCourseEntry?.aiDeepExplanation?.takeIf { it.isNotBlank() }
+                        ?: "Máy chủ phản hồi mã ${res.code()}. Ngữ cảnh gốc: \"$resolvedQuote\"."
+                    _activeLivingLookup.value = _activeLivingLookup.value?.copy(
+                        aiExplanation = fallbackText,
+                        simpleFollowup = existingSaved?.simpleFollowup ?: matchedCourseEntry?.intuitionExample,
+                    )
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "lookupLivingTerm error: ${e.message}")
+                val matchedCourseEntry = _dictionaryEntries.value.find {
+                    it.canonicalNameEn.equals(cleanTerm, ignoreCase = true) ||
+                        it.canonicalNameVi.equals(cleanTerm, ignoreCase = true)
+                }
+                val fallbackText = existingSaved?.summary
+                    ?: matchedCourseEntry?.aiDeepExplanation?.takeIf { it.isNotBlank() }
+                    ?: "Không thể kết nối AI Gateway (${e.localizedMessage ?: "ngoại tuyến"}). Ngữ cảnh bạn vừa chọn: \"$resolvedQuote\"."
+                _activeLivingLookup.value = _activeLivingLookup.value?.copy(
+                    aiExplanation = fallbackText,
+                    simpleFollowup = existingSaved?.simpleFollowup ?: matchedCourseEntry?.intuitionExample,
+                )
+            } finally {
+                _isLookingUpLivingTerm.value = false
+            }
+        }
+    }
+
+    fun saveLivingLookupToVault(result: LivingLookupResult) {
+        if (result.term.isBlank()) return
+        viewModelScope.launch {
+            val activeCourseId = _selectedCourseId.value
+            val isExternal = result.originLabel == "Tra cứu ngoài ứng dụng"
+            val reqCourseId = if (isExternal) null else activeCourseId.takeIf { it > 0L }
+            try {
+                val req = SaveLivingEntryRequestDto(
+                    courseId = reqCourseId,
+                    lectureId = result.lectureId?.takeIf { it > 0L },
+                    slideNumber = result.slideNumber,
+                    originLabel = result.originLabel.ifBlank { "Từ điển sống" },
+                    term = result.term,
+                    contextQuote = result.contextQuote,
+                    aiExplanation = result.aiExplanation,
+                    codeExample = result.codeExample,
+                    simpleFollowup = result.simpleFollowup,
+                    pitfallFollowup = result.pitfallFollowup,
+                    trustedSources = result.trustedSources.map { it.toDto() },
+                )
+                val res = apiService.saveLivingDictionaryEntry(req)
+                if (res.isSuccessful && res.body() != null) {
+                    val savedUi = res.body()!!.toUiModel()
+                    val updatedList = listOf(savedUi) + _savedLivingEntries.value.filterNot {
+                        it.id == savedUi.id || it.term.equals(savedUi.term, ignoreCase = true)
+                    }
+                    _savedLivingEntries.value = updatedList
+                    _activeLivingLookup.value = _activeLivingLookup.value?.let { current ->
+                        if (current.term.equals(savedUi.term, ignoreCase = true)) {
+                            current.copy(id = savedUi.id)
+                        } else current
+                    }
+                    saveLivingDictionaryCache(activeCourseId, updatedList)
+                    appContext?.let { ctx ->
+                        if (!isExternal) {
+                            Toast.makeText(
+                                ctx,
+                                "Đã lưu \"${savedUi.term}\" vào Kho Từ điển sống",
+                                Toast.LENGTH_SHORT
+                            ).show()
+                        }
+                    }
+                    return@launch
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "saveLivingLookupToVault error: ${e.message}")
+            }
+
+            // Fallback lưu cục bộ khi ngoại tuyến
+            val localId = result.id ?: -System.currentTimeMillis()
+            val localEntry = SavedLivingEntry(
+                id = localId,
+                term = result.term,
+                originLabel = result.originLabel.ifBlank { "Từ điển sống" },
+                lectureId = result.lectureId,
+                slideNumber = result.slideNumber,
+                contextQuote = result.contextQuote,
+                summary = result.aiExplanation,
+                isMastered = false,
+                isNew = true,
+                codeExample = result.codeExample,
+                simpleFollowup = result.simpleFollowup,
+                pitfallFollowup = result.pitfallFollowup,
+                trustedSources = result.trustedSources,
+            )
+            val updatedList = listOf(localEntry) + _savedLivingEntries.value.filterNot {
+                it.term.equals(localEntry.term, ignoreCase = true)
+            }
+            _savedLivingEntries.value = updatedList
+            _activeLivingLookup.value = _activeLivingLookup.value?.copy(id = localId)
+            saveLivingDictionaryCache(activeCourseId, updatedList)
+        }
+    }
+
+    fun toggleSavedLivingMastery(entryId: Long) {
+        val activeCourseId = _selectedCourseId.value
+        val updated = _savedLivingEntries.value.map { item ->
+            if (item.id == entryId) {
+                item.copy(isMastered = !item.isMastered, isNew = false)
+            } else item
+        }
+        _savedLivingEntries.value = updated
+        saveLivingDictionaryCache(activeCourseId, updated)
+
+        if (entryId <= 0L) return
+        viewModelScope.launch {
+            try {
+                val res = apiService.toggleLivingEntryMastery(entryId)
+                if (res.isSuccessful && res.body() != null) {
+                    val body = res.body()!!
+                    val synced = _savedLivingEntries.value.map { item ->
+                        if (item.id == entryId) {
+                            item.copy(isMastered = body.isMastered, isNew = body.isNew)
+                        } else item
+                    }
+                    _savedLivingEntries.value = synced
+                    saveLivingDictionaryCache(activeCourseId, synced)
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "toggleSavedLivingMastery error: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteSavedLivingEntry(entryId: Long) {
+        val activeCourseId = _selectedCourseId.value
+        val remaining = _savedLivingEntries.value.filterNot { it.id == entryId }
+        _savedLivingEntries.value = remaining
+        saveLivingDictionaryCache(activeCourseId, remaining)
+
+        if (_activeLivingLookup.value?.id == entryId) {
+            _activeLivingLookup.value = _activeLivingLookup.value?.copy(id = null)
+        }
+
+        if (entryId <= 0L) return
+        viewModelScope.launch {
+            try {
+                apiService.deleteLivingEntry(entryId)
+            } catch (e: Exception) {
+                Log.w(TAG, "deleteSavedLivingEntry error: ${e.message}")
+            }
         }
     }
 }

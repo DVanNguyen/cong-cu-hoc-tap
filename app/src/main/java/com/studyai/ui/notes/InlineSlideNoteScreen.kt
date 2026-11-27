@@ -25,7 +25,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.ClickableText
+import androidx.compose.foundation.text.selection.DisableSelection
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.Close
@@ -55,6 +56,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -64,7 +66,12 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalTextToolbar
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
@@ -75,6 +82,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.studyai.audio.AudioPlayerUiState
+import com.studyai.ui.dictionary.LivingDictionaryTextToolbar
 import com.studyai.ui.theme.StudyAiCodeTextStyle
 import com.studyai.ui.theme.StudyAiExtras
 import com.studyai.ui.theme.StudyAiPalette
@@ -173,10 +181,16 @@ fun InlineSlideNoteDocumentScreen(
     onPlayTimestamp: (Float) -> Unit = {},
     onUpdateNote: (noteId: String, newText: String) -> Unit = { _, _ -> },
     onDeleteNote: (noteId: String) -> Unit = {},
+    onLookupSelectedText: (selectedText: String, surroundingSentence: String, slideNumber: Int?) -> Unit = { _, _, _ -> },
     @Suppress("UNUSED_PARAMETER") onExportMarkdown: (() -> Unit)? = null,
 ) {
     val isDark = StudyAiExtras.isDark
+    val hostView = LocalView.current
+    @Suppress("DEPRECATION")
+    val clipboardManager = LocalClipboardManager.current
+
     var activePopupConcept by remember { mutableStateOf<InlineConceptHighlight?>(null) }
+    var activePopupConceptSlide by remember { mutableStateOf<Int?>(null) }
     var editingNote by remember { mutableStateOf<InlineLecturerNote?>(null) }
     var editDraftText by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
@@ -184,6 +198,48 @@ fun InlineSlideNoteDocumentScreen(
     val headerOffset = (if (isOfflineCache) 1 else 0) + 1
     val totalNotes = remember(pages) {
         pages.sumOf { page -> page.blocks.sumOf { it.inlineNotes.size } }
+    }
+
+    val livingToolbar = remember(hostView, pages, headerOffset) {
+        LivingDictionaryTextToolbar(view = hostView) {
+            @Suppress("DEPRECATION")
+            val selected = clipboardManager.getText()?.text?.trim().orEmpty()
+            if (selected.isNotEmpty()) {
+                val visiblePageIndices = listState.layoutInfo.visibleItemsInfo
+                    .map { it.index - headerOffset }
+                    .filter { it in pages.indices }
+                val orderedPages = visiblePageIndices.map { pages[it] } +
+                    pages.filterIndexed { idx, _ -> idx !in visiblePageIndices }
+
+                var matchedSlideNo: Int? = null
+                var matchedSentence: String = selected
+                for (p in orderedPages) {
+                    val blockHit = p.blocks.firstOrNull { b ->
+                        b.originalSlideText.contains(selected, ignoreCase = true) ||
+                            b.inlineNotes.any { n ->
+                                n.explanationText.contains(selected, ignoreCase = true) ||
+                                    n.evidenceQuote.contains(selected, ignoreCase = true)
+                            }
+                    }
+                    if (blockHit != null) {
+                        matchedSlideNo = p.pageNumber
+                        matchedSentence = when {
+                            blockHit.originalSlideText.contains(selected, ignoreCase = true) -> blockHit.originalSlideText
+                            else -> blockHit.inlineNotes.firstOrNull {
+                                it.explanationText.contains(selected, ignoreCase = true)
+                            }?.explanationText ?: blockHit.inlineNotes.firstOrNull {
+                                it.evidenceQuote.contains(selected, ignoreCase = true)
+                            }?.evidenceQuote ?: selected
+                        }
+                        break
+                    }
+                }
+                if (matchedSlideNo == null && visiblePageIndices.isNotEmpty()) {
+                    matchedSlideNo = pages[visiblePageIndices.first()].pageNumber
+                }
+                onLookupSelectedText(selected, matchedSentence, matchedSlideNo)
+            }
+        }
     }
 
     LaunchedEffect(scrollToTopNonce) {
@@ -215,74 +271,87 @@ fun InlineSlideNoteDocumentScreen(
         }
     }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        if (isOfflineCache) {
-            item(key = "offline_banner") {
-                OfflineCacheBanner()
-            }
-        }
-
-        // Hàng 3: Thanh chú giải siêu gọn, không bọc card
-        item(key = "legend_bar") {
-            CompactLegendAndNoteCountBar(totalNotes = totalNotes)
-        }
-
-        if (pages.isEmpty()) {
-            item(key = "empty_notes_card") {
-                Surface(
-                    shape = RoundedCornerShape(24.dp),
-                    color = MaterialTheme.colorScheme.surface,
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Column(
-                        modifier = Modifier.padding(24.dp),
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        Icon(
-                            imageVector = Icons.AutoMirrored.Filled.MenuBook,
-                            contentDescription = null,
-                            tint = StudyAiPalette.PrimaryCobalt,
-                            modifier = Modifier.size(30.dp),
-                        )
-                        Text(
-                            text = "Chưa có trang slide hoặc ghi chú nào",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.onSurface,
-                            textAlign = TextAlign.Center,
-                        )
-                        Text(
-                            text = "Chuyển sang tab Thu âm để ghi âm bám slide trực tiếp hoặc tải cặp file Slide PDF + Audio để StudyAI biên tập vở ghi chép.",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
+    CompositionLocalProvider(LocalTextToolbar provides livingToolbar) {
+        SelectionContainer {
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                if (isOfflineCache) {
+                    item(key = "offline_banner") {
+                        DisableSelection {
+                            OfflineCacheBanner()
+                        }
                     }
                 }
-            }
-        }
 
-        items(pages, key = { it.pageNumber }) { page ->
-            AnnotatedSlidePageCard(
-                page = page,
-                isDark = isDark,
-                onClickConcept = { activePopupConcept = it },
-                onToggleConfusedBlock = onToggleConfusedBlock,
-                onPlayTimestamp = onPlayTimestamp,
-                onStartEditNote = { note ->
-                    editingNote = note
-                    editDraftText = note.explanationText
-                },
-                onDeleteNote = onDeleteNote,
-            )
+                // Hàng 3: Thanh chú giải siêu gọn, không bọc card
+                item(key = "legend_bar") {
+                    DisableSelection {
+                        CompactLegendAndNoteCountBar(totalNotes = totalNotes)
+                    }
+                }
+
+                if (pages.isEmpty()) {
+                    item(key = "empty_notes_card") {
+                        DisableSelection {
+                            Surface(
+                                shape = RoundedCornerShape(24.dp),
+                                color = MaterialTheme.colorScheme.surface,
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+                                modifier = Modifier.fillMaxWidth(),
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(24.dp),
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
+                                        contentDescription = null,
+                                        tint = StudyAiPalette.PrimaryCobalt,
+                                        modifier = Modifier.size(30.dp),
+                                    )
+                                    Text(
+                                        text = "Chưa có trang slide hoặc ghi chú nào",
+                                        style = MaterialTheme.typography.titleMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                    Text(
+                                        text = "Chuyển sang tab Thu âm để ghi âm bám slide trực tiếp hoặc tải cặp file Slide PDF + Audio để StudyAI biên tập vở ghi chép.",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                items(pages, key = { it.pageNumber }) { page ->
+                    AnnotatedSlidePageCard(
+                        page = page,
+                        isDark = isDark,
+                        onClickConcept = { hl ->
+                            activePopupConcept = hl
+                            activePopupConceptSlide = page.pageNumber
+                        },
+                        onToggleConfusedBlock = onToggleConfusedBlock,
+                        onPlayTimestamp = onPlayTimestamp,
+                        onStartEditNote = { note ->
+                            editingNote = note
+                            editDraftText = note.explanationText
+                        },
+                        onDeleteNote = onDeleteNote,
+                    )
+                }
+            }
         }
     }
 
@@ -378,6 +447,23 @@ fun InlineSlideNoteDocumentScreen(
                 )
             },
             confirmButton = {
+                Button(
+                    onClick = {
+                        val term = concept.term
+                        val explanation = concept.explanation
+                        val slideNo = activePopupConceptSlide
+                        activePopupConcept = null
+                        onLookupSelectedText(term, explanation, slideNo)
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = StudyAiPalette.PrimaryCobalt,
+                        contentColor = Color.White,
+                    ),
+                ) {
+                    Text("Mở Từ điển sống")
+                }
+            },
+            dismissButton = {
                 TextButton(onClick = { activePopupConcept = null }) {
                     Text("Đã hiểu")
                 }
@@ -862,19 +948,19 @@ private fun SlideBlockRow(
                                         val end = start + hl.term.length
                                         val bg = if (hl.sourceType == HighlightSourceType.ACADEMIC_INTERNET) acadBg else prevBg
                                         val fg = if (hl.sourceType == HighlightSourceType.ACADEMIC_INTERNET) acadFg else prevFg
-                                        addStyle(
-                                            style = SpanStyle(
-                                                background = bg,
-                                                color = fg,
-                                                fontWeight = FontWeight.SemiBold,
-                                                textDecoration = TextDecoration.Underline,
+                                        addLink(
+                                            clickable = LinkAnnotation.Clickable(
+                                                tag = "CONCEPT_$idx",
+                                                styles = TextLinkStyles(
+                                                    style = SpanStyle(
+                                                        background = bg,
+                                                        color = fg,
+                                                        fontWeight = FontWeight.SemiBold,
+                                                        textDecoration = TextDecoration.Underline,
+                                                    )
+                                                ),
+                                                linkInteractionListener = { onClickConcept(hl) },
                                             ),
-                                            start = start,
-                                            end = end,
-                                        )
-                                        addStringAnnotation(
-                                            tag = "CONCEPT",
-                                            annotation = idx.toString(),
                                             start = start,
                                             end = end,
                                         )
@@ -897,22 +983,12 @@ private fun SlideBlockRow(
                             fontStyle = if (block.kind == "formula") FontStyle.Italic else FontStyle.Normal,
                         )
 
-                        @Suppress("DEPRECATION")
-                        ClickableText(
+                        Text(
                             text = annotatedText,
                             style = baseTextStyle,
                             modifier = Modifier
                                 .weight(1f)
                                 .padding(top = 2.dp),
-                            onClick = { offset ->
-                                annotatedText.getStringAnnotations(tag = "CONCEPT", start = offset, end = offset)
-                                    .firstOrNull()
-                                    ?.item
-                                    ?.toIntOrNull()
-                                    ?.let { idx ->
-                                        block.highlights.getOrNull(idx)?.let(onClickConcept)
-                                    }
-                            },
                         )
                     }
 

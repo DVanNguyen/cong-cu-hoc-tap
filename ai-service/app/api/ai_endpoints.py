@@ -607,3 +607,207 @@ async def process_lecture_pair_endpoint(
         "pages": pages,
         "general_notes": general_notes,
     }
+
+
+# ============================================================================
+# 4. POST /living-dictionary/lookup (Từ Điển Sống Bôi Đen Ngữ Cảnh - Màn 4)
+# ============================================================================
+class LivingDictionaryLookupRequest(BaseModel):
+    selected_text: str
+    surrounding_sentence: Optional[str] = ""
+    course_title: Optional[str] = ""
+    origin_label: Optional[str] = ""
+
+
+class LivingDictionaryLLMSchema(BaseModel):
+    ai_explanation: str
+    code_example: Optional[str] = None
+    simple_followup: str
+    pitfall_followup: str
+
+
+def _build_trusted_sources_for_term(
+    term: str,
+    context_sentence: str,
+    course_title: str,
+    wiki_items: Optional[List[Dict[str, Any]]] = None,
+) -> List[Dict[str, str]]:
+    from urllib.parse import quote
+
+    combined = f"{term} {context_sentence} {course_title}".lower()
+    encoded = quote(term.strip())
+    sources: List[Dict[str, str]] = []
+
+    if any(k in combined for k in ("sql", "tsql", "t-sql", "trancount", "declare", "select", "stored proc", "trigger", "transaction", "varchar", "nvarchar", "datetime")):
+        sources.append({
+            "domain": "Microsoft Learn",
+            "badge": "Tài liệu chính thức",
+            "title": f"{term} (Transact-SQL) — SQL Server Docs",
+            "excerpt": f"Tài liệu kỹ thuật chính thức của Microsoft về cú pháp, hành vi runtime và quy tắc sử dụng {term} trong Microsoft SQL Server / T-SQL.",
+            "url": f"https://learn.microsoft.com/en-us/search/?terms={encoded}&scope=SQL",
+        })
+    if any(k in combined for k in ("postgres", "psql", "pg_", "jsonb", "mvcc", "vacuum")):
+        sources.append({
+            "domain": "PostgreSQL Docs",
+            "badge": "Tài liệu chính thức",
+            "title": f"{term} — PostgreSQL Documentation",
+            "excerpt": f"Đặc tả chi tiết và ví dụ truy vấn chuẩn cho {term} trong hệ quản trị PostgreSQL.",
+            "url": f"https://www.postgresql.org/search/?q={encoded}",
+        })
+    if any(k in combined for k in ("injection", "xss", "csrf", "auth", "token", "owasp", "hash", "encrypt", "jwt", "security", "bảo mật", "mã hóa")):
+        sources.append({
+            "domain": "OWASP Foundation",
+            "badge": "Chuẩn bảo mật",
+            "title": f"{term} — OWASP Security Guide & Cheat Sheet",
+            "excerpt": f"Khuyến nghị phòng chống lỗ hổng và thực hành bảo mật chuẩn quốc tế liên quan đến {term}.",
+            "url": f"https://owasp.org/search/?searchString={encoded}",
+        })
+    if any(k in combined for k in ("http", "html", "css", "js", "javascript", "dom", "api", "rest", "fetch", "cors", "async", "promise", "browser")):
+        sources.append({
+            "domain": "MDN Web Docs",
+            "badge": "Tài liệu chuẩn Web",
+            "title": f"{term} — MDN Web Docs Reference",
+            "excerpt": f"Tham chiếu chuẩn Web, đặc tả giao thức và ví dụ tương thích trình duyệt cho {term}.",
+            "url": f"https://developer.mozilla.org/en-US/search?q={encoded}",
+        })
+    if any(k in combined for k in ("python", "def ", "list", "dict", "numpy", "pytorch", "heuristic", "a*", "bfs", "dfs", "algorithm", "recursion")):
+        sources.append({
+            "domain": "Python Docs",
+            "badge": "Tài liệu chính thức",
+            "title": f"{term} — Python & CS Reference",
+            "excerpt": f"Tài liệu ngôn ngữ Python và thư viện chuẩn minh họa cách hoạt động của {term}.",
+            "url": f"https://docs.python.org/3/search.html?q={encoded}",
+        })
+
+    if wiki_items:
+        for w in wiki_items[:2]:
+            url = w.get("url") or ""
+            if url:
+                sources.append({
+                    "domain": "Wikipedia",
+                    "badge": w.get("citation_badge", "Bách khoa mở"),
+                    "title": w.get("title", f"{term} — Wikipedia"),
+                    "excerpt": w.get("snippet_summary", f"Khái niệm tổng quan về {term}."),
+                    "url": url,
+                })
+
+    if not sources or len(sources) < 2:
+        sources.append({
+            "domain": "Wikipedia",
+            "badge": "Bách khoa học thuật",
+            "title": f"{term} — Wikipedia",
+            "excerpt": f"Định nghĩa tổng quan, lịch sử thuật ngữ và khái niệm liên quan tới {term}.",
+            "url": f"https://en.wikipedia.org/wiki/Special:Search?search={encoded}",
+        })
+        if len(sources) < 2:
+            sources.append({
+                "domain": "Microsoft Learn",
+                "badge": "Tài liệu kỹ thuật",
+                "title": f"Tra cứu tài liệu kỹ thuật: {term}",
+                "excerpt": f"Hướng dẫn kiến trúc và ví dụ áp dụng thực tế cho {term}.",
+                "url": f"https://learn.microsoft.com/en-us/search/?terms={encoded}",
+            })
+
+    # Khử trùng lặp URL giữ thứ tự
+    seen = set()
+    unique = []
+    for s in sources:
+        if s["url"] not in seen:
+            seen.add(s["url"])
+            unique.append(s)
+    return unique[:4]
+
+
+@router.post("/living-dictionary/lookup")
+async def living_dictionary_lookup_endpoint(req: LivingDictionaryLookupRequest):
+    import httpx
+    from app.core.config import settings
+    from app.llm.client import get_llm_client
+    from app.modules.living_dictionary.reference_expander import fetch_wikipedia_reference
+
+    term = (req.selected_text or "").strip()
+    if not term:
+        raise HTTPException(status_code=400, detail="selected_text không được để trống")
+
+    surrounding = (req.surrounding_sentence or "").strip() or term
+    course_title = (req.course_title or "").strip() or "Khoa học Máy tính"
+
+    ai_explanation = ""
+    code_example: Optional[str] = None
+    simple_followup = ""
+    pitfall_followup = ""
+
+    # 1. Sinh giải thích AI bám sát câu văn vừa bôi đen (nếu có LLM khả dụng)
+    provider = settings.LLM_PROVIDER.lower()
+    can_call_llm = provider != "mock" and (provider != "gemini" or bool(settings.GEMINI_API_KEY))
+    if can_call_llm:
+        try:
+            prompt = (
+                f"Môn học: {course_title}\n"
+                f"Thuật ngữ/Cụm từ sinh viên vừa bôi đen: \"{term}\"\n"
+                f"Ngữ cảnh xuất hiện: \"{surrounding}\"\n\n"
+                "Hãy trả về JSON tiếng Việt ngắn gọn, rõ ràng gồm 4 trường:\n"
+                "- ai_explanation: Giải thích 2-4 câu bám sát đúng ngữ cảnh trên, dễ hiểu cho sinh viên CNTT.\n"
+                "- code_example: 1 đoạn code hoặc công thức ngắn minh họa trực quan (hoặc null nếu là khái niệm thuần lý thuyết).\n"
+                "- simple_followup: Trả lời ngắn câu hỏi 'Ví dụ đời thường?' bằng phép ẩn dụ quen thuộc.\n"
+                "- pitfall_followup: Trả lời ngắn câu hỏi 'Lỗi hay gặp khi thi?' nêu bẫy lý thuyết hoặc lỗi thực hành."
+            )
+            llm_client = get_llm_client()
+            structured = await asyncio.to_thread(
+                llm_client.generate_structured,
+                prompt,
+                LivingDictionaryLLMSchema,
+                "Bạn là trợ giảng đại học xuất sắc, giải thích súc tích, chuẩn xác bằng tiếng Việt.",
+            )
+            ai_explanation = (structured.ai_explanation or "").strip()
+            code_example = structured.code_example.strip() if structured.code_example else None
+            simple_followup = (structured.simple_followup or "").strip()
+            pitfall_followup = (structured.pitfall_followup or "").strip()
+        except Exception:
+            pass
+
+    # Fallback tiếng Việt theo ngữ cảnh nếu chưa gọi được LLM
+    if not ai_explanation:
+        is_sql = any(k in f"{term} {surrounding} {course_title}".lower() for k in ("sql", "trancount", "declare", "select", "begin", "rollback", "table", "varchar", "date"))
+        ai_explanation = (
+            f"\"{term}\" là một khái niệm/thành phần quan trọng trong môn {course_title}, xuất hiện trong câu ngữ cảnh: \"{surrounding}\". "
+            "Thành phần này giúp kiểm soát trạng thái, dữ liệu hoặc luồng thực thi chính xác theo đặc tả kỹ thuật của bài giảng."
+        )
+        if is_sql and not code_example:
+            code_example = f"-- Minh họa nhanh với {term}\nBEGIN TRY\n    -- Xử lý lệnh T-SQL\n    PRINT N'Kiểm tra {term}';\nEND TRY\nBEGIN CATCH\n    IF @@TRANCOUNT > 0 ROLLBACK TRAN;\nEND CATCH;"
+        simple_followup = simple_followup or f"Hãy hình dung \"{term}\" giống như chốt kiểm soát an toàn trước khi xác nhận một giao dịch: chỉ khi đủ điều kiện hợp lệ mới ghi kết quả cuối cùng."
+        pitfall_followup = pitfall_followup or f"Sinh viên thường nhầm phạm vi tác dụng hoặc quên kiểm tra điều kiện biên trước khi dùng \"{term}\", đặc biệt trong bài tập tự luận và câu hỏi trắc nghiệm bẫy ngữ cảnh."
+
+    # 2. Lấy trích dẫn Wikipedia song song (timeout ngắn, an toàn khi offline)
+    wiki_items: List[Dict[str, Any]] = []
+    try:
+        async with httpx.AsyncClient(headers={"User-Agent": "StudyAI-VKU/2.0"}, timeout=4.5) as client:
+            vi_res, en_res = await asyncio.gather(
+                fetch_wikipedia_reference(client, term, "vi"),
+                fetch_wikipedia_reference(client, term, "en"),
+                return_exceptions=True,
+            )
+            if isinstance(vi_res, list):
+                wiki_items.extend(vi_res)
+            if isinstance(en_res, list):
+                wiki_items.extend(en_res)
+    except Exception:
+        pass
+
+    trusted_sources = _build_trusted_sources_for_term(
+        term=term,
+        context_sentence=surrounding,
+        course_title=course_title,
+        wiki_items=wiki_items,
+    )
+
+    return {
+        "term": term,
+        "origin_label": req.origin_label or "Từ điển sống",
+        "context_quote": surrounding,
+        "ai_explanation": ai_explanation,
+        "code_example": code_example,
+        "simple_followup": simple_followup,
+        "pitfall_followup": pitfall_followup,
+        "trusted_sources": trusted_sources,
+    }

@@ -76,4 +76,13 @@ Route::prefix('v1')->group(function () {
     Route::post('courses/{courseId}/mindmap/append-slide', [StudyAiUnifiedController::class, 'appendSlideToMindmap']);
     Route::patch('mindmap/branches/{branchId}/seen', [StudyAiUnifiedController::class, 'markMindmapBranchSeen']);
     Route::patch('mindmap/leaves/{leafId}/toggle-mastery', [StudyAiUnifiedController::class, 'toggleMindmapLeafMastery']);
+
+    // =========================================================================
+    // 7. Từ điển sống toàn trình (Tra cứu bôi đen + Kho đã lưu cá nhân - Màn 4)
+    // =========================================================================
+    Route::post('living-dictionary/lookup', [StudyAiUnifiedController::class, 'lookupLivingTerm']);
+    Route::get('courses/{courseId}/living-dictionary/entries', [StudyAiUnifiedController::class, 'getSavedLivingEntries']);
+    Route::post('living-dictionary/entries', [StudyAiUnifiedController::class, 'saveLivingDictionaryEntry']);
+    Route::patch('living-dictionary/entries/{entryId}/toggle-mastery', [StudyAiUnifiedController::class, 'toggleLivingEntryMastery']);
+    Route::delete('living-dictionary/entries/{entryId}', [StudyAiUnifiedController::class, 'deleteLivingEntry']);
 });

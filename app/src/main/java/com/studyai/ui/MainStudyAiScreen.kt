@@ -85,9 +85,13 @@ import com.studyai.ui.capture.VaultSlideFileUi
 import com.studyai.ui.course.CourseManagerBottomSheet
 import com.studyai.ui.course.CourseUiItem
 import com.studyai.ui.dictionary.CourseDictionaryItemUi
-import com.studyai.ui.dictionary.CourseDictionaryScreen
 import com.studyai.ui.dictionary.LivingDictionaryBottomSheet
+import com.studyai.ui.dictionary.LivingDictionaryScreen
 import com.studyai.ui.dictionary.LivingDictionaryUiModel
+import com.studyai.ui.dictionary.LivingLookupBottomSheet
+import com.studyai.ui.dictionary.LivingLookupResult
+import com.studyai.ui.dictionary.LivingVaultFilter
+import com.studyai.ui.dictionary.SavedLivingEntry
 import com.studyai.ui.graph.ConceptEdgeUi
 import com.studyai.ui.graph.ConceptNodeUi
 import com.studyai.ui.graph.KnowledgeRoadmapScreen
@@ -196,6 +200,17 @@ fun MainStudyAiScreen(
     onUpdateInlineNote: (String, String) -> Unit = { _, _ -> },
     onDeleteInlineNote: (String) -> Unit = {},
     onExportMarkdown: (() -> Unit)? = null,
+    savedLivingEntries: List<SavedLivingEntry> = emptyList(),
+    livingVaultFilter: LivingVaultFilter = LivingVaultFilter.ALL,
+    activeLivingLookup: LivingLookupResult? = null,
+    isLookingUpLivingTerm: Boolean = false,
+    onLivingVaultFilterChange: (LivingVaultFilter) -> Unit = {},
+    onLookupLivingTerm: (selectedText: String, surroundingSentence: String, slideNumber: Int?, originLabel: String?) -> Unit = { _, _, _, _ -> },
+    onSaveLivingLookup: (LivingLookupResult) -> Unit = {},
+    onOpenSavedLivingEntry: (SavedLivingEntry) -> Unit = {},
+    onToggleSavedLivingMastery: (Long) -> Unit = {},
+    onDeleteSavedLivingEntry: (Long) -> Unit = {},
+    onDismissLivingLookup: () -> Unit = {},
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
@@ -365,6 +380,29 @@ fun MainStudyAiScreen(
         mindmapState.branches.sumOf { it.leaves.size }
     }
 
+    val quickLookupSuggestions = remember(savedLivingEntries, dictionaryEntries, annotatedSlidePages) {
+        val candidates = linkedSetOf<String>()
+        savedLivingEntries.forEach { entry ->
+            val term = entry.term.trim()
+            if (term.length in 2..36) candidates.add(term)
+        }
+        dictionaryEntries.forEach { item ->
+            val en = item.canonicalNameEn.trim()
+            val vi = item.canonicalNameVi.trim()
+            if (en.length in 2..36) candidates.add(en)
+            if (vi.length in 2..36) candidates.add(vi)
+        }
+        annotatedSlidePages.forEach { page ->
+            page.blocks.forEach { block ->
+                block.highlights.forEach { hl ->
+                    val term = hl.term.trim()
+                    if (term.length in 2..36) candidates.add(term)
+                }
+            }
+        }
+        candidates.take(6).toList()
+    }
+
     val handleNavigateToChapterSlide: (Int, Int, Float) -> Unit = { lecId, slideNo, sec ->
         selectedTab = StudyAiTab.NOTES
         onNavigateToChapterSlide(lecId, slideNo, sec)
@@ -380,7 +418,7 @@ fun MainStudyAiScreen(
                         StudyAiTab.NOTES -> lectureSubtitleForNotes
                         StudyAiTab.CAPTURE -> "Thu âm & Xử lý bài giảng"
                         StudyAiTab.ROADMAP -> "${mindmapState.branches.size} nhánh bài giảng • $totalMindmapConcepts khái niệm"
-                        else -> currentCourse.meta
+                        StudyAiTab.DICTIONARY -> "Từ điển sống • ${savedLivingEntries.size} mục đã lưu"
                     },
                     activeTab = selectedTab,
                     isDarkTheme = isDarkTheme,
@@ -589,6 +627,22 @@ fun MainStudyAiScreen(
                                 },
                                 onUpdateNote = onUpdateInlineNote,
                                 onDeleteNote = onDeleteInlineNote,
+                                onLookupSelectedText = { selectedText, surroundingSentence, slideNo ->
+                                    val resolvedOrigin = if (slideNo != null) {
+                                        val cleanLec = currentLectureTitle
+                                            .replace(Regex("^Bài\\s*#?\\d+\\s*[•:\\-–]\\s*", RegexOption.IGNORE_CASE), "")
+                                            .trim()
+                                        if (cleanLec.isNotBlank()) "Slide $slideNo • $cleanLec" else "Slide $slideNo"
+                                    } else {
+                                        lectureSubtitleForNotes
+                                    }
+                                    onLookupLivingTerm(
+                                        selectedText,
+                                        surroundingSentence,
+                                        slideNo,
+                                        resolvedOrigin,
+                                    )
+                                },
                                 onExportMarkdown = null,
                             )
                         }
@@ -667,11 +721,28 @@ fun MainStudyAiScreen(
                         }
 
                         StudyAiTab.DICTIONARY -> {
-                            CourseDictionaryScreen(
+                            LivingDictionaryScreen(
                                 courseTitle = currentCourse.name,
-                                dictionaryEntries = dictionaryEntries,
-                                onSelectConcept = onSelectConcept,
-                                onNavigateToChapterSlide = handleNavigateToChapterSlide,
+                                savedEntries = savedLivingEntries,
+                                quickSuggestions = quickLookupSuggestions,
+                                activeFilter = livingVaultFilter,
+                                onFilterChange = onLivingVaultFilterChange,
+                                onQuickLookup = { query ->
+                                    onLookupLivingTerm(
+                                        query,
+                                        query,
+                                        null,
+                                        "Tra nhanh trong Từ điển sống",
+                                    )
+                                },
+                                onOpenEntry = onOpenSavedLivingEntry,
+                                onToggleMastered = onToggleSavedLivingMastery,
+                                onDeleteEntry = onDeleteSavedLivingEntry,
+                                onJumpToSlide = { lecId, slideNo ->
+                                    val resolvedLectureId = (lecId ?: currentLectureId.toLong()).toInt().coerceAtLeast(1)
+                                    val resolvedSlideNo = (slideNo ?: 1).coerceAtLeast(1)
+                                    handleNavigateToChapterSlide(resolvedLectureId, resolvedSlideNo, 0f)
+                                },
                             )
                         }
                     }
@@ -682,6 +753,27 @@ fun MainStudyAiScreen(
                         entry = entry,
                         onDismiss = onDismissConceptDetail,
                         onNavigateToChapterSlide = handleNavigateToChapterSlide,
+                    )
+                }
+
+                activeLivingLookup?.let { lookupResult ->
+                    val isAlreadySaved = savedLivingEntries.any { saved ->
+                        (lookupResult.id != null && saved.id == lookupResult.id) ||
+                            saved.term.equals(lookupResult.term, ignoreCase = true)
+                    }
+                    LivingLookupBottomSheet(
+                        result = lookupResult,
+                        isAlreadySaved = isAlreadySaved,
+                        isLoading = isLookingUpLivingTerm,
+                        jumpButtonLabel = if (lookupResult.slideNumber != null) "Về đoạn đã bôi" else "Về trang Ghi chú",
+                        onDismiss = onDismissLivingLookup,
+                        onJumpToOrigin = { lecId, slideNo ->
+                            onDismissLivingLookup()
+                            val resolvedLectureId = (lecId ?: currentLectureId.toLong()).toInt().coerceAtLeast(1)
+                            val resolvedSlideNo = (slideNo ?: 1).coerceAtLeast(1)
+                            handleNavigateToChapterSlide(resolvedLectureId, resolvedSlideNo, 0f)
+                        },
+                        onSaveToVault = onSaveLivingLookup,
                     )
                 }
 
@@ -1225,89 +1317,23 @@ private fun StudyAiTopHeader(
                         }
                     }
 
-                    else -> {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Box {
-                                Surface(
-                                    onClick = { langMenuExpanded = true },
-                                    shape = RoundedCornerShape(999.dp),
-                                    color = MaterialTheme.colorScheme.secondaryContainer,
-                                    border = BorderStroke(
-                                        width = 1.dp,
-                                        color = StudyAiPalette.Teal.copy(alpha = 0.35f),
-                                    ),
-                                ) {
-                                    Row(
-                                        modifier = Modifier.padding(horizontal = 9.dp, vertical = 6.dp),
-                                        verticalAlignment = Alignment.CenterVertically,
-                                    ) {
-                                        Icon(
-                                            imageVector = Icons.Default.Translate,
-                                            contentDescription = "Ngôn ngữ bài giảng",
-                                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                                            modifier = Modifier.size(14.dp),
-                                        )
-                                        Spacer(modifier = Modifier.width(4.dp))
-                                        Text(
-                                            text = selectedLanguageMode.shortLabel,
-                                            style = MaterialTheme.typography.labelMedium,
-                                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                                        )
-                                    }
-                                }
-
-                                DropdownMenu(
-                                    expanded = langMenuExpanded,
-                                    onDismissRequest = { langMenuExpanded = false },
-                                ) {
-                                    LectureLanguageMode.values().forEach { mode ->
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(
-                                                    text = mode.fullLabel,
-                                                    fontWeight = if (mode == selectedLanguageMode) FontWeight.SemiBold else FontWeight.Normal,
-                                                )
-                                            },
-                                            trailingIcon = if (mode == selectedLanguageMode) {
-                                                {
-                                                    Icon(
-                                                        imageVector = Icons.Default.Check,
-                                                        contentDescription = null,
-                                                        tint = StudyAiPalette.PrimaryCobalt,
-                                                        modifier = Modifier.size(18.dp),
-                                                    )
-                                                }
-                                            } else null,
-                                            onClick = {
-                                                langMenuExpanded = false
-                                                onLanguageModeChange(mode)
-                                            },
-                                        )
-                                    }
-                                }
-                            }
-
-                            IconButton(
-                                onClick = onOpenServerSettings,
-                                modifier = Modifier.size(40.dp),
-                            ) {
+                    StudyAiTab.DICTIONARY -> {
+                        Surface(
+                            onClick = onOpenServerSettings,
+                            shape = CircleShape,
+                            color = MaterialTheme.colorScheme.surfaceVariant,
+                            border = BorderStroke(
+                                1.dp,
+                                MaterialTheme.colorScheme.outline.copy(alpha = 0.6f),
+                            ),
+                            modifier = Modifier.size(34.dp),
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
                                 Icon(
                                     imageVector = Icons.Default.Dns,
-                                    contentDescription = "Cấu hình Server URL",
+                                    contentDescription = "Cấu hình Server URL động",
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(19.dp),
-                                )
-                            }
-
-                            IconButton(
-                                onClick = onToggleDarkTheme,
-                                modifier = Modifier.size(40.dp),
-                            ) {
-                                Icon(
-                                    imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
-                                    contentDescription = if (isDarkTheme) "Chuyển giao diện sáng" else "Chuyển giao diện tối",
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(19.dp),
+                                    modifier = Modifier.size(17.dp),
                                 )
                             }
                         }

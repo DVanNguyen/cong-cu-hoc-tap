@@ -2115,4 +2115,411 @@ class StudyAiUnifiedController extends Controller
             'is_mastered' => $nextMastered,
         ]);
     }
+
+    /**
+     * =========================================================================
+     * 6. TỪ ĐIỂN SỐNG TOÀN TRÌNH (TRA CỨU BÔI ĐEN & KHO ĐÃ LƯU - MÀN HÌNH 4)
+     * =========================================================================
+     */
+    private function buildTrustedSourcesFallback(string $term, string $surrounding, string $courseTitle): array
+    {
+        $combined = mb_strtolower("{$term} {$surrounding} {$courseTitle}");
+        $encoded = urlencode($term);
+        $sources = [];
+
+        if (preg_match('/(sql|tsql|t-sql|trancount|declare|select|stored|trigger|transaction|varchar|datetime)/i', $combined)) {
+            $sources[] = [
+                'domain' => 'Microsoft Learn',
+                'badge' => 'Tài liệu chính thức',
+                'title' => "{$term} (Transact-SQL) — SQL Server Docs",
+                'excerpt' => "Tài liệu kỹ thuật chính thức của Microsoft về cú pháp và hành vi của {$term} trong SQL Server / T-SQL.",
+                'url' => "https://learn.microsoft.com/en-us/search/?terms={$encoded}&scope=SQL",
+            ];
+        }
+        if (preg_match('/(postgres|psql|pg_|jsonb|mvcc|vacuum)/i', $combined)) {
+            $sources[] = [
+                'domain' => 'PostgreSQL Docs',
+                'badge' => 'Tài liệu chính thức',
+                'title' => "{$term} — PostgreSQL Documentation",
+                'excerpt' => "Đặc tả kỹ thuật và ví dụ truy vấn cho {$term} trong PostgreSQL.",
+                'url' => "https://www.postgresql.org/search/?q={$encoded}",
+            ];
+        }
+        if (preg_match('/(injection|xss|csrf|auth|token|owasp|hash|encrypt|jwt|security|bảo mật|mã hóa)/iu', $combined)) {
+            $sources[] = [
+                'domain' => 'OWASP Foundation',
+                'badge' => 'Chuẩn bảo mật',
+                'title' => "{$term} — OWASP Cheat Sheet Series",
+                'excerpt' => "Khuyến nghị phòng chống lỗ hổng và chuẩn bảo mật quốc tế cho {$term}.",
+                'url' => "https://owasp.org/search/?searchString={$encoded}",
+            ];
+        }
+        if (preg_match('/(http|html|css|js|javascript|dom|api|rest|fetch|cors|async|promise)/i', $combined)) {
+            $sources[] = [
+                'domain' => 'MDN Web Docs',
+                'badge' => 'Tài liệu chuẩn Web',
+                'title' => "{$term} — MDN Web Docs Reference",
+                'excerpt' => "Đặc tả kỹ thuật chuẩn Web và ví dụ mã nguồn cho {$term}.",
+                'url' => "https://developer.mozilla.org/en-US/search?q={$encoded}",
+            ];
+        }
+
+        $sources[] = [
+            'domain' => 'Wikipedia',
+            'badge' => 'Bách khoa học thuật',
+            'title' => "{$term} — Wikipedia",
+            'excerpt' => "Tổng quan định nghĩa, nguồn gốc và kiến thức nền tảng liên quan tới {$term}.",
+            'url' => "https://en.wikipedia.org/wiki/Special:Search?search={$encoded}",
+        ];
+
+        if (count($sources) < 2) {
+            $sources[] = [
+                'domain' => 'Microsoft Learn',
+                'badge' => 'Tài liệu kỹ thuật',
+                'title' => "Tham chiếu kỹ thuật: {$term}",
+                'excerpt' => "Tài liệu hướng dẫn chuyên sâu và ví dụ ứng dụng cho {$term}.",
+                'url' => "https://learn.microsoft.com/en-us/search/?terms={$encoded}",
+            ];
+        }
+
+        return array_slice($sources, 0, 4);
+    }
+
+    public function lookupLivingTerm(Request $request)
+    {
+        $validated = $request->validate([
+            'course_id' => 'nullable|integer',
+            'lecture_id' => 'nullable|integer',
+            'slide_number' => 'nullable|integer',
+            'selected_text' => 'required|string|max:240',
+            'surrounding_sentence' => 'nullable|string|max:2000',
+            'origin_label' => 'nullable|string|max:120',
+        ]);
+
+        $term = trim((string) $validated['selected_text']);
+        $courseId = !empty($validated['course_id']) ? (int) $validated['course_id'] : null;
+        $lectureId = !empty($validated['lecture_id']) ? (int) $validated['lecture_id'] : null;
+        $slideNum = !empty($validated['slide_number']) ? (int) $validated['slide_number'] : null;
+        $surrounding = trim((string) ($validated['surrounding_sentence'] ?? '')) ?: $term;
+
+        $course = $courseId ? DB::table('courses')->where('id', $courseId)->first() : null;
+        $courseTitle = $course ? (string) $course->name : 'Khoa học Máy tính';
+
+        $originLabel = trim((string) ($validated['origin_label'] ?? ''));
+        if ($originLabel === '') {
+            if ($lectureId && $slideNum) {
+                $originLabel = "Bài {$lectureId} • Slide {$slideNum}";
+            } elseif ($slideNum) {
+                $originLabel = "Slide {$slideNum}";
+            } elseif ($lectureId) {
+                $originLabel = "Bài {$lectureId}";
+            } else {
+                $originLabel = 'Từ điển sống';
+            }
+        }
+
+        $aiPayload = null;
+        $aiUrl = rtrim((string) env('AI_SERVICE_URL', 'http://127.0.0.1:8001'), '/');
+        try {
+            $resp = Http::timeout(22)->post("{$aiUrl}/ai/living-dictionary/lookup", [
+                'selected_text' => $term,
+                'surrounding_sentence' => $surrounding,
+                'course_title' => $courseTitle,
+                'origin_label' => $originLabel,
+            ]);
+            if ($resp->successful()) {
+                $aiPayload = $resp->json();
+            }
+        } catch (\Throwable $e) {
+            Log::warning("lookupLivingTerm AI fallback for '{$term}': " . $e->getMessage());
+        }
+
+        $aiExplanation = trim((string) ($aiPayload['ai_explanation'] ?? ''));
+        $codeExample = $aiPayload['code_example'] ?? null;
+        $simpleFollowup = trim((string) ($aiPayload['simple_followup'] ?? ''));
+        $pitfallFollowup = trim((string) ($aiPayload['pitfall_followup'] ?? ''));
+        $trustedSources = is_array($aiPayload['trusted_sources'] ?? null) ? $aiPayload['trusted_sources'] : [];
+
+        // Kiểm tra xem thuật ngữ này đã có sẵn trong concepts / dictionary_entries hay chưa nếu AI server đang tắt
+        if ($aiExplanation === '') {
+            $existingConcept = DB::table('concepts as c')
+                ->leftJoin('dictionary_entries as de', 'c.id', '=', 'de.concept_id')
+                ->when($courseId, fn ($q) => $q->where('c.course_id', $courseId))
+                ->where(function ($q) use ($term) {
+                    $q->where('c.name', 'like', "%{$term}%")
+                      ->orWhere('c.canonical_name', 'like', "%{$term}%");
+                })
+                ->select('c.definition_summary', 'de.ai_deep_explanation', 'de.intuition_example')
+                ->first();
+
+            if ($existingConcept && !empty($existingConcept->ai_deep_explanation)) {
+                $aiExplanation = (string) $existingConcept->ai_deep_explanation;
+                if ($simpleFollowup === '' && !empty($existingConcept->intuition_example)) {
+                    $simpleFollowup = (string) $existingConcept->intuition_example;
+                }
+            }
+        }
+
+        if ($aiExplanation === '') {
+            $isSql = (bool) preg_match('/(sql|trancount|declare|select|begin|rollback|table|varchar|date)/i', "{$term} {$surrounding} {$courseTitle}");
+            $aiExplanation = "\"{$term}\" là thuật ngữ chuyên môn trong học phần {$courseTitle}, xuất hiện ở ngữ cảnh: \"{$surrounding}\". Thành phần này quyết định hành vi xử lý dữ liệu và logic thực thi chuẩn xác trong bài giảng.";
+            if ($isSql && empty($codeExample)) {
+                $codeExample = "-- Minh họa áp dụng {$term}\nBEGIN TRY\n    PRINT N'Kiểm tra {$term}';\nEND TRY\nBEGIN CATCH\n    IF @@TRANCOUNT > 0 ROLLBACK TRAN;\nEND CATCH;";
+            }
+        }
+        if ($simpleFollowup === '') {
+            $simpleFollowup = "Hình dung \"{$term}\" giống như chốt kiểm soát quy trình: giúp đảm bảo các bước xử lý trước khi ghi nhận kết quả luôn nhất quán và an toàn.";
+        }
+        if ($pitfallFollowup === '') {
+            $pitfallFollowup = "Sinh viên dễ nhầm phạm vi áp dụng hoặc bỏ qua điều kiện biên khi viết/đọc \"{$term}\" trong đề thi trắc nghiệm lẫn tự luận.";
+        }
+        if (empty($trustedSources)) {
+            $trustedSources = $this->buildTrustedSourcesFallback($term, $surrounding, $courseTitle);
+        }
+
+        return response()->json([
+            'term' => $term,
+            'origin_label' => $originLabel,
+            'lecture_id' => $lectureId,
+            'slide_number' => $slideNum,
+            'context_quote' => $surrounding,
+            'ai_explanation' => $aiExplanation,
+            'code_example' => $codeExample,
+            'simple_followup' => $simpleFollowup,
+            'pitfall_followup' => $pitfallFollowup,
+            'trusted_sources' => $trustedSources,
+        ]);
+    }
+
+    public function getSavedLivingEntries(int $courseId)
+    {
+        if (!Schema::hasTable('living_dictionary_entries')) {
+            return response()->json([
+                'course_id' => $courseId,
+                'entries' => [],
+            ]);
+        }
+
+        // Nếu môn học chưa có bản ghi cá nhân nào, tự động đồng bộ từ các khái niệm cốt lõi đã trích xuất của môn
+        $existingCount = DB::table('living_dictionary_entries')
+            ->where('course_id', $courseId)
+            ->count();
+
+        if ($existingCount === 0) {
+            $courseConcepts = DB::table('concepts as c')
+                ->leftJoin('dictionary_entries as de', 'c.id', '=', 'de.concept_id')
+                ->where('c.course_id', $courseId)
+                ->select(
+                    'c.id',
+                    'c.canonical_name',
+                    'c.name',
+                    'c.definition_summary',
+                    'c.first_defined_lecture_order',
+                    'c.first_defined_slide_id',
+                    'de.lecturer_oral_explanation',
+                    'de.ai_deep_explanation',
+                    'de.intuition_example'
+                )
+                ->get();
+
+            foreach ($courseConcepts as $cc) {
+                $termName = trim((string) ($cc->canonical_name ?: $cc->name));
+                if ($termName === '') {
+                    continue;
+                }
+                $lecNo = (int) ($cc->first_defined_lecture_order ?: 1);
+                $slideNo = (int) ($cc->first_defined_slide_id ?: 1);
+                $refs = DB::table('external_references')
+                    ->where('concept_id', $cc->id)
+                    ->orderByDesc('final_rank_score')
+                    ->get()
+                    ->map(fn ($r) => [
+                        'domain' => (string) ($r->domain_name ?: $r->source_provider ?: 'Học thuật'),
+                        'badge' => (string) ($r->citation_badge ?: 'Tài liệu tham khảo'),
+                        'title' => (string) $r->title,
+                        'excerpt' => (string) ($r->snippet_summary ?: ''),
+                        'url' => (string) $r->url,
+                    ])
+                    ->values()
+                    ->all();
+
+                $aiExp = trim((string) ($cc->ai_deep_explanation ?: $cc->definition_summary ?: $termName));
+                $ctx = trim((string) ($cc->lecturer_oral_explanation ?: $cc->definition_summary ?: $termName));
+                DB::table('living_dictionary_entries')->insert([
+                    'course_id' => $courseId,
+                    'lecture_id' => $lecNo,
+                    'slide_number' => $slideNo,
+                    'origin_label' => "Bài {$lecNo} • Slide {$slideNo}",
+                    'term' => mb_substr($termName, 0, 220),
+                    'context_quote' => $ctx,
+                    'ai_explanation' => $aiExp,
+                    'code_example' => null,
+                    'simple_followup' => $cc->intuition_example ? (string) $cc->intuition_example : null,
+                    'pitfall_followup' => null,
+                    'trusted_sources_json' => json_encode($refs, JSON_UNESCAPED_UNICODE),
+                    'is_mastered' => false,
+                    'is_new' => false,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ]);
+            }
+        }
+
+        $rows = DB::table('living_dictionary_entries')
+            ->where(function ($q) use ($courseId) {
+                $q->where('course_id', $courseId)->orWhereNull('course_id');
+            })
+            ->orderByDesc('is_new')
+            ->orderByDesc('id')
+            ->get();
+
+        $entries = $rows->map(function ($r) {
+            $sources = json_decode((string) ($r->trusted_sources_json ?? '[]'), true);
+            return [
+                'id' => (int) $r->id,
+                'term' => (string) $r->term,
+                'origin_label' => (string) ($r->origin_label ?: 'Từ điển sống'),
+                'lecture_id' => $r->lecture_id !== null ? (int) $r->lecture_id : null,
+                'slide_number' => $r->slide_number !== null ? (int) $r->slide_number : null,
+                'context_quote' => (string) ($r->context_quote ?? ''),
+                'ai_explanation' => (string) $r->ai_explanation,
+                'code_example' => $r->code_example !== null ? (string) $r->code_example : null,
+                'simple_followup' => $r->simple_followup !== null ? (string) $r->simple_followup : null,
+                'pitfall_followup' => $r->pitfall_followup !== null ? (string) $r->pitfall_followup : null,
+                'trusted_sources' => is_array($sources) ? $sources : [],
+                'is_mastered' => (bool) $r->is_mastered,
+                'is_new' => (bool) $r->is_new,
+            ];
+        })->values();
+
+        return response()->json([
+            'course_id' => $courseId,
+            'entries' => $entries,
+        ]);
+    }
+
+    public function saveLivingDictionaryEntry(Request $request)
+    {
+        if (!Schema::hasTable('living_dictionary_entries')) {
+            return response()->json(['error' => 'Living dictionary table missing'], 500);
+        }
+
+        $validated = $request->validate([
+            'course_id' => 'nullable|integer',
+            'lecture_id' => 'nullable|integer',
+            'slide_number' => 'nullable|integer',
+            'origin_label' => 'nullable|string|max:120',
+            'term' => 'required|string|max:220',
+            'context_quote' => 'nullable|string|max:2000',
+            'ai_explanation' => 'required|string',
+            'code_example' => 'nullable|string',
+            'simple_followup' => 'nullable|string',
+            'pitfall_followup' => 'nullable|string',
+            'trusted_sources' => 'nullable|array',
+        ]);
+
+        $courseId = !empty($validated['course_id']) ? (int) $validated['course_id'] : null;
+        if ($courseId !== null && !DB::table('courses')->where('id', $courseId)->exists()) {
+            $courseId = null;
+        }
+
+        $term = trim((string) $validated['term']);
+        $originLabel = trim((string) ($validated['origin_label'] ?? 'Từ điển sống')) ?: 'Từ điển sống';
+
+        $existing = DB::table('living_dictionary_entries')
+            ->where(function ($q) use ($courseId) {
+                if ($courseId === null) {
+                    $q->whereNull('course_id');
+                } else {
+                    $q->where('course_id', $courseId);
+                }
+            })
+            ->whereRaw('LOWER(term) = ?', [mb_strtolower($term)])
+            ->first();
+
+        $payload = [
+            'course_id' => $courseId,
+            'lecture_id' => !empty($validated['lecture_id']) ? (int) $validated['lecture_id'] : null,
+            'slide_number' => !empty($validated['slide_number']) ? (int) $validated['slide_number'] : null,
+            'origin_label' => $originLabel,
+            'term' => $term,
+            'context_quote' => (string) ($validated['context_quote'] ?? ''),
+            'ai_explanation' => (string) $validated['ai_explanation'],
+            'code_example' => $validated['code_example'] ?? null,
+            'simple_followup' => $validated['simple_followup'] ?? null,
+            'pitfall_followup' => $validated['pitfall_followup'] ?? null,
+            'trusted_sources_json' => json_encode($validated['trusted_sources'] ?? [], JSON_UNESCAPED_UNICODE),
+            'is_new' => true,
+            'updated_at' => now(),
+        ];
+
+        if ($existing) {
+            DB::table('living_dictionary_entries')->where('id', $existing->id)->update($payload);
+            $entryId = (int) $existing->id;
+            $isMastered = (bool) $existing->is_mastered;
+        } else {
+            $payload['is_mastered'] = false;
+            $payload['created_at'] = now();
+            $entryId = (int) DB::table('living_dictionary_entries')->insertGetId($payload);
+            $isMastered = false;
+        }
+
+        return response()->json([
+            'id' => $entryId,
+            'term' => $term,
+            'origin_label' => $originLabel,
+            'lecture_id' => $payload['lecture_id'],
+            'slide_number' => $payload['slide_number'],
+            'context_quote' => $payload['context_quote'],
+            'ai_explanation' => $payload['ai_explanation'],
+            'code_example' => $payload['code_example'],
+            'simple_followup' => $payload['simple_followup'],
+            'pitfall_followup' => $payload['pitfall_followup'],
+            'trusted_sources' => $validated['trusted_sources'] ?? [],
+            'is_mastered' => $isMastered,
+            'is_new' => true,
+        ], 201);
+    }
+
+    public function toggleLivingEntryMastery(int $entryId)
+    {
+        if (!Schema::hasTable('living_dictionary_entries')) {
+            return response()->json(['error' => 'Living dictionary table missing'], 404);
+        }
+        $row = DB::table('living_dictionary_entries')->where('id', $entryId)->first();
+        if (!$row) {
+            return response()->json(['error' => 'Entry not found'], 404);
+        }
+
+        $nextMastered = !((bool) $row->is_mastered);
+        DB::table('living_dictionary_entries')
+            ->where('id', $entryId)
+            ->update([
+                'is_mastered' => $nextMastered,
+                'is_new' => false,
+                'updated_at' => now(),
+            ]);
+
+        return response()->json([
+            'id' => $entryId,
+            'is_mastered' => $nextMastered,
+            'is_new' => false,
+        ]);
+    }
+
+    public function deleteLivingEntry(int $entryId)
+    {
+        if (!Schema::hasTable('living_dictionary_entries')) {
+            return response()->json(['error' => 'Living dictionary table missing'], 404);
+        }
+        $deleted = DB::table('living_dictionary_entries')->where('id', $entryId)->delete();
+        if (!$deleted) {
+            return response()->json(['error' => 'Entry not found'], 404);
+        }
+
+        return response()->json([
+            'deleted' => true,
+            'id' => $entryId,
+        ]);
+    }
 }

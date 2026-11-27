@@ -87,6 +87,10 @@ class MainActivity : ComponentActivity() {
                     val mindmapState by viewModel.mindmapState.collectAsState()
                     val dictionaryEntries by viewModel.dictionaryEntries.collectAsState()
                     val selectedConceptDetail by viewModel.selectedConceptDetail.collectAsState()
+                    val savedLivingEntries by viewModel.savedLivingEntries.collectAsState()
+                    val livingVaultFilter by viewModel.livingVaultFilter.collectAsState()
+                    val activeLivingLookup by viewModel.activeLivingLookup.collectAsState()
+                    val isLookingUpLivingTerm by viewModel.isLookingUpLivingTerm.collectAsState()
                     val isLoading by viewModel.isLoading.collectAsState()
                     val errorMessage by viewModel.errorMessage.collectAsState()
                     val courses by viewModel.courses.collectAsState()
@@ -212,7 +216,27 @@ class MainActivity : ComponentActivity() {
                             },
                             onExportMarkdown = {
                                 viewModel.exportAndShareMarkdown(this@MainActivity, currentLectureId)
-                            }
+                            },
+                            savedLivingEntries = savedLivingEntries,
+                            livingVaultFilter = livingVaultFilter,
+                            activeLivingLookup = activeLivingLookup,
+                            isLookingUpLivingTerm = isLookingUpLivingTerm,
+                            onLivingVaultFilterChange = { filter -> viewModel.setLivingVaultFilter(filter) },
+                            onLookupLivingTerm = { selectedText, surroundingSentence, slideNo, originLabel ->
+                                viewModel.lookupLivingTerm(
+                                    selectedText = selectedText,
+                                    surroundingSentence = surroundingSentence,
+                                    courseId = selectedCourseId,
+                                    lectureId = currentLectureId,
+                                    slideNumber = slideNo,
+                                    originLabel = originLabel,
+                                )
+                            },
+                            onSaveLivingLookup = { result -> viewModel.saveLivingLookupToVault(result) },
+                            onOpenSavedLivingEntry = { entry -> viewModel.openSavedLivingEntry(entry) },
+                            onToggleSavedLivingMastery = { entryId -> viewModel.toggleSavedLivingMastery(entryId) },
+                            onDeleteSavedLivingEntry = { entryId -> viewModel.deleteSavedLivingEntry(entryId) },
+                            onDismissLivingLookup = { viewModel.dismissLivingLookup() },
                         )
                     }
                 }

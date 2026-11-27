@@ -6,10 +6,13 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -24,19 +28,21 @@ import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.AccountTree
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Lightbulb
 import androidx.compose.material.icons.filled.Public
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.RecordVoiceOver
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -54,15 +60,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.studyai.ui.theme.StudyAiExtras
+import com.studyai.ui.theme.StudyAiPalette
 
 // =========================================================================
-// 1. DATA MODELS CHO LIÊN KẾT CHÉO LIÊN CHƯƠNG & TỪ ĐIỂN SỐNG
+// 1. DATA MODELS TƯƠNG THÍCH CHO LIÊN KẾT CHÉO & KHÁI NIỆM MÔN HỌC
 // =========================================================================
 
 data class CrossChapterLinkUiModel(
@@ -117,7 +129,7 @@ data class CourseDictionaryItemUi(
 )
 
 // =========================================================================
-// 2. COMPONENT LIÊN KẾT CHÉO KIẾN THỨC GIỮA CÁC CHƯƠNG
+// 2. COMPONENT LIÊN KẾT CHÉO KIẾN THỨC GIỮA CÁC CHƯƠNG (GIỮ TƯƠNG THÍCH)
 // =========================================================================
 
 @Composable
@@ -203,10 +215,6 @@ fun CrossChapterLinksSection(
     }
 }
 
-// =========================================================================
-// 3. BOTTOM SHEET "TỪ ĐIỂN SỐNG & TÀI LIỆU THAM KHẢO MỞ RỘNG"
-// =========================================================================
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LivingDictionaryBottomSheet(
@@ -220,7 +228,7 @@ fun LivingDictionaryBottomSheet(
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 22.dp, topEnd = 22.dp)
+        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
     ) {
         LazyColumn(
             modifier = Modifier
@@ -381,10 +389,6 @@ fun LivingDictionaryBottomSheet(
     }
 }
 
-// =========================================================================
-// 4. COMPONENT CARD TÀI LIỆU THAM KHẢO NGOÀI
-// =========================================================================
-
 @Composable
 fun ExternalReferenceCard(
     ref: ExternalReferenceUiModel,
@@ -412,10 +416,7 @@ fun ExternalReferenceCard(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Surface(
-                    color = badgeBg,
-                    shape = RoundedCornerShape(8.dp)
-                ) {
+                Surface(color = badgeBg, shape = RoundedCornerShape(8.dp)) {
                     Text(
                         text = "${ref.citationBadge} • ${ref.domainName}",
                         style = MaterialTheme.typography.labelSmall,
@@ -435,20 +436,13 @@ fun ExternalReferenceCard(
             }
 
             Spacer(modifier = Modifier.height(6.dp))
-
-            Text(
-                text = ref.title,
-                style = MaterialTheme.typography.titleSmall,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
+            Text(text = ref.title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
             Text(
                 text = ref.snippetSummary,
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 4.dp)
             )
-
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -475,260 +469,466 @@ fun ExternalReferenceCard(
 }
 
 // =========================================================================
-// 5. TOÀN CẢNH MÀN HÌNH TỪ ĐIỂN SỐNG
+// 3. MÀN HÌNH 4 CHÍNH: TỪ ĐIỂN SỐNG + KHO ĐÃ LƯU CÁ NHÂN (SPEC MÀN 4)
 // =========================================================================
 
 @Composable
-fun CourseDictionaryScreen(
+fun LivingDictionaryScreen(
     courseTitle: String = "Môn học",
-    dictionaryEntries: List<CourseDictionaryItemUi>,
-    onSelectConcept: (Long) -> Unit,
-    onNavigateToChapterSlide: (Int, Int, Float) -> Unit = { _, _, _ -> }
+    savedEntries: List<SavedLivingEntry>,
+    quickSuggestions: List<String> = emptyList(),
+    activeFilter: LivingVaultFilter = LivingVaultFilter.ALL,
+    onFilterChange: (LivingVaultFilter) -> Unit = {},
+    onQuickLookup: (String) -> Unit = {},
+    onOpenEntry: (SavedLivingEntry) -> Unit = {},
+    onToggleMastered: (Long) -> Unit = {},
+    onDeleteEntry: (Long) -> Unit = {},
+    onJumpToSlide: (lectureId: Long?, slideNumber: Int?) -> Unit = { _, _ -> },
 ) {
-    var searchQuery by remember { mutableStateOf("") }
-    var selectedFilter by remember { mutableStateOf("ALL") }
+    val isDark = StudyAiExtras.isDark
+    val surfaceColor = MaterialTheme.colorScheme.surface
+    val surfaceSubtle = MaterialTheme.colorScheme.surfaceVariant
+    val borderColor = MaterialTheme.colorScheme.outline
+    val primarySoft = if (isDark) StudyAiPalette.PrimarySoftDark else StudyAiPalette.PrimarySoftLight
+    val primaryText = if (isDark) StudyAiPalette.PrimaryTextDark else StudyAiPalette.PrimaryTextLight
+    val tealSoft = if (isDark) StudyAiPalette.TealSoftDark else StudyAiPalette.TealSoftLight
+    val tealText = if (isDark) StudyAiPalette.TealTextDark else StudyAiPalette.TealTextLight
+    val amberSoft = if (isDark) StudyAiPalette.AmberSoftDark else StudyAiPalette.AmberSoftLight
+    val amberText = if (isDark) StudyAiPalette.AmberTextDark else StudyAiPalette.AmberTextLight
 
-    val filteredEntries = remember(dictionaryEntries, searchQuery, selectedFilter) {
-        dictionaryEntries.filter { item ->
-            val matchQuery = searchQuery.isBlank() ||
-                    item.canonicalNameVi.contains(searchQuery, ignoreCase = true) ||
-                    item.canonicalNameEn.contains(searchQuery, ignoreCase = true) ||
-                    item.aliases.any { it.contains(searchQuery, ignoreCase = true) }
+    var queryDraft by remember { mutableStateOf("") }
 
-            val isAcademic = item.referencesCount >= 3 || item.abstractnessScore >= 0.75f
-            val matchFilter = when (selectedFilter) {
-                "LECTURE" -> !isAcademic
-                "ACADEMIC" -> isAcademic
-                else -> true
+    val newCount = remember(savedEntries) { savedEntries.count { it.isNew } }
+    val reviewCount = remember(savedEntries) { savedEntries.count { !it.isMastered } }
+    val masteredCount = remember(savedEntries) { savedEntries.count { it.isMastered } }
+
+    val filteredEntries = remember(savedEntries, activeFilter, queryDraft) {
+        val q = queryDraft.trim()
+        savedEntries.filter { entry ->
+            val matchFilter = when (activeFilter) {
+                LivingVaultFilter.ALL -> true
+                LivingVaultFilter.NEW -> entry.isNew
+                LivingVaultFilter.REVIEW -> !entry.isMastered
+                LivingVaultFilter.MASTERED -> entry.isMastered
             }
-            matchQuery && matchFilter
+            val matchQuery = q.isEmpty() ||
+                entry.term.contains(q, ignoreCase = true) ||
+                entry.contextQuote.contains(q, ignoreCase = true) ||
+                entry.summary.contains(q, ignoreCase = true)
+            matchFilter && matchQuery
         }
     }
 
-    Column(
+    LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(horizontal = 16.dp)
+            .background(MaterialTheme.colorScheme.background),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Spacer(modifier = Modifier.height(10.dp))
-
-        OutlinedTextField(
-            value = searchQuery,
-            onValueChange = { searchQuery = it },
-            placeholder = { Text("Tra cứu thuật ngữ hoặc khái niệm...", style = MaterialTheme.typography.bodySmall) },
-            leadingIcon = {
-                Icon(
-                    imageVector = Icons.Default.Search,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(20.dp)
-                )
-            },
-            trailingIcon = if (searchQuery.isNotEmpty()) {
-                {
-                    IconButton(onClick = { searchQuery = "" }) {
-                        Icon(
-                            imageVector = Icons.Default.Close,
-                            contentDescription = "Xóa từ khóa tìm kiếm",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-                }
-            } else null,
-            shape = RoundedCornerShape(14.dp),
-            colors = OutlinedTextFieldDefaults.colors(
-                focusedContainerColor = MaterialTheme.colorScheme.surface,
-                unfocusedContainerColor = MaterialTheme.colorScheme.surface,
-                focusedBorderColor = MaterialTheme.colorScheme.primary,
-                unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-            ),
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            FilterChip(
-                selected = selectedFilter == "ALL",
-                onClick = { selectedFilter = "ALL" },
-                label = { Text("Tất cả (${dictionaryEntries.size})", style = MaterialTheme.typography.labelSmall) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-            FilterChip(
-                selected = selectedFilter == "LECTURE",
-                onClick = { selectedFilter = "LECTURE" },
-                label = { Text("Bài giảng", style = MaterialTheme.typography.labelSmall) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
-                )
-            )
-            FilterChip(
-                selected = selectedFilter == "ACADEMIC",
-                onClick = { selectedFilter = "ACADEMIC" },
-                label = { Text("Học thuật", style = MaterialTheme.typography.labelSmall) },
-                colors = FilterChipDefaults.filterChipColors(
-                    selectedContainerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    selectedLabelColor = MaterialTheme.colorScheme.onTertiaryContainer
-                )
-            )
-        }
-
-        Spacer(modifier = Modifier.height(6.dp))
-
-        if (filteredEntries.isEmpty()) {
+        // 1. Thẻ Tra cứu nhanh bằng AI + Nguồn uy tín
+        item(key = "living_quick_lookup_card") {
             Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = MaterialTheme.colorScheme.surface,
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.45f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 8.dp)
+                shape = RoundedCornerShape(24.dp),
+                color = surfaceColor,
+                border = BorderStroke(1.dp, borderColor),
+                modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(
-                    modifier = Modifier.padding(22.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.AutoStories,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(30.dp)
-                    )
-                    Text(
-                        text = if (dictionaryEntries.isEmpty()) "Từ điển môn $courseTitle đang trống" else "Không tìm thấy kết quả khớp",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center
-                    )
-                    Text(
-                        text = if (searchQuery.isNotBlank()) {
-                            "Chưa có thuật ngữ \"$searchQuery\" trong bộ từ điển ngoại tuyến của môn học này."
-                        } else {
-                            "Khi xử lý bài giảng ở tab Thu âm, StudyAI sẽ tự động tổng hợp thuật ngữ kèm giải thích của giảng viên tại đây."
-                        },
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center
-                    )
-                    if (searchQuery.isNotBlank() || selectedFilter != "ALL") {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoAwesome,
+                            contentDescription = null,
+                            tint = StudyAiPalette.PrimaryCobalt,
+                            modifier = Modifier.size(16.dp),
+                        )
+                        Text(
+                            text = "Tra cứu ngữ cảnh bài giảng",
+                            fontSize = 13.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        OutlinedTextField(
+                            value = queryDraft,
+                            onValueChange = { queryDraft = it },
+                            placeholder = {
+                                Text(
+                                    text = "Nhập từ khóa, lệnh T-SQL, khái niệm...",
+                                    fontSize = 12.5.sp,
+                                )
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Search,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(18.dp),
+                                )
+                            },
+                            trailingIcon = if (queryDraft.isNotEmpty()) {
+                                {
+                                    IconButton(
+                                        onClick = { queryDraft = "" },
+                                        modifier = Modifier.size(30.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.Close,
+                                            contentDescription = "Xóa chữ",
+                                            modifier = Modifier.size(16.dp),
+                                        )
+                                    }
+                                }
+                            } else null,
+                            shape = RoundedCornerShape(14.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = surfaceSubtle.copy(alpha = 0.45f),
+                                unfocusedContainerColor = surfaceSubtle.copy(alpha = 0.45f),
+                                focusedBorderColor = StudyAiPalette.PrimaryCobalt,
+                                unfocusedBorderColor = borderColor,
+                            ),
+                            singleLine = true,
+                            modifier = Modifier.weight(1f),
+                        )
+
                         Button(
                             onClick = {
-                                searchQuery = ""
-                                selectedFilter = "ALL"
+                                val term = queryDraft.trim()
+                                if (term.isNotEmpty()) {
+                                    onQuickLookup(term)
+                                }
                             },
-                            shape = RoundedCornerShape(12.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                            enabled = queryDraft.trim().isNotEmpty(),
+                            shape = RoundedCornerShape(14.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = StudyAiPalette.PrimaryCobalt,
+                                contentColor = Color.White,
+                            ),
+                            contentPadding = PaddingValues(horizontal = 14.dp, vertical = 14.dp),
                         ) {
-                            Text("Xóa bộ lọc tìm kiếm", style = MaterialTheme.typography.labelMedium)
+                            Text("Tra ngay", fontSize = 12.5.sp, fontWeight = FontWeight.Bold)
                         }
+                    }
+
+                    if (quickSuggestions.isNotEmpty()) {
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            items(quickSuggestions, key = { it }) { term ->
+                                Surface(
+                                    onClick = { onQuickLookup(term) },
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = primarySoft,
+                                ) {
+                                    Text(
+                                        text = term,
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = primaryText,
+                                        maxLines = 1,
+                                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Text(
+                        text = "Mẹo: Giữ tay bôi đen bất kỳ cụm từ nào ở tab Ghi chú hoặc file PDF ngoài app → chọn ✨ Từ điển sống.",
+                        fontSize = 11.sp,
+                        lineHeight = 16.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        // 2. Header Kho đã lưu + 4 chip lọc (Tất cả / Mới lưu / Cần ôn / Đã vững)
+        item(key = "living_vault_header") {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = "Kho đã lưu",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                    )
+                    Text(
+                        text = "$masteredCount/${savedEntries.size} đã vững",
+                        fontFamily = FontFamily.Monospace,
+                        fontSize = 11.sp,
+                        color = tealText,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    val filterItems = listOf(
+                        LivingVaultFilter.ALL to "Tất cả (${savedEntries.size})",
+                        LivingVaultFilter.NEW to "Mới lưu ($newCount)",
+                        LivingVaultFilter.REVIEW to "Cần ôn ($reviewCount)",
+                        LivingVaultFilter.MASTERED to "Đã vững ($masteredCount)",
+                    )
+                    items(filterItems, key = { it.first.name }) { (filter, label) ->
+                        val isSelected = activeFilter == filter
+                        Surface(
+                            onClick = { onFilterChange(filter) },
+                            shape = RoundedCornerShape(999.dp),
+                            color = if (isSelected) StudyAiPalette.PrimaryCobalt else surfaceColor,
+                            border = if (isSelected) null else BorderStroke(1.dp, borderColor),
+                        ) {
+                            Text(
+                                text = label,
+                                fontSize = 12.sp,
+                                fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                                color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        // 3. Danh sách mục trong Kho đã lưu
+        if (filteredEntries.isEmpty()) {
+            item(key = "living_vault_empty") {
+                Surface(
+                    shape = RoundedCornerShape(24.dp),
+                    color = surfaceColor,
+                    border = BorderStroke(1.dp, borderColor),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.AutoStories,
+                            contentDescription = null,
+                            tint = StudyAiPalette.PrimaryCobalt,
+                            modifier = Modifier.size(30.dp),
+                        )
+                        Text(
+                            text = if (savedEntries.isEmpty()) {
+                                "Kho Từ điển sống môn $courseTitle đang trống"
+                            } else {
+                                "Không có mục nào khớp bộ lọc"
+                            },
+                            style = MaterialTheme.typography.titleMedium,
+                            color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
+                        )
+                        Text(
+                            text = if (savedEntries.isEmpty()) {
+                                "Hãy bôi đen cụm từ lạ ở tab Ghi chú hoặc nhập từ khóa phía trên rồi bấm \"Lưu vào Từ điển\"."
+                            } else {
+                                "Chạm \"Tất cả\" hoặc xóa từ khóa tìm kiếm để xem toàn bộ kho đã lưu."
+                            },
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                        )
                     }
                 }
             }
         } else {
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(10.dp),
-                contentPadding = PaddingValues(bottom = 20.dp),
-                modifier = Modifier.fillMaxSize()
-            ) {
-                items(filteredEntries, key = { it.id }) { item ->
-                    val isAcademic = item.referencesCount >= 3 || item.abstractnessScore >= 0.75f
-                    OutlinedCard(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clickable { onSelectConcept(item.id) },
-                        shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.outlinedCardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.4f))
+            items(filteredEntries, key = { "${it.id}_${it.term}" }) { entry ->
+                Surface(
+                    onClick = { onOpenEntry(entry) },
+                    shape = RoundedCornerShape(24.dp),
+                    color = surfaceColor,
+                    border = BorderStroke(
+                        width = 1.dp,
+                        color = if (entry.isMastered) StudyAiPalette.Teal.copy(alpha = 0.55f) else borderColor,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Column(
+                        modifier = Modifier.padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
                                 verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                modifier = Modifier.weight(1f),
                             ) {
                                 Surface(
-                                    color = if (isAcademic) MaterialTheme.colorScheme.tertiaryContainer else MaterialTheme.colorScheme.secondaryContainer,
-                                    shape = RoundedCornerShape(8.dp)
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = primarySoft,
                                 ) {
                                     Text(
-                                        text = "Bài ${item.firstIntroducedLectureId} • Slide ${item.firstIntroducedSlideNo}",
-                                        style = MaterialTheme.typography.labelSmall,
+                                        text = entry.originLabel,
+                                        fontFamily = FontFamily.Monospace,
+                                        fontSize = 10.5.sp,
                                         fontWeight = FontWeight.Bold,
-                                        color = if (isAcademic) MaterialTheme.colorScheme.onTertiaryContainer else MaterialTheme.colorScheme.onSecondaryContainer,
-                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp)
+                                        color = primaryText,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
                                     )
                                 }
 
-                                Text(
-                                    text = "${item.referencesCount} nguồn tham khảo",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                )
+                                if (entry.isNew) {
+                                    Surface(shape = RoundedCornerShape(999.dp), color = amberSoft) {
+                                        Text(
+                                            text = "Mới lưu",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = amberText,
+                                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                                        )
+                                    }
+                                }
                             }
 
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Surface(
+                                    onClick = { onToggleMastered(entry.id) },
+                                    shape = RoundedCornerShape(999.dp),
+                                    color = if (entry.isMastered) tealSoft else surfaceSubtle,
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    ) {
+                                        Icon(
+                                            imageVector = if (entry.isMastered) {
+                                                Icons.Default.CheckCircle
+                                            } else {
+                                                Icons.Default.RadioButtonUnchecked
+                                            },
+                                            contentDescription = null,
+                                            tint = if (entry.isMastered) tealText else MaterialTheme.colorScheme.onSurfaceVariant,
+                                            modifier = Modifier.size(13.dp),
+                                        )
+                                        Text(
+                                            text = if (entry.isMastered) "Đã vững ✓" else "Cần ôn",
+                                            fontSize = 10.5.sp,
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = if (entry.isMastered) tealText else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                }
 
-                            Text(
-                                text = item.canonicalNameVi,
-                                style = MaterialTheme.typography.titleMedium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-
-                            if (item.canonicalNameEn.isNotBlank() && !item.canonicalNameEn.equals(item.canonicalNameVi, ignoreCase = true)) {
-                                Text(
-                                    text = item.canonicalNameEn,
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium
-                                )
+                                IconButton(
+                                    onClick = { onDeleteEntry(entry.id) },
+                                    modifier = Modifier.size(32.dp),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.DeleteOutline,
+                                        contentDescription = "Xóa khỏi kho",
+                                        tint = StudyAiPalette.Rose.copy(alpha = 0.8f),
+                                        modifier = Modifier.size(17.dp),
+                                    )
+                                }
                             }
+                        }
 
-                            Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            text = entry.term,
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = MaterialTheme.colorScheme.onSurface,
+                        )
 
-                            Text(
-                                text = item.definitionSummary.ifBlank { item.aiDeepExplanation },
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                maxLines = 3,
-                                overflow = TextOverflow.Ellipsis
-                            )
-
-                            Spacer(modifier = Modifier.height(10.dp))
-
+                        if (entry.contextQuote.isNotBlank()) {
                             Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.SpaceBetween,
-                                verticalAlignment = Alignment.CenterVertically
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(IntrinsicSize.Min)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(surfaceSubtle)
                             ) {
-                                Text(
-                                    text = if (isAcademic) "Nguồn học thuật mở rộng" else "Trích từ bài giảng trên lớp",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.secondary,
-                                    fontWeight = FontWeight.Medium
+                                Box(
+                                    modifier = Modifier
+                                        .width(3.dp)
+                                        .fillMaxHeight()
+                                        .background(StudyAiPalette.PrimaryCobalt)
                                 )
-
                                 Text(
-                                    text = "Xem chi tiết →",
-                                    style = MaterialTheme.typography.labelSmall,
+                                    text = "\"${entry.contextQuote}\"",
+                                    fontSize = 11.5.sp,
+                                    lineHeight = 17.sp,
+                                    fontStyle = FontStyle.Italic,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 7.dp),
+                                )
+                            }
+                        }
+
+                        Text(
+                            text = entry.summary,
+                            fontSize = 12.5.sp,
+                            lineHeight = 19.sp,
+                            color = if (isDark) StudyAiPalette.InkSecondaryDark else StudyAiPalette.InkSecondaryLight,
+                            maxLines = 3,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = "Mở AI + ${entry.trustedSources.size} nguồn uy tín",
+                                fontSize = 11.5.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = primaryText,
+                            )
+
+                            if (entry.slideNumber != null && entry.slideNumber > 0) {
+                                Text(
+                                    text = "Về Slide gốc →",
+                                    fontSize = 11.5.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.primary
+                                    color = tealText,
+                                    modifier = Modifier
+                                        .clip(RoundedCornerShape(8.dp))
+                                        .clickable { onJumpToSlide(entry.lectureId, entry.slideNumber) }
+                                        .padding(horizontal = 6.dp, vertical = 3.dp),
                                 )
                             }
                         }
                     }
                 }
             }
+        }
+
+        item(key = "living_bottom_spacer") {
+            Spacer(Modifier.height(14.dp))
         }
     }
 }

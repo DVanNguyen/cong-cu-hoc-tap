@@ -463,3 +463,77 @@ data class MindmapMasteryResponse(
     @SerializedName("is_mastered") val isMastered: Boolean = false
 )
 
+// ============================================================================
+// 7. DTO CHO TỪ ĐIỂN SỐNG TOÀN TRÌNH (MÀN HÌNH 4 & SELECTION LOOKUP)
+// ============================================================================
+data class LivingLookupRequestDto(
+    @SerializedName("course_id") val courseId: Long? = null,
+    @SerializedName("lecture_id") val lectureId: Long? = null,
+    @SerializedName("slide_number") val slideNumber: Int? = null,
+    @SerializedName("selected_text") val selectedText: String,
+    @SerializedName("surrounding_sentence") val surroundingSentence: String = "",
+    @SerializedName("origin_label") val originLabel: String? = null,
+)
+
+data class TrustedSourceDocDto(
+    val domain: String = "",
+    val badge: String = "",
+    val title: String = "",
+    val excerpt: String = "",
+    val url: String = "",
+)
+
+data class LivingLookupResponseDto(
+    val term: String = "",
+    @SerializedName("origin_label") val originLabel: String = "Từ điển sống",
+    @SerializedName("lecture_id") val lectureId: Long? = null,
+    @SerializedName("slide_number") val slideNumber: Int? = null,
+    @SerializedName("context_quote") val contextQuote: String = "",
+    @SerializedName("ai_explanation") val aiExplanation: String = "",
+    @SerializedName("code_example") val codeExample: String? = null,
+    @SerializedName("simple_followup") val simpleFollowup: String? = null,
+    @SerializedName("pitfall_followup") val pitfallFollowup: String? = null,
+    @SerializedName("trusted_sources") val trustedSources: List<TrustedSourceDocDto> = emptyList(),
+)
+
+data class SaveLivingEntryRequestDto(
+    @SerializedName("course_id") val courseId: Long? = null,
+    @SerializedName("lecture_id") val lectureId: Long? = null,
+    @SerializedName("slide_number") val slideNumber: Int? = null,
+    @SerializedName("origin_label") val originLabel: String,
+    val term: String,
+    @SerializedName("context_quote") val contextQuote: String = "",
+    @SerializedName("ai_explanation") val aiExplanation: String,
+    @SerializedName("code_example") val codeExample: String? = null,
+    @SerializedName("simple_followup") val simpleFollowup: String? = null,
+    @SerializedName("pitfall_followup") val pitfallFollowup: String? = null,
+    @SerializedName("trusted_sources") val trustedSources: List<TrustedSourceDocDto> = emptyList(),
+)
+
+data class SavedLivingEntryDto(
+    val id: Long = 0L,
+    val term: String = "",
+    @SerializedName("origin_label") val originLabel: String = "Từ điển sống",
+    @SerializedName("lecture_id") val lectureId: Long? = null,
+    @SerializedName("slide_number") val slideNumber: Int? = null,
+    @SerializedName("context_quote") val contextQuote: String = "",
+    @SerializedName("ai_explanation") val aiExplanation: String = "",
+    @SerializedName("code_example") val codeExample: String? = null,
+    @SerializedName("simple_followup") val simpleFollowup: String? = null,
+    @SerializedName("pitfall_followup") val pitfallFollowup: String? = null,
+    @SerializedName("trusted_sources") val trustedSources: List<TrustedSourceDocDto> = emptyList(),
+    @SerializedName("is_mastered") val isMastered: Boolean = false,
+    @SerializedName("is_new") val isNew: Boolean = false,
+)
+
+data class SavedLivingEntriesResponseDto(
+    @SerializedName("course_id") val courseId: Long = 0L,
+    val entries: List<SavedLivingEntryDto> = emptyList(),
+)
+
+data class ToggleLivingMasteryResponseDto(
+    val id: Long = 0L,
+    @SerializedName("is_mastered") val isMastered: Boolean = false,
+    @SerializedName("is_new") val isNew: Boolean = false,
+)
+

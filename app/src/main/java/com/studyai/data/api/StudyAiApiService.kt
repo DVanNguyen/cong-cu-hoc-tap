@@ -200,4 +200,32 @@ interface StudyAiApiService {
     suspend fun toggleMindmapLeafMastery(
         @Path("leafId") leafId: String
     ): Response<MindmapMasteryResponse>
+
+    // =========================================================================
+    // 6. Endpoint Từ điển sống toàn trình (Màn hình 4 & Selection Lookup)
+    // =========================================================================
+    @POST("api/v1/living-dictionary/lookup")
+    suspend fun lookupLivingTerm(
+        @Body request: LivingLookupRequestDto
+    ): Response<LivingLookupResponseDto>
+
+    @GET("api/v1/courses/{courseId}/living-dictionary/entries")
+    suspend fun getSavedLivingEntries(
+        @Path("courseId") courseId: Long
+    ): Response<SavedLivingEntriesResponseDto>
+
+    @POST("api/v1/living-dictionary/entries")
+    suspend fun saveLivingDictionaryEntry(
+        @Body request: SaveLivingEntryRequestDto
+    ): Response<SavedLivingEntryDto>
+
+    @PATCH("api/v1/living-dictionary/entries/{entryId}/toggle-mastery")
+    suspend fun toggleLivingEntryMastery(
+        @Path("entryId") entryId: Long
+    ): Response<ToggleLivingMasteryResponseDto>
+
+    @DELETE("api/v1/living-dictionary/entries/{entryId}")
+    suspend fun deleteLivingEntry(
+        @Path("entryId") entryId: Long
+    ): Response<Map<String, Any>>
 }
